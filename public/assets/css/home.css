@@ -1,0 +1,117 @@
+body {
+  font-family: "product-sans-regular";
+}
+@keyframes scroll {
+  0% {
+    transform: translateY(0);
+  }
+  100% {
+    transform: translateY(-50%);
+  }
+}
+
+.animate-scroll {
+  animation: scroll 30s linear infinite;
+}
+
+@keyframes move {
+  0% {
+    transform: translateX(0);
+  }
+  50% {
+    transform: translateX(10px);
+  }
+  100% {
+    transform: translateX(0);
+  }
+}
+
+@font-face {
+  font-family: "Bookman Old Style";
+  src: url("../assets/fonts/book-man-old-style/bookmanoldstyle_bold.ttf")
+    format("truetype");
+  font-weight: bold; /* Hoặc font-weight: normal; tùy thuộc vào kiểu font */
+  font-style: normal;
+}
+@font-face {
+  font-family: "product-sans-regular";
+  src: url("../assets/fonts/product-sans/Product Sans Regular.ttf")
+    format("truetype");
+  font-weight: normal; /* Hoặc font-weight: normal; tùy thuộc vào kiểu font */
+  font-style: normal;
+}
+@font-face {
+  font-family: "product-sans-bold";
+  src: url("../assets/fonts/product-sans/Product Sans Bold.ttf")
+    format("truetype");
+  font-weight: bold; /* Hoặc font-weight: normal; tùy thuộc vào kiểu font */
+  font-style: bold;
+}
+
+@media (max-width: 768px) {
+  .scrolling-background {
+    display: none;
+  }
+}
+.product-sans-regular {
+  font-family: "product-sans-regular";
+}
+.product-sans-bold {
+  font-family: "product-sans-bold";
+}
+.animate-move {
+  animation: move 1.5s ease-in-out infinite;
+}
+.navigation-link:hover {
+  color: #f7961d;
+}
+.button-sign-in:hover {
+  background-color: #ffb151;
+}
+.bookman-old-style {
+  font-family: "Bookman Old Style";
+}
+
+/* Ẩn thanh cuộn cho tất cả các trình duyệt */
+.scrollbar-hide {
+  -ms-overflow-style: none; /* IE and Edge */
+  scrollbar-width: none; /* Firefox */
+}
+
+/* Ẩn thanh cuộn cho Chrome, Safari và Opera */
+.scrollbar-hide::-webkit-scrollbar {
+  display: none;
+}
+.home-category-button {
+  border: solid 1px #f7961d;
+}
+.home-category-button:hover {
+  background: linear-gradient(to right, #f7961d, #ffbe6e);
+  color: white;
+}
+.link-see-all {
+  border: solid 1px #000;
+}
+.link-see-all:hover {
+  background: linear-gradient(to right, #f7961d, #ffbe6e);
+  color: white;
+  border: 1px solid #fff;
+}
+.link-blog:hover {
+  color: #f7961d;
+}
+.button-signup {
+  background: linear-gradient(to right, #f7961d, #ffbe6e);
+  color: white;
+}
+.button-signup:hover {
+  background: linear-gradient(to left, #f7961d, #ffbe6e);
+  color: white;
+}
+.icon-social img {
+  width: 32px;
+  height: 32px;
+}
+.policy-link a:hover {
+  color: #f7961d;
+}

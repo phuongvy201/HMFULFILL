@@ -1,0 +1,24 @@
+.icon-contact-us {
+  border: solid 1px #f7961d;
+}
+
+.card-title-catalog:hover {
+  color: #f7961d;
+}
+.button-read-more-catalog {
+  font-family: "Poppins", sans-serif;
+  background: linear-gradient(to right, #f7961d, #ffbe6e);
+  color: white;
+}
+.button-read-more-catalog:hover {
+  background: linear-gradient(to left, #f7961d, #ffbe6e);
+  color: white;
+}
+.hide-scrollbar {
+    overflow-x: auto; /* Cho phép cuộn ngang */
+    -ms-overflow-style: none; /* Ẩn thanh cuộn trên Internet Explorer và Edge */
+    scrollbar-width: none; /* Ẩn thanh cuộn trên Firefox */
+  }
+  .hide-scrollbar::-webkit-scrollbar {
+    display: none; /* Ẩn thanh cuộn trên Chrome, Safari và Opera */
+  }
