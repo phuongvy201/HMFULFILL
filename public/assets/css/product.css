@@ -1,0 +1,45 @@
+.product-item a:hover {
+    color: #ff7500;
+  }
+  #default-search:focus {
+    box-shadow: none;
+    outline: none;
+  }
+  @font-face {
+    font-family: "Roboto Bold";
+    src: url("../assets/fonts/font-roboto/Roboto-Bold.ttf") format("truetype");
+    font-weight: bold; /* Hoặc font-weight: normal; tùy thuộc vào kiểu font */
+    font-style: bold;
+  }
+  .roboto-bold {
+    font-family: "Roboto Bold";
+  }
+  .custom-scrollbar {
+    overflow-y: auto; /* Đảm bảo có thanh cuộn dọc */
+  }
+  
+  /* Chrome, Safari và các trình duyệt dựa trên WebKit */
+  .custom-scrollbar::-webkit-scrollbar {
+    width: 8px; /* Độ rộng của thanh cuộn */
+  }
+  .custom-scrollbar::-webkit-scrollbar-track {
+    background: #f1f1f1; /* Màu nền của thanh cuộn */
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb {
+    background: #f1f1f1; /* Màu của thanh cuộn */
+  }
+  .custom-scrollbar::-webkit-scrollbar-thumb:hover {
+    background: #e2e2e2; /* Màu khi hover */
+  }
+  
+  /* Firefox */
+  .custom-scrollbar {
+    scrollbar-width: thin; /* Độ dày của thanh cuộn */
+    scrollbar-color: #d8d8d8 #f1f1f1; /* Màu của thanh cuộn và màu nền */
+  }
+  
+  .thumbnail-active {
+    border: 2px solid #f7961d; /* Màu sắc nổi bật cho thumbnail */
+    opacity: 1; /* Đảm bảo thumbnail nổi bật không bị mờ */
+  }
+  

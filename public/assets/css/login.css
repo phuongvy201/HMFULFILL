@@ -1,0 +1,70 @@
+body {
+    font-family: "product-sans-regular";
+}
+@keyframes scroll {
+    0% {
+        transform: translateY(0);
+    }
+    100% {
+        transform: translateY(-50%);
+    }
+}
+
+.animate-scroll {
+    animation: scroll 30s linear infinite;
+}
+
+@keyframes move {
+    0% {
+        transform: translateX(0);
+    }
+    50% {
+        transform: translateX(10px);
+    }
+    100% {
+        transform: translateX(0);
+    }
+}
+
+@font-face {
+    font-family: "Bookman Old Style";
+    src: url("../assets/fonts/book-man-old-style/bookmanoldstyle_bold.ttf")
+        format("truetype");
+    font-weight: bold; /* Hoặc font-weight: normal; tùy thuộc vào kiểu font */
+    font-style: normal;
+}
+@font-face {
+    font-family: "product-sans-regular";
+    src: url("../assets/fonts/product-sans/Product Sans Regular.ttf")
+        format("truetype");
+    font-weight: normal; /* Hoặc font-weight: normal; tùy thuộc vào kiểu font */
+    font-style: normal;
+}
+@font-face {
+    font-family: "product-sans-bold";
+    src: url("../assets/fonts/product-sans/Product Sans Bold.ttf")
+        format("truetype");
+    font-weight: bold; /* Hoặc font-weight: normal; tùy thuộc vào kiểu font */
+    font-style: bold;
+}
+.product-sans-regular {
+    font-family: "product-sans-regular";
+}
+.form-login input:focus {
+    outline: none;
+}
+.form-login button {
+    background-color: #f7961d;
+    color: #fff;
+}
+.form-login button:hover {
+    background-color: #ed8a12;
+    color: #fff;
+}
+.form-login a {
+    color: #f7961d;
+}
+.form-login 
+{
+  background:linear-gradient(to right, #005366, #00667d, #007d96, #0096b3);
+}

@@ -7,23 +7,17 @@
     <title>@yield('title')</title>
     <link rel="icon" href="{{ asset('assets/images/hm icon.png') }}" type="image/x-icon">
     <link rel="stylesheet" href="{{ asset('assets/css/home.css') }}" />
-    <link
-        href="https://cdn.jsdelivr.net/npm/tailwindcss@2.2.19/dist/tailwind.min.css"
-        rel="stylesheet" />
+    <link rel="stylesheet" href="{{ asset('assets/css/product.css') }}" />
+
     <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
-    <link
-        href="https://fonts.googleapis.com/css2?family=Baloo+2:wght@400;600&display=swap"
-        rel="stylesheet" />
+
     <link
         rel="stylesheet"
         href="{{ asset('assets/fonts/font-awesome/css/all.min.css') }}" />
-    <script src="https://cdn.jsdelivr.net/npm/flowbite@3.1.2/dist/flowbite.min.js"></script>
     <script src="https://cdn.jsdelivr.net/npm/@tailwindcss/browser@4"></script>
     <script src="{{ asset('assets/fonts/font-awesome/js/all.min.js') }}"></script>
-    <link
-        href="{{ asset('assets/fonts/book-man-old-style/bookmanoldstyle_bold.ttf') }}"
-        rel="stylesheet" />
+    @vite('resources/css/app.css')
 </head>
 
 <body>
@@ -39,12 +33,13 @@
                     alt="Flowbite Logo" />
             </a>
             <div class="flex lg:order-2 space-x-3 lg:space-x-0 rtl:space-x-reverse">
-                <button
+                <a
+                    href="/login"
                     type="button"
                     style="background-color: #f7961d"
                     class="button-sign-in text-white font-medium rounded-lg text-sm px-6 py-3 text-center transition delay-150 duration-300 ease-in-out hover:-translate-y-1 hover:scale-110 hover:bg-indigo-500">
                     Sign in
-                </button>
+                </a>
                 <button
                     data-collapse-toggle="navbar-cta"
                     type="button"
@@ -80,7 +75,7 @@
                     </li>
                     <li class="w-full lg:w-auto flex justify-center mx-auto">
                         <a
-                            href="#"
+                            href="/products"
                             class="navigation-link py-2 px-3 text-gray-700 rounded-sm hover:bg-gray-100 lg:hover:bg-transparent">All products</a>
                     </li>
                     <li class="w-full lg:w-auto flex justify-center mx-auto">

@@ -35,4 +35,11 @@ return [
         ],
     ],
 
+    'twofifteen' => [
+        'app_id' => env('TWOFIFTEEN_APP_ID'),
+        'secret_key' => env('TWOFIFTEEN_SECRET_KEY'),
+        'api_url' => env('TWOFIFTEEN_API_URL'),
+    ],
+
+
 ];

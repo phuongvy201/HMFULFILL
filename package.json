@@ -10,7 +10,22 @@
         "axios": "^1.8.2",
         "concurrently": "^9.0.1",
         "laravel-vite-plugin": "^1.2.0",
-        "tailwindcss": "^4.0.0",
+        "tailwindcss": "^4.0.16",
         "vite": "^6.0.11"
+    },
+    "dependencies": {
+        "@alpinejs/persist": "^3.14.9",
+        "@ckeditor/ckeditor5-build-classic": "^44.3.0",
+        "@fullcalendar/core": "^6.1.15",
+        "@fullcalendar/daygrid": "^6.1.15",
+        "@fullcalendar/interaction": "^6.1.15",
+        "@fullcalendar/list": "^6.1.15",
+        "@fullcalendar/timegrid": "^6.1.15",
+        "@tailwindcss/forms": "^0.5.10",
+        "alpinejs": "^3.14.9",
+        "apexcharts": "^4.5.0",
+        "dropzone": "^6.0.0-beta.2",
+        "flatpickr": "^4.6.13",
+        "jsvectormap": "^1.6.0"
     }
 }
