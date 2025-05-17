@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
 class ImportFile extends Model
 {
@@ -10,7 +11,9 @@ class ImportFile extends Model
         'file_name',
         'file_path',
         'status',
-        'error_logs'
+        'error_logs',
+        'user_id',
+        'warehouse'
     ];
 
     protected $casts = [
@@ -21,5 +24,9 @@ class ImportFile extends Model
     public function excelOrders()
     {
         return $this->hasMany(ExcelOrder::class, 'import_file_id');
+    }
+    public function user(): BelongsTo
+    {
+        return $this->belongsTo(User::class);
     }
 }

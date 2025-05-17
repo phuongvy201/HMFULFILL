@@ -21,7 +21,7 @@
 </head>
 
 <body class="product-sans-regular">
-    @yield('content')
+    @yield('content-auth')
 </body>
 
 </html>

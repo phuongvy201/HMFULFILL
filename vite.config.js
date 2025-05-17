@@ -15,4 +15,7 @@ export default defineConfig({
             "~": "/node_modules",
         },
     },
+    optimizeDeps: {
+        exclude: ["*.blade.php"],
+    },
 });

@@ -1,5 +1,5 @@
 <aside
-    x-data="{ selected: 'Dashboard' }"
+    x-data="{ selectedAdmin: $persist('Dashboard') }"
     :class="sidebarToggle ? 'translate-x-0 lg:w-[90px]' : '-translate-x-full'"
     class="sidebar fixed left-0 top-0 z-9999 flex h-screen w-[290px] flex-col overflow-y-hidden border-r border-gray-200 bg-white px-5 dark:border-gray-800 dark:bg-black lg:static lg:translate-x-0">
     <!-- SIDEBAR HEADER -->
@@ -27,7 +27,7 @@
     <div
         class="flex flex-col overflow-y-auto duration-300 ease-linear no-scrollbar">
         <!-- Sidebar Menu -->
-        <nav x-data="{ selected: $persist('Dashboard') }">
+        <nav x-data="{ selectedAdmin: $persist('Dashboard') }">
             <!-- Menu Group -->
             <div>
                 <h3 class="mb-4 text-xs uppercase leading-[20px] text-gray-400">
@@ -58,11 +58,11 @@
                     <li>
                         <a
                             href="#"
-                            @click.prevent="selected = (selected === 'Dashboard' ? '' : 'Dashboard')"
+                            @click.prevent="selectedAdmin = (selectedAdmin === 'Dashboard' ? '' : 'Dashboard')"
                             class="menu-item group"
-                            :class="(selected === 'Dashboard') || (page === 'ecommerce' || page === 'analytics' || page === 'marketing' || page === 'crm' || page === 'stocks') ? 'menu-item-active' : 'menu-item-inactive'">
+                            :class="(selectedAdmin === 'Dashboard') || (page === 'ecommerce' || page === 'analytics' || page === 'marketing' || page === 'crm' || page === 'stocks') ? 'menu-item-active' : 'menu-item-inactive'">
                             <svg
-                                :class="(selected === 'Dashboard') || (page === 'ecommerce' || page === 'analytics' || page === 'marketing' || page === 'crm' || page === 'stocks') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                                :class="(selectedAdmin === 'Dashboard') || (page === 'ecommerce' || page === 'analytics' || page === 'marketing' || page === 'crm' || page === 'stocks') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                                 width="24"
                                 height="24"
                                 viewBox="0 0 24 24"
@@ -92,11 +92,11 @@
                     <li>
                         <a
                             href="calendar.html"
-                            @click="selected = (selected === 'Calendar' ? '':'Calendar')"
+                            @click="selectedAdmin = (selectedAdmin === 'Calendar' ? '':'Calendar')"
                             class="menu-item group"
-                            :class=" (selected === 'Calendar') && (page === 'calendar') ? 'menu-item-active' : 'menu-item-inactive'">
+                            :class=" (selectedAdmin === 'Calendar') && (page === 'calendar') ? 'menu-item-active' : 'menu-item-inactive'">
                             <svg
-                                :class="(selected === 'Calendar') && (page === 'calendar') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
+                                :class="(selectedAdmin === 'Calendar') && (page === 'calendar') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
                                 width="24"
                                 height="24"
                                 viewBox="0 0 24 24"
@@ -118,17 +118,67 @@
                     </li>
                     <!-- Menu Item Calendar -->
 
+                    <!-- Menu Item Finance -->
+                    <li>
+                        <a
+                            href="#"
+                            @click.prevent="selectedAdmin = (selectedAdmin === 'Finance' ? '' : 'Finance')"
+                            class="menu-item group"
+                            :class="(selectedAdmin === 'Finance') || (page === 'wallet' || page === 'topupRequests') ? 'menu-item-active' : 'menu-item-inactive'">
+                            <svg
+                                :class="(selectedAdmin === 'Finance') || (page === 'wallet' || page === 'topupRequests') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M3 3H21C21.55 3 22 3.45 22 4V20C22 20.55 21.55 21 21 21H3C2.45 21 2 20.55 2 20V4C2 3.45 2.45 3 3 3ZM3 5V20H21V5H3ZM6 8H18V10H6V8ZM6 12H18V14H6V12ZM6 16H12V18H6V16Z"
+                                    fill="" />
+                            </svg>
+                            <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">
+                                Finance
+                            </span>
+                        </a>
 
+                        <!-- Dropdown Menu Start -->
+                        <div
+                            class="overflow-hidden transform translate"
+                            :class="(selectedAdmin === 'Finance') ? 'block' :'hidden'">
+                            <ul
+                                :class="sidebarToggle ? 'lg:hidden' : 'flex'"
+                                class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
+                                <li>
+                                    <a
+                                        href="{{ route('admin.finance.balance-overview') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'wallet' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Balance Overview
+                                    </a>
+                                </li>
+                                <li>
+                                    <a
+                                        href="{{ route('admin.topup.requests') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="pageAdmin === 'topupRequests' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Topup Requests
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <!-- Dropdown Menu End -->
+                    </li>
+                    <!-- Menu Item Finance -->
 
                     <!-- Menu Item Forms -->
                     <li>
                         <a
                             href="/admin/products"
-                            @click.prevent="selected = (selected === 'Products' ? '' : 'Products')"
+                            @click.prevent="selectedAdmin = (selectedAdmin === 'Products' ? '' : 'Products')"
                             class="menu-item group"
-                            :class="(selected === 'Products') || (page === 'formElements' || page === 'formLayout' || page === 'proFormElements' || page === 'proFormLayout') ? 'menu-item-active' : 'menu-item-inactive'">
+                            :class="(selectedAdmin === 'Products') || (page === 'formElements' || page === 'formLayout' || page === 'proFormElements' || page === 'proFormLayout') ? 'menu-item-active' : 'menu-item-inactive'">
                             <svg
-                                :class="(selected === 'Products') || (page === 'formElements' || page === 'formLayout' || page === 'proFormElements' || page === 'proFormLayout') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
+                                :class="(selectedAdmin === 'Products') || (page === 'formElements' || page === 'formLayout' || page === 'proFormElements' || page === 'proFormLayout') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
                                 width="24"
                                 height="24"
                                 viewBox="0 0 24 24"
@@ -149,7 +199,7 @@
 
                             <svg
                                 class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
-                                :class="[(selected === 'Products') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
+                                :class="[(selectedAdmin === 'Products') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
                                 width="20"
                                 height="20"
                                 viewBox="0 0 20 20"
@@ -167,7 +217,7 @@
                         <!-- Dropdown Menu Start -->
                         <div
                             class="overflow-hidden transform translate"
-                            :class="(selected === 'Products') ? 'block' :'hidden'">
+                            :class="(selectedAdmin === 'Products') ? 'block' :'hidden'">
                             <ul
                                 :class="sidebarToggle ? 'lg:hidden' : 'flex'"
                                 class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
@@ -199,11 +249,11 @@
                     <li>
                         <a
                             href="/admin/categories"
-                            @click.prevent="selected = (selected === 'Categories' ? '' : 'Categories')"
+                            @click.prevent="selectedAdmin = (selectedAdmin === 'Categories' ? '' : 'Categories')"
                             class="menu-item group"
-                            :class="(selected === 'Categories') || (page === 'formElements' || page === 'formLayout' || page === 'proFormElements' || page === 'proFormLayout') ? 'menu-item-active' : 'menu-item-inactive'">
+                            :class="(selectedAdmin === 'Categories') || (page === 'formElements' || page === 'formLayout' || page === 'proFormElements' || page === 'proFormLayout') ? 'menu-item-active' : 'menu-item-inactive'">
                             <svg
-                                :class="(selected === 'Categories') || (page === 'formElements' || page === 'formLayout' || page === 'proFormElements' || page === 'proFormLayout') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
+                                :class="(selectedAdmin === 'Categories') || (page === 'formElements' || page === 'formLayout' || page === 'proFormElements' || page === 'proFormLayout') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
                                 width="24"
                                 height="24"
                                 viewBox="0 0 24 24"
@@ -224,7 +274,7 @@
 
                             <svg
                                 class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
-                                :class="[(selected === 'Categories') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
+                                :class="[(selectedAdmin === 'Categories') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
                                 width="20"
                                 height="20"
                                 viewBox="0 0 20 20"
@@ -242,7 +292,7 @@
                         <!-- Dropdown Menu Start -->
                         <div
                             class="overflow-hidden transform translate"
-                            :class="(selected === 'Categories') ? 'block' :'hidden'">
+                            :class="(selectedAdmin === 'Categories') ? 'block' :'hidden'">
                             <ul
                                 :class="sidebarToggle ? 'lg:hidden' : 'flex'"
                                 class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
@@ -262,11 +312,11 @@
                     <li>
                         <a
                             href="/admin/orders"
-                            @click.prevent="selected = (selected === 'Orders' ? '' : 'Orders')"
+                            @click.prevent="selectedAdmin = (selectedAdmin === 'Orders' ? '' : 'Orders')"
                             class="menu-item group"
-                            :class="(selected === 'Orders') || (page === 'orderList') ? 'menu-item-active' : 'menu-item-inactive'">
+                            :class="(selectedAdmin === 'Orders') || (page === 'orderList') ? 'menu-item-active' : 'menu-item-inactive'">
                             <svg
-                                :class="(selected === 'Orders') || (page === 'orderList') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                                :class="(selectedAdmin === 'Orders') || (page === 'orderList') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                                 width="24"
                                 height="24"
                                 viewBox="0 0 24 24"
@@ -285,7 +335,7 @@
 
                             <svg
                                 class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
-                                :class="[(selected === 'Orders') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
+                                :class="[(selectedAdmin === 'Orders') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
                                 width="20"
                                 height="20"
                                 viewBox="0 0 20 20"
@@ -303,7 +353,7 @@
                         <!-- Dropdown Menu Start -->
                         <div
                             class="overflow-hidden transform translate"
-                            :class="(selected === 'Orders') ? 'block' :'hidden'">
+                            :class="(selectedAdmin === 'Orders') ? 'block' :'hidden'">
                             <ul
                                 :class="sidebarToggle ? 'lg:hidden' : 'flex'"
                                 class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
@@ -312,7 +362,7 @@
                                         href="{{ route('admin.order-fulfillment-list') }}"
                                         class="menu-dropdown-item group"
                                         :class="page === 'orderList' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
-                                        Order List
+                                        Import Fulfillment Orders
                                     </a>
                                 </li>
                             </ul>
@@ -324,12 +374,40 @@
                                         href="{{ route('admin.submitted-orders') }}"
                                         class="menu-dropdown-item group"
                                         :class="page === 'orderCreate' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
-                                        Submitted Orders
+                                        Fulfilled to Supplier
+                                    </a>
+                                </li>
+                            </ul>
+                            <ul
+                                :class="sidebarToggle ? 'lg:hidden' : 'flex'"
+                                class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
+                                <li>
+                                    <a
+                                        href="{{ route('admin.customer-uploaded-files-list') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'orderReceived' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Orders Received
                                     </a>
                                 </li>
                             </ul>
                         </div>
                         <!-- Dropdown Menu End -->
+                    </li>
+                    <li>
+                        <a href="{{ route('logout') }}"
+                            onclick="event.preventDefault(); document.getElementById('logout-form').submit();"
+                            class="menu-item group"
+                            :class="page === 'logout' ? 'menu-item-active' : 'menu-item-inactive'">
+                            <svg :class="page === 'logout' ? 'menu-item-icon-active' : 'menu-item-icon-inactive'" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M9 21H5C4.46957 21 3.96086 20.7893 3.58579 20.4142C3.21071 20.0391 3 19.5304 3 19V5C3 4.46957 3.21071 3.96086 3.58579 3.58579C3.96086 3.21071 4.46957 3 5 3H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M16 17L21 12L16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                                <path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <span :class="sidebarToggle ? 'lg:hidden' : ''">Logout</span>
+                        </a>
+                        <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
+                            @csrf
+                        </form>
                     </li>
                 </ul>
             </div>

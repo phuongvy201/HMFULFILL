@@ -128,13 +128,18 @@
 
 <script>
     document.getElementById('category-form').addEventListener('submit', function(e) {
-        e.preventDefault(); // Ngăn chặn hành động mặc định của form
+        e.preventDefault();
 
         const formData = new FormData(this);
 
-        fetch("{{ route('admin.categories.store') }}", {
+        fetch("/admin/add-category", {
                 method: 'POST',
                 body: formData,
+                headers: {
+                    'X-Requested-With': 'XMLHttpRequest',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                },
+                credentials: 'same-origin'
             })
             .then(response => response.json())
             .then(data => {

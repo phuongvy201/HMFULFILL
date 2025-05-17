@@ -13,7 +13,8 @@ class SupplierFulfillment extends Model
         'buyer_email',
         'shipping_address',
         'items',
-        'comments',
+        'comment',
+        'shipping',
         'status'
     ];
 

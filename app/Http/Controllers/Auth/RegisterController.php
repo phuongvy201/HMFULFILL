@@ -11,6 +11,8 @@ use App\Mail\VerifyEmail;
 use Illuminate\Support\Str;
 use App\Mail\VerificationCodeMail;
 use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Auth;
+use Illuminate\Validation\ValidationException;
 
 class RegisterController extends Controller
 {
@@ -43,7 +45,7 @@ class RegisterController extends Controller
             ]);
 
             // Chuyển hướng đến trang đăng nhập
-            return redirect()->route('login')->with('message', 'Registration successful! You can now log in.');
+            return redirect()->route('signin')->with('message', 'Registration successful! You can now log in.');
         } catch (\Illuminate\Validation\ValidationException $e) {
             // Ghi log lỗi
             Log::error('Registration error: ' . $e->getMessage());
@@ -58,7 +60,6 @@ class RegisterController extends Controller
         }
     }
 
-
     public function verifyEmail($token)
     {
         $user = User::where('email_verification_at', $token)->first();
@@ -68,9 +69,45 @@ class RegisterController extends Controller
             $user->email_verification_at = null; // Xóa token sau khi xác thực
             $user->save();
 
-            return redirect('/login')->with('message', 'Email verified successfully!');
+            return redirect('/signin')->with('message', 'Email verified successfully!');
         }
 
-        return redirect('/login')->with('error', 'Invalid verification token.');
+        return redirect('/signin')->with('error', 'Invalid verification token.');
+    }
+
+    public function showLoginForm()
+    {
+        return view('auth.signin');
+    }
+
+    public function login(Request $request)
+    {
+        $request->validate([
+            'email' => 'required|string|email',
+            'password' => 'required|string',
+        ]);
+
+        if (Auth::attempt(['email' => $request->email, 'password' => $request->password])) {
+            $user = Auth::user();
+
+            if ($user->role === 'admin') {
+                return redirect()->route('admin.dashboard');
+            } elseif ($user->role === 'customer') {
+                return redirect()->route('customer.index');
+            }
+        }
+
+        throw ValidationException::withMessages([
+            'email' => ['The provided credentials are incorrect.'],
+        ]);
+    }
+
+    public function logout(Request $request)
+    {
+        Auth::logout();
+        $request->session()->invalidate();
+        $request->session()->regenerateToken();
+
+        return redirect()->route('signin')->with('message', 'You have been logged out successfully.');
     }
 }

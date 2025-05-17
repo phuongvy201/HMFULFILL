@@ -9,13 +9,13 @@
         style="background-image: url('../assets/images/bg_breadcrumb.jpg')">
         <div class="absolute inset-0 bg-black/40"></div>
         <div class="relative z-10 text-center">
-            <h1 class="text-4xl font-semibold">Mineral Wash T-Shirt DTG</h1>
+            <h1 class="text-4xl font-semibold">{{ $product->name }}</h1>
             <div class="mt-2">
                 <a href="/" class="text-gray-200 hover:text-gray-400">Home</a>
                 <span class="mx-2 text-gray-300">›</span>
-                <span class="text-gray-200">Apparels</span>
+                <span class="text-gray-200">{{ $product->category->name }}</span>
                 <span class="mx-2 text-gray-300">›</span>
-                <span class="text-orange-400">Mineral Wash T-Shirt DTG</span>
+                <span class="text-orange-400">{{ $product->name }}</span>
             </div>
         </div>
     </div>
@@ -29,196 +29,85 @@
                 <div class="relative h-56 overflow-hidden rounded-lg md:h-96">
                     <img
                         id="main-image"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-1.jpg"
-                        class="absolute block w-full h-full object-cover -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2"
-                        alt="" />
+                        src="{{ asset($product->images->first()->image_url) }}"
+                        class="absolute block w-full h-full object-contain -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2"
+                        alt="{{ $product->name }}" />
                 </div>
 
                 <!-- Thumbnails -->
                 <div class="flex gap-4 mt-4 custom-scrollbar overflow-x-auto">
+                    @foreach ($product->images as $image)
                     <img
                         onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-1.jpg"
+                        src="{{ asset($image->image_url) }}"
                         class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition thumbnail-active"
-                        alt="" />
-                    <img
-                        onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-2.jpg"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
-                        alt="" />
-                    <img
-                        onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-3.jpg"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
-                        alt="" />
-                    <img
-                        onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-4.jpg"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
-                        alt="" />
-                    <img
-                        onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-5.jpg"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
-                        alt="" />
-                    <img
-                        onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-3.jpg"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
-                        alt="" />
-                    <img
-                        onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-4.jpg"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
-                        alt="" />
-                    <img
-                        onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-5.jpg"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
-                        alt="" />
-                    <img
-                        onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-3.jpg"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
-                        alt="" />
-                    <img
-                        onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-4.jpg"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
-                        alt="" />
-                    <img
-                        onclick="showImage(this)"
-                        src="https://flowbite.s3.amazonaws.com/docs/gallery/square/image-5.jpg"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
-                        alt="" />
+                        alt="{{ $product->name }}" />
+                    @endforeach
+
                 </div>
             </div>
             <!-- Thông tin sản phẩm -->
             <div>
-                <h2 class="text-gray-600 text-sm uppercase">Apparels</h2>
+                <h2 class="text-gray-600 text-sm uppercase">{{ $product->category->name }}</h2>
                 <h1 class="text-2xl font-bold text-gray-800 font-serif">
-                    Mineral Wash T-Shirt DTG
+                    {{ $product->name }}
                 </h1>
                 <p class="text-gray-500 text-sm font-medium mt-1">
-                    <span class="bg-gray-200 px-2 py-1 rounded">SKU: LFUG32W12OZ</span>
+                    <span class="bg-gray-200 px-2 py-1 rounded">SKU: <span id="selected-sku">-</span></span>
                 </p>
                 <p style="color: #f7961d" class="text-2xl mt-2 roboto-bold">
-                    Price: $9.50
+                    Price: $<span id="total-price">{{ $product->base_price }}</span>
                 </p>
-                <p class="text-sm text-gray-500">(Include ship price: ~$15.00)</p>
+                <p class="text-sm text-gray-500">Fulfillment Location:
+                    @foreach($product->fulfillmentLocations as $fulfillmentLocation)
+                    <span id="fulfillment-location">{{ $fulfillmentLocation->country_code }}</span>
+                    @endforeach
+                </p>
+                
 
                 <!-- Tùy chọn -->
+
+                @foreach($groupedAttributes as $name => $values)
                 <div class="mt-4">
                     <label
                         style="color: #005366"
-                        class="block text-gray-700 font-semibold">Color</label>
+                        class="block text-gray-700 font-semibold">{{ $name }}</label>
                     <select
-                        id="countries"
-                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
-                        <option selected>Choose a color</option>
-                        <option value="US">United States</option>
-                        <option value="CA">Canada</option>
-                        <option value="FR">France</option>
-                        <option value="DE">Germany</option>
+                        name="{{ strtolower(str_replace(' ', '_', $name)) }}"
+                        onchange="findMatchingVariant()"
+                        class="attribute-select bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg
+                   focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5
+                   dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400
+                   dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
+                        <option value="">Choose {{ $name }}</option>
+                        @foreach($values as $value)
+                        <option value="{{ $value }}">{{ $value }}</option>
+                        @endforeach
                     </select>
                 </div>
-                <div class="mt-4">
-                    <label
-                        style="color: #005366"
-                        class="block text-gray-700 font-semibold">Capacity</label>
-                    <select
-                        id="countries"
-                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
-                        <option selected>Choose a capacity</option>
-                        <option value="US">United States</option>
-                        <option value="CA">Canada</option>
-                        <option value="FR">France</option>
-                        <option value="DE">Germany</option>
-                    </select>
-                </div>
-                <div class="mt-4">
-                    <label
-                        style="color: #005366"
-                        class="block text-gray-700 font-semibold">Size</label>
-                    <select
-                        id="countries"
-                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
-                        <option selected>Choose a size</option>
-                        <option value="US">United States</option>
-                        <option value="CA">Canada</option>
-                        <option value="FR">France</option>
-                        <option value="DE">Germany</option>
-                    </select>
-                </div>
+                @endforeach
+
+            
+
 
                 <!-- Vận chuyển -->
                 <div class="mt-6">
                     <label
                         style="color: #005366"
-                        class="block text-gray-700 font-semibold">Ship To</label>
+                        class="block text-gray-700 font-semibold">Shipping Method</label>
                     <select
-                        id="countries"
+                        id="shipping-method"
+                        onchange="updateShippingPrice()"
                         class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
-                        <option selected>United States</option>
-                        <option value="CA">Canada</option>
-                        <option value="FR">France</option>
-                        <option value="DE">Germany</option>
+                        <option selected value="">Select Shipping Method</option>
+                        <option value="tiktok_1st">Ship by Tiktok - 1 item</option>
+                        <option value="tiktok_next">Ship by Tiktok - 2 items</option>
+                        <option value="seller_1st">Ship by Seller - 1 item</option>
+                        <option value="seller_next">Ship by Seller - 2 items</option>
                     </select>
                 </div>
 
-                <div class="mt-4 shadow-md p-4 rounded-lg bg-white">
-                    <!-- Standard Shipping -->
-                    <label
-                        class="flex justify-between items-center cursor-pointer p-3 bg-white rounded-lg hover:bg-gray-100">
-                        <div class="flex items-center gap-3">
-                            <input
-                                type="radio"
-                                name="shipping"
-                                value="standard"
-                                class="hidden peer" />
-                            <div
-                                class="w-4 h-4 border-2 border-gray-400 rounded-full flex items-center justify-center peer-checked:border-blue-500 peer-checked:bg-blue-500">
-                                <div
-                                    class="w-2.5 h-2.5 bg-white rounded-full hidden peer-checked:block"></div>
-                            </div>
-                            <img
-                                class="h-5"
-                                src="{{ asset('assets/images/icon/transport.png') }}"
-                                alt="Standard Shipping" />
-                            <div>
-                                <span class="text-gray-800 font-medium">Standard Shipping</span>
-                                <p class="text-gray-500 text-sm">3-9 business days</p>
-                            </div>
-                        </div>
-                        <p class="text-lg">$5.50</p>
-                    </label>
 
-                    <!-- Ground Shipping -->
-                    <label
-                        class="flex justify-between items-center cursor-pointer p-3 bg-white rounded-lg hover:bg-gray-100 mt-3">
-                        <div class="flex items-center gap-3">
-                            <input
-                                type="radio"
-                                name="shipping"
-                                value="ground"
-                                class="hidden peer" />
-                            <div
-                                class="w-4 h-4 border-2 border-gray-400 rounded-full flex items-center justify-center peer-checked:border-blue-500 peer-checked:bg-blue-500">
-                                <div
-                                    class="w-2.5 h-2.5 bg-white rounded-full hidden peer-checked:block"></div>
-                            </div>
-                            <img
-                                class="h-5"
-                                src="{{ asset('assets/images/icon/travel.png') }}"
-                                alt="Ground Shipping" />
-                            <div>
-                                <span class="text-gray-800 font-medium">Ground Shipping</span>
-                                <p class="text-gray-500 text-sm">2-5 business days</p>
-                            </div>
-                        </div>
-                        <p class="text-lg">$11.99</p>
-                    </label>
-                </div>
 
                 <!-- Nút hành động -->
 
@@ -229,51 +118,140 @@
     <div
         class="max-w-5xl mx-auto p-4 border rounded-lg shadow-sm product-sans-regular mb-10">
         <!-- Tabs -->
-        <div class="flex border-b">
+        <div class="flex ">
             <button style="border-bottom: 2px solid #f7961d" class="px-4 py-2">
                 Product Information
             </button>
-            <button class="px-4 py-2 font-medium">Shipping Information</button>
-            <button class="px-4 py-2 text-gray-800 font-medium">Note</button>
+           
         </div>
 
         <!-- Content -->
         <div class="p-6">
             <h2 class="text-lg font-semibold text-gray-800">
-                ART UPLOAD FILE REQUIREMENTS
+                PRODUCT DESCRIPTION
             </h2>
             <p class="mt-2 text-gray-600">
-                Every image you upload to our website must meet these basic
-                requirements or the software will not accept it. See below for
-                additional requirements. When sending us your art file, please be
-                sure to include the following information:
+               {{ $product->description }}
             </p>
 
-            <ul class="mt-4 space-y-2 text-gray-700">
-                <li><strong>Art Dimension:</strong> 4500 x 5100 pixels</li>
-                <li><strong>Art Resolution:</strong> 300 DPI</li>
-            </ul>
-
-            <p class="mt-4 text-gray-600">
-                High-resolution images must not contain watermarks, signatures, or
-                photo borders. Additionally, colors used online are different from
-                those used in print, so it’s important to make sure the colors in
-                your images are set correctly.
-            </p>
-
-            <p class="mt-4 text-gray-600">Support CYMK colors.</p>
+         
 
             <!-- Download Button -->
             <div class="mt-6">
-                <button
-                    class="relative inline-flex items-center justify-center p-0.5 mb-2 me-2 overflow-hidden text-sm font-medium text-gray-900 rounded-lg group bg-gradient-to-br from-pink-500 to-orange-400 group-hover:from-pink-500 group-hover:to-orange-400 hover:text-white dark:text-white focus:ring-4 focus:outline-none focus:ring-pink-200 dark:focus:ring-pink-800">
-                    <span
-                        class="relative px-5 py-2.5 transition-all ease-in duration-75 bg-white dark:bg-gray-900 rounded-md group-hover:bg-transparent group-hover:dark:bg-transparent">
+                <a href="{{ $product->template_link }}" target="_blank" class="relative inline-flex items-center justify-center p-0.5 mb-2 me-2 overflow-hidden text-sm font-medium text-gray-900 rounded-lg group bg-gradient-to-br from-pink-500 to-orange-400 group-hover:from-pink-500 group-hover:to-orange-400 hover:text-white dark:text-white focus:ring-4 focus:outline-none focus:ring-pink-200 dark:focus:ring-pink-800">
+                    <span class="relative px-5 py-2.5 transition-all ease-in duration-75 bg-white dark:bg-gray-900 rounded-md group-hover:bg-transparent group-hover:dark:bg-transparent">
                         Get Template
                     </span>
-                </button>
+                </a>
             </div>
         </div>
     </div>
 </section>
+<script>
+    function showImage(thumbnail) {
+        // Cập nhật ảnh chính
+        const mainImage = document.getElementById("main-image");
+        mainImage.src = thumbnail.src;
+
+        // Xóa class active từ tất cả thumbnails
+        const thumbnails = document.querySelectorAll(".custom-scrollbar img");
+        thumbnails.forEach((thumb) => {
+            thumb.classList.remove("thumbnail-active");
+        });
+
+        // Thêm class active cho thumbnail được chọn
+        thumbnail.classList.add("thumbnail-active");
+    }
+
+    // Khởi tạo thumbnail đầu tiên là active
+    document.addEventListener("DOMContentLoaded", function() {
+        const firstThumbnail = document.querySelector(".custom-scrollbar img");
+        if (firstThumbnail) {
+            showImage(firstThumbnail);
+        }
+    });
+
+    // Khởi tạo dữ liệu variants từ PHP
+    var variants = @json($product->variants);
+    var basePrice = {{ $product->base_price }};
+
+    function findMatchingVariant() {
+        var selectedValues = {};
+        var selects = document.querySelectorAll('.attribute-select');
+        
+        selects.forEach(function(select) {
+            var name = select.name.replace(/_/g, ' ').replace(/\b\w/g, function(l) { 
+                return l.toUpperCase(); 
+            });
+            selectedValues[name] = select.value;
+        });
+
+        var allSelected = Object.values(selectedValues).every(function(value) {
+            return value !== '';
+        });
+
+        var skuElement = document.getElementById('selected-sku');
+        if (!allSelected) {
+            skuElement.textContent = '-';
+            return null;
+        }
+
+        var matchingVariant = variants.find(function(variant) {
+            return variant.attributes.every(function(attr) {
+                return selectedValues[attr.name] === attr.value;
+            });
+        });
+
+        if (matchingVariant) {
+            skuElement.textContent = matchingVariant.sku;
+            return matchingVariant;
+        } else {
+            skuElement.textContent = 'Không có sản phẩm phù hợp';
+            return null;
+        }
+    }
+
+    function updateShippingPrice() {
+        var currentVariant = findMatchingVariant();
+        if (!currentVariant) {
+            alert('Please select all product options');
+            document.getElementById('shipping-method').value = '';
+            return;
+        }
+
+        var shippingMethod = document.getElementById('shipping-method').value;
+        
+        if (!shippingMethod) {
+            document.getElementById('total-price').textContent = basePrice.toFixed(2);
+            return;
+        }
+
+        var shippingPrice = currentVariant.shipping_prices.find(function(price) {
+            return price.method === shippingMethod;
+        });
+
+        if (shippingPrice) {
+            var shipping = parseFloat(shippingPrice.price);
+            var total =shipping;
+            
+            document.getElementById('total-price').textContent = total.toFixed(2);
+        }
+    }
+
+    // Event listeners cho attribute selects
+    document.querySelectorAll('.attribute-select').forEach(function(select) {
+        select.addEventListener('change', function() {
+            findMatchingVariant(); // Cập nhật SKU
+            // Reset shipping
+            document.getElementById('shipping-method').value = '';
+            document.getElementById('shipping-price').textContent = '0.00';
+            document.getElementById('total-price').textContent = basePrice.toFixed(2);
+        });
+    });
+
+    // Khởi tạo ban đầu
+    document.addEventListener('DOMContentLoaded', function() {
+        findMatchingVariant();
+    });
+</script>
 @endsection

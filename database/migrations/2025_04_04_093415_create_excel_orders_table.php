@@ -30,8 +30,9 @@ return new class extends Migration
             $table->string('phone2')->nullable();
             $table->text('comment')->nullable();
             $table->enum('status', ['pending', 'processed', 'failed'])->default('pending');
-            $table->json('api_response')->nullable();
+            $table->longText('api_response')->nullable();
             $table->unsignedBigInteger('import_file_id');
+            
             $table->timestamps();
 
             $table->foreign('import_file_id')->references('id')->on('import_files');

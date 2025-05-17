@@ -257,332 +257,57 @@
         <div
             class="w-full flex justify-start lg:justify-center overflow-x-auto scrollbar-hide">
             <!-- Container cho scroll trên mobile/tablet -->
-            <button
+            @foreach ($categories as $category)
+            <a href="/products/{{ $category->slug }}"
                 type="button"
-                style="
-              background-color: linear-gradient(to right, #f7961d, #ffbe6e);
-            "
+               
                 class="home-category-button font-medium rounded-full text-sm px-5 md:py-2.5 me-2 mb-2 mx-2">
-                Accessories
-            </button>
-            <button
-                type="button"
-                class="home-category-button font-medium rounded-full text-sm px-5 md:py-2.5 me-2 mb-2 mx-2">
-                Apparel
-            </button>
-            <button
-                type="button"
-                class="home-category-button font-medium rounded-full text-sm px-5 md:py-2.5 me-2 mb-2 mx-2">
-                Footwear
-            </button>
-            <button
-                type="button"
-                class="home-category-button font-medium rounded-full text-sm px-5 md:py-2.5 me-2 mb-2 mx-2">
-                Home Decorations
-            </button>
-            <button
-                type="button"
-                class="home-category-button font-medium rounded-full text-sm px-5 md:py-2.5 me-2 mb-2 mx-2">
-                Ornaments
-            </button>
+                {{ $category->name }}
+            </a>
+            @endforeach
+
         </div>
         <div class="w-full">
             <!-- Container cho scroll trên mobile/tablet và grid trên desktop -->
+
             <div
                 class="flex lg:grid lg:grid-cols-4 lg:gap-4 overflow-x-auto lg:overflow-x-hidden space-x-4 lg:space-x-0 pb-4 scrollbar-hide">
                 <!-- Item 1 -->
+                @foreach ($products as $product)
                 <div class="flex-none w-[280px] lg:w-auto p-2">
                     <div
                         class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
+                        <a href="/product/{{ $product->slug }}">
                             <img
                                 class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
+                                src="{{ asset($product->main_image->image_url) }}"
                                 alt="product image" />
                         </a>
                         <div class="px-5 pb-6">
-                            <a href="#">
+                                <a href="/product/{{ $product->slug }}">
                                 <h5
                                     class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
+                                    {{ $product->name }}
                                 </h5>
                             </a>
                             <div class="flex items-center justify-between mt-2">
                                 <span
                                     style="color: #005366"
                                     class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
+                                    <small class="font-thin">From: </small>{{ $product->base_price }} $
                                 </span>
                             </div>
                         </div>
                     </div>
                 </div>
-                <div class="flex-none w-[280px] lg:w-auto p-2">
-                    <div
-                        class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
-                            <img
-                                class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
-                                alt="product image" />
-                        </a>
-                        <div class="px-5 pb-6">
-                            <a href="#">
-                                <h5
-                                    class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
-                                </h5>
-                            </a>
-                            <div class="flex items-center justify-between mt-2">
-                                <span
-                                    style="color: #005366"
-                                    class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div class="flex-none w-[280px] lg:w-auto p-2">
-                    <div
-                        class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
-                            <img
-                                class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
-                                alt="product image" />
-                        </a>
-                        <div class="px-5 pb-6">
-                            <a href="#">
-                                <h5
-                                    class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
-                                </h5>
-                            </a>
-                            <div class="flex items-center justify-between mt-2">
-                                <span
-                                    style="color: #005366"
-                                    class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex-none w-[280px] lg:w-auto p-2">
-                    <div
-                        class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
-                            <img
-                                class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
-                                alt="product image" />
-                        </a>
-                        <div class="px-5 pb-6">
-                            <a href="#">
-                                <h5
-                                    class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
-                                </h5>
-                            </a>
-                            <div class="flex items-center justify-between mt-2">
-                                <span
-                                    style="color: #005366"
-                                    class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex-none w-[280px] lg:w-auto p-2">
-                    <div
-                        class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
-                            <img
-                                class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
-                                alt="product image" />
-                        </a>
-                        <div class="px-5 pb-6">
-                            <a href="#">
-                                <h5
-                                    class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
-                                </h5>
-                            </a>
-                            <div class="flex items-center justify-between mt-2">
-                                <span
-                                    style="color: #005366"
-                                    class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex-none w-[280px] lg:w-auto p-2">
-                    <div
-                        class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
-                            <img
-                                class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
-                                alt="product image" />
-                        </a>
-                        <div class="px-5 pb-6">
-                            <a href="#">
-                                <h5
-                                    class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
-                                </h5>
-                            </a>
-                            <div class="flex items-center justify-between mt-2">
-                                <span
-                                    style="color: #005366"
-                                    class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex-none w-[280px] lg:w-auto p-2">
-                    <div
-                        class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
-                            <img
-                                class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
-                                alt="product image" />
-                        </a>
-                        <div class="px-5 pb-6">
-                            <a href="#">
-                                <h5
-                                    class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
-                                </h5>
-                            </a>
-                            <div class="flex items-center justify-between mt-2">
-                                <span
-                                    style="color: #005366"
-                                    class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex-none w-[280px] lg:w-auto p-2">
-                    <div
-                        class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
-                            <img
-                                class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
-                                alt="product image" />
-                        </a>
-                        <div class="px-5 pb-6">
-                            <a href="#">
-                                <h5
-                                    class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
-                                </h5>
-                            </a>
-                            <div class="flex items-center justify-between mt-2">
-                                <span
-                                    style="color: #005366"
-                                    class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex-none w-[280px] lg:w-auto p-2">
-                    <div
-                        class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
-                            <img
-                                class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
-                                alt="product image" />
-                        </a>
-                        <div class="px-5 pb-6">
-                            <a href="#">
-                                <h5
-                                    class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
-                                </h5>
-                            </a>
-                            <div class="flex items-center justify-between mt-2">
-                                <span
-                                    style="color: #005366"
-                                    class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex-none w-[280px] lg:w-auto p-2">
-                    <div
-                        class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
-                            <img
-                                class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
-                                alt="product image" />
-                        </a>
-                        <div class="px-5 pb-6">
-                            <a href="#">
-                                <h5
-                                    class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
-                                </h5>
-                            </a>
-                            <div class="flex items-center justify-between mt-2">
-                                <span
-                                    style="color: #005366"
-                                    class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-                <div class="flex-none w-[280px] lg:w-auto p-2">
-                    <div
-                        class="w-full bg-white border border-gray-200 shadow-md rounded-lg">
-                        <a href="#">
-                            <img
-                                class="p-5 rounded-t-lg"
-                                src="https://s3.amazonaws.com/image.bluprinter/products/1740025850-il_794xN.6370700926_b5k9.jpg"
-                                alt="product image" />
-                        </a>
-                        <div class="px-5 pb-6">
-                            <a href="#">
-                                <h5
-                                    class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
-                                    Apple Watch Series 7 GPS, Aluminium Case, Starlight Sport
-                                </h5>
-                            </a>
-                            <div class="flex items-center justify-between mt-2">
-                                <span
-                                    style="color: #005366"
-                                    class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>599$
-                                </span>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+                @endforeach
             </div>
+
         </div>
         <div class="w-full text-center">
             <a
-                href="#"
+                href="/products"
+            
                 class="link-see-all py-2 px-5 text-base product-sans-regular text-center rounded-lg">
                 See All
             </a>

@@ -90,7 +90,7 @@
                                             </svg>
                                         </button>
 
-                                        <form id="uploadForm" class="space-y-6" action="{{ route('fulfillment.upload') }}" method="POST" enctype="multipart/form-data">
+                                        <form id="uploadForm" class="space-y-6" action="/admin/fulfillment/upload" method="POST" enctype="multipart/form-data">
                                             @csrf
                                             <h4 class="text-lg font-medium text-gray-800 dark:text-white/90">
                                                 Add Fulfillment File
@@ -219,7 +219,7 @@
                                             <div x-data="{checked: false}" class="flex items-center gap-3">
 
                                                 <div class="flex items-center">
-                                                    <a href="{{ route('admin.order-fulfillment-detail', $file->id) }}" target="_blank" class="text-blue-500 hover:underline-none">
+                                                    <a href="/admin/order-fulfillment-detail/{{ $file->id }}" target="_blank" class="text-blue-500 hover:underline-none">
                                                         <span class="text-theme-sm font-medium text-gray-700 dark:text-gray-400 flex items-center group relative">
                                                             {{ $file->file_name }}
                                                         </span>
@@ -241,15 +241,64 @@
 
                                     <td class="px-6 py-3 whitespace-nowrap">
                                         <div class="flex items-center">
-                                            <p class="text-gray-700 text-theme-sm dark:text-gray-400">
-                                                @if(is_array($file->error_logs))
-                                                {{ implode(', ', $file->error_logs) }}
-                                                @else
-                                                {{ $file->error_logs }}
-                                                @endif
-                                            </p>
+                                            @if(!empty($file->error_logs) && (is_array($file->error_logs) || is_object($file->error_logs)))
+                                            <div x-data="{ showErrorModal: false }">
+                                                <a href="#" @click.prevent="showErrorModal = true" class="text-red-600 hover:underline text-sm">
+                                                    🔴 Your file has errors, click to view details
+                                                </a>
+
+                                                <!-- Modal lỗi -->
+                                                <template x-teleport="body">
+                                                    <div x-show="showErrorModal"
+                                                        x-transition
+                                                        class="fixed inset-0 flex items-center justify-center p-5 z-50">
+                                                        <!-- Overlay -->
+                                                        <div class="absolute inset-0 bg-black/40 backdrop-blur-sm" @click="showErrorModal = false"></div>
+
+                                                        <!-- Nội dung modal -->
+                                                        <div class="relative bg-white dark:bg-gray-800 rounded-xl p-6 max-w-xl w-full shadow-lg z-50"
+                                                            @click.outside="showErrorModal = false">
+                                                            <h2 class="text-lg font-semibold mb-4 text-gray-800 dark:text-white">Error Details</h2>
+                                                            <div class="max-h-[300px] overflow-y-auto text-sm space-y-2">
+                                                                @foreach($file->error_logs as $row => $messages)
+                                                                <div class="text-red-600 dark:text-red-400">
+                                                                    <strong>Row {{$row}}:</strong>
+                                                                    <ul class="list-disc ml-6">
+                                                                        @if(is_array($messages))
+                                                                        @foreach($messages as $message)
+                                                                        <li>
+                                                                            @if($message === "Insufficient balance in wallet")
+                                                                            ⚠️ Insufficient balance in wallet. Please top up your wallet to proceed.
+                                                                            @else
+                                                                            {{$message}}
+                                                                            @endif
+                                                                        </li>
+                                                                        @endforeach
+                                                                        @else
+                                                                        <li>{{ $messages }}</li>
+                                                                        @endif
+                                                                    </ul>
+                                                                </div>
+                                                                @endforeach
+                                                            </div>
+                                                            <div class="mt-5 flex justify-end">
+                                                                <button @click="showErrorModal = false"
+                                                                    class="px-4 py-2 bg-gray-200 text-gray-700 rounded hover:bg-gray-300 dark:bg-gray-700 dark:text-white dark:hover:bg-gray-600">
+                                                                    Close
+                                                                </button>
+                                                            </div>
+                                                        </div>
+                                                    </div>
+                                                </template>
+                                            </div>
+                                            @else
+                                            <span class="text-gray-700 text-sm dark:text-gray-400">
+                                                ✅ No errors
+                                            </span>
+                                            @endif
                                         </div>
                                     </td>
+
                                     <td class="px-6 py-3 whitespace-nowrap">
                                         <div style="text-transform: capitalize;" class="flex items-center">
                                             @switch($file->status)
@@ -258,18 +307,14 @@
                                                 {{ $file->status }}
                                             </p>
                                             @break
-                                            @case('success')
-                                            <p class="bg-success-50 text-theme-xs text-success-600 dark:bg-success-500/15 dark:text-success-500 rounded-full px-2 py-0.5 font-medium">
-                                                {{ $file->status }}
-                                            </p>
-                                            @break
+
                                             @case('failed')
                                             <p class="bg-error-50 text-theme-xs text-error-600 dark:bg-error-500/15 dark:text-error-400 rounded-full px-2 py-0.5 font-medium">
                                                 {{ $file->status }}
                                             </p>
                                             @break
                                             @case('processed')
-                                            <p class="bg-info-50 text-theme-xs text-info-600 dark:bg-info-500/15 dark:text-info-400 rounded-full px-2 py-0.5 font-medium">
+                                            <p class="bg-success-50 text-theme-xs text-success-600 dark:bg-success-500/15 dark:text-success-400 rounded-full px-2 py-0.5 font-medium">
                                                 {{ $file->status }}
                                             </p>
                                             @break
@@ -336,6 +381,16 @@
                             <!-- table body end -->
                         </table>
                     </div>
+                    <div class="border-t border-gray-100 p-4 dark:border-gray-800 sm:p-6">
+                        <div class="">
+                            @if ($files->hasPages())
+                            <!-- Hiển thị các liên kết phân trang -->
+                            {{ $files->links() }}
+                            @else
+                            <p class="text-gray-500 dark:text-gray-400">Không có dữ liệu để phân trang.</p>
+                            @endif
+                        </div>
+                    </div>
                 </div>
                 <!-- ====== Table Six End -->
             </div>
@@ -369,7 +424,7 @@
             }).then((result) => {
                 if (result.isConfirmed) {
                     // Sửa URL và phương thức gửi request
-                    fetch("{{ route('fulfillment.files.destroy') }} ", {
+                    fetch("/admin/fulfillment/files/destroy", {
                             method: 'DELETE',
                             headers: {
                                 'Content-Type': 'application/json',
@@ -423,7 +478,7 @@
                 cancelButtonText: 'Cancel'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    fetch("{{ route('fulfillment.files.destroy', '') }}/" + id, {
+                    fetch("/admin/fulfillment/files/destroy/" + id, {
                             method: 'DELETE',
                             headers: {
                                 'X-CSRF-TOKEN': '{{ csrf_token() }}'
@@ -465,7 +520,7 @@
             cancelButtonText: 'Cancel'
         }).then((result) => {
             if (result.isConfirmed) {
-                fetch(`{{ route('fulfillment.files.destroy', '') }}/${fileId}`, {
+                fetch(`/admin/fulfillment/files/destroy/${fileId}`, {
                         method: 'DELETE',
                         headers: {
                             'Content-Type': 'application/json',

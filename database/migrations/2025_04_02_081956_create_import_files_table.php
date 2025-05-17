@@ -16,7 +16,8 @@ return new class extends Migration
             $table->string('file_name');
             $table->string('file_path');
             $table->enum('status', ['pending', 'processed', 'failed'])->default('pending');
-            $table->json('error_logs')->nullable();
+            $table->longText('error_logs')->nullable();
+            $table->string('warehouse')->nullable();
             $table->timestamps();
         });
     }

@@ -90,6 +90,7 @@ body {
 }
 .home-category-button {
   border: solid 1px #f7961d;
+  border-radius: 10px;
 }
 .home-category-button:hover {
   background: linear-gradient(to right, #f7961d, #ffbe6e);

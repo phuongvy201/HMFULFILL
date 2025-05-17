@@ -3,6 +3,7 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\Relations\HasOne;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 
@@ -25,9 +26,11 @@ class ExcelOrder extends Model
         'phone1',
         'phone2',
         'comment',
+        'shipping_method',
         'status',
         'api_response',
-        'import_file_id'
+        'import_file_id',
+
     ];
 
     protected $casts = [
@@ -41,6 +44,11 @@ class ExcelOrder extends Model
 
     public function importFile(): BelongsTo
     {
-        return $this->belongsTo(ImportFile::class);
+        return $this->belongsTo(ImportFile::class, 'import_file_id');
+    }
+
+    public function fulfillment(): HasOne
+    {
+        return $this->hasOne(ExcelOrderFulfillment::class);
     }
 }

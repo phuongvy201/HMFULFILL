@@ -25,7 +25,7 @@
         <div
             class="max-w-screen-xl flex flex-wrap items-center justify-between mx-auto px-3">
             <a
-                href="/home"
+                href="/"
                 class="flex items-center space-x-3 rtl:space-x-reverse">
                 <img
                     src="{{ asset('assets/images/logo.png') }}"
@@ -34,7 +34,7 @@
             </a>
             <div class="flex lg:order-2 space-x-3 lg:space-x-0 rtl:space-x-reverse">
                 <a
-                    href="/login"
+                    href="/signin"
                     type="button"
                     style="background-color: #f7961d"
                     class="button-sign-in text-white font-medium rounded-lg text-sm px-6 py-3 text-center transition delay-150 duration-300 ease-in-out hover:-translate-y-1 hover:scale-110 hover:bg-indigo-500">
@@ -133,7 +133,7 @@
                 <div class="mx-auto w-full max-w-screen-xl">
                     <div class="grid grid-cols-2 gap-8 px-4 py-6 lg:py-8 md:grid-cols-4">
                         <div>
-                            <a href="/home"><img src="{{ asset('assets/images/logo.png') }}" class="h-20 md:h-24 lg:h-32 max-w-full" alt="Logo" /></a>
+                            <a href="/"><img src="{{ asset('assets/images/logo.png') }}" class="h-20 md:h-24 lg:h-32 max-w-full" alt="Logo" /></a>
                             <div class="flex flex-wrap gap-3 mt-2">
                                 <a href="#" class="text-pink-500 icon-social">
                                     <img src="{{ asset('assets/images/icon/instagram (2).png') }}" alt="Instagram" class="w-8 md:w-10 lg:w-12 h-auto" />
@@ -193,7 +193,7 @@
         </div>
         <div class="px-4 py-6 bg-gray-100 dark:bg-gray-700 md:flex md:items-center md:justify-between text-center">
             <span class="text-sm text-gray-500 dark:text-gray-300 sm:text-center mx-auto">
-                © 2025 <a href="/home">HM Fulfill</a>. All Rights Reserved.
+                © 2025 <a href="/">HM Fulfill</a>. All Rights Reserved.
             </span>
 
         </div>

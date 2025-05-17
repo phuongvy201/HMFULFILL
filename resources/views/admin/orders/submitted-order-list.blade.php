@@ -1,11 +1,11 @@
 @extends('layouts.admin')
 
-@section('title', 'Submitted Orders')
+@section('title', 'Submit Orders')
 
 @section('content-admin')
 <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
     <!-- Breadcrumb Start -->
-    <div x-data="{ pageName: `Submitted Orders List`}">
+    <div x-data="{ pageName: `Submit Orders List`}">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
             <h2
                 class="text-xl font-semibold text-gray-800 dark:text-white/90"
@@ -92,11 +92,11 @@
                                 <select name="status" class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 h-10 w-full rounded-lg border border-gray-300 bg-transparent py-2.5 px-4 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden xl:w-[150px] dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30">
                                     <option value="">Status</option>
                                     <option value="created">Created</option>
-                                    <option value="processing payment">Processing Payment</option>
+                                    <option value="processing_payment">Processing Payment</option>
                                     <option value="paid">Paid</option>
                                     <option value="shipped">Shipped</option>
                                     <option value="returned">Returned</option>
-                                    <option value="in progress">In Progress</option>
+                                    <option value="in_progress">In Progress</option>
                                 </select>
                             </div>
 
@@ -139,6 +139,13 @@
                                 <th class="px-6 py-3 whitespace-nowrap">
                                     <div class="flex items-center">
                                         <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                                            Created At
+                                        </p>
+                                    </div>
+                                </th>
+                                <th class="px-6 py-3 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                                             Status
                                         </p>
                                     </div>
@@ -164,16 +171,20 @@
                                         </p>
                                     </div>
                                 </th>
+                                <th class="px-6 py-3 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
+                                            Actions
+                                        </p>
+                                    </div>
+                                </th>
                             </tr>
                         </thead>
                         <!-- table header end -->
 
                         <!-- table body start -->
                         <tbody class="divide-y divide-gray-100 dark:divide-gray-800">
-                            @foreach($orders as $orderData)
-                            @php
-                            $order = $orderData['order'];
-                            @endphp
+                            @foreach($orders as $order)
                             <tr>
                                 {{-- ID --}}
                                 <td class="px-6 py-3 whitespace-nowrap">
@@ -192,6 +203,13 @@
                                     <div class="flex items-center">
                                         <span class="text-theme-sm mb-0.5 block font-medium text-gray-700 dark:text-gray-400">
                                             {{ $order['external_id'] ?? 'N/A' }}
+                                        </span>
+                                    </div>
+                                </td>
+                                <td class="px-6 py-3 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <span class="text-theme-sm mb-0.5 block font-medium text-gray-700 dark:text-gray-400">
+                                            {{ $order['created_at'] }}
                                         </span>
                                     </div>
                                 </td>
@@ -231,12 +249,37 @@
                                         </p>
                                     </div>
                                 </td>
+                                <td class="px-6 py-3 whitespace-nowrap">
+                                    <div class="flex items-center">
+                                        <a href="{{ route('admin.submitted-order-detail', ['id' => $order['id']]) }}" class="text-blue-500 hover:text-blue-700" title="View Order">
+                                            <!-- Biểu tượng con mắt (Eye icon) -->
+                                            <svg xmlns="http://www.w3.org/2000/svg" class="w-5 h-5" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                                    d="M2.458 12C3.732 7.943 7.523 5 12 5c4.477 0 8.268 2.943 9.542 7-1.274 4.057-5.065 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                            </svg>
+                                        </a>
+                                    </div>
+
+
                             </tr>
                             @endforeach
                         </tbody>
 
                         <!-- table body end -->
                     </table>
+                </div>
+                <!-- Phân trang -->
+                <div class="border-t border-gray-100 p-4 dark:border-gray-800 sm:p-6">
+                    <div class="flex items-center justify-between gap-2 px-6 py-4 sm:justify-normal">
+                        @if ($orders->hasPages())
+                        <!-- Hiển thị các liên kết phân trang -->
+                        {{ $orders->links() }}
+                        @else
+                        <p class="text-gray-500 dark:text-gray-400">No data to paginate.</p>
+                        @endif
+                    </div>
                 </div>
             </div>
             <!-- ====== Table End -->

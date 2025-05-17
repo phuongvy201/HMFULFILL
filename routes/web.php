@@ -5,13 +5,16 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SupplierFulfillmentController;
+use App\Http\Controllers\CustomerController;
 use Illuminate\Support\Facades\Route;
 
 // Trang chủ
-Route::view('/', 'customer.home');
-Route::view('/home', 'customer.home');
+Route::get('/', function () {
+    return app()->make(ProductController::class)->index(request());
+})->name('home');
 
 // Nhóm các trang tĩnh của khách hàng
 Route::prefix('pages')->group(function () {
@@ -28,18 +31,13 @@ Route::prefix('pages')->group(function () {
 });
 
 // Nhóm route liên quan đến sản phẩm
-Route::prefix('products')->group(function () {
-    Route::view('/', 'customer.products.products');
-    Route::get('/{slug}', function ($slug) {
-        return view('customer.products.product-detail', compact('slug'));
-    });
-});
+Route::get('/products', [ProductController::class, 'productList'])->name('products.list');
+Route::get('/product/{slug}', [ProductController::class, 'show'])->name('products.show');
 
 // Nhóm route admin
 Route::prefix('admin')->middleware('auth')->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('admin.dashboard');
     Route::view('/products', 'admin.products.product-list')->name('admin.products');
-    Route::get('/add-product', [ProductController::class, 'create'])->name('admin.products.create');
 
     Route::get('/categories/data', [CategoryController::class, 'index'])->name('admin.categories.data');
     Route::get('/categories', [CategoryController::class, 'showCategories'])->name('admin.categories');
@@ -56,30 +54,60 @@ Route::prefix('admin')->middleware('auth')->group(function () {
     Route::get('/fulfillment', [SupplierFulfillmentController::class, 'index'])->name('fulfillment.index');
     Route::get('/orders/import-file-fulfillment', [SupplierFulfillmentController::class, 'uploadFulfillmentFile'])->name('admin.orders.import-file-fulfillment');
     Route::get('/order-fulfillment-list', [SupplierFulfillmentController::class, 'orderFulfillmentList'])->name('admin.order-fulfillment-list');
+    Route::get('/customer-uploaded-files-list', [SupplierFulfillmentController::class, 'customerUploadedFilesList'])->name('admin.customer-uploaded-files-list');
     Route::delete('/fulfillment/files/destroy', [SupplierFulfillmentController::class, 'destroy'])->name('fulfillment.files.destroy');
     Route::get('/order-fulfillment-detail/{id}', [SupplierFulfillmentController::class, 'orderFulfillmentDetail'])->name('admin.order-fulfillment-detail');
     Route::post('/order-fulfillment-upload', [OrderUploadController::class, 'upload'])->name('admin.order-fulfillment-upload');
     Route::delete('/order-fulfillment/{id}', [OrderUploadController::class, 'destroy'])->name('admin.order-fulfillment.destroy');
     Route::delete('/order-fulfillment/bulk-delete', [OrderUploadController::class, 'destroyMultiple'])->name('admin.order-fulfillment.bulk-destroy');
     Route::get('/submitted-orders', [OrderUploadController::class, 'index'])->name('admin.submitted-orders');
+    Route::get('/submitted-order-detail', [OrderUploadController::class, 'getOrderDetails'])->name('admin.submitted-order-detail');
+
+    Route::get('/products', [ProductController::class, 'adminIndex'])->name('admin.products.index');
+    Route::get('/products/create', [ProductController::class, 'create'])->name('admin.products.create');
+    Route::post('/products', [ProductController::class, 'store'])->name('admin.products.store');
+    Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('admin.products.destroy');
+    Route::get('/topup-requests', [FinanceController::class, 'topupRequests'])->name('admin.topup.requests');
+    Route::get('topup/approve/{id}', [FinanceController::class, 'approveTopup'])->name('admin.topup.approve');
+    Route::get('topup/reject/{id}', [FinanceController::class, 'rejectTopup'])->name('admin.topup.reject');
+    Route::get('finance/balance-overview', [FinanceController::class, 'balanceOverview'])->name('admin.finance.balance-overview');
+    Route::get('finance/user-balance/{userId}', [FinanceController::class, 'userBalance'])->name('admin.finance.user-balance');
+    Route::post('finance/adjust-balance/{userId}', [FinanceController::class, 'adjustBalance'])->name('admin.finance.adjust-balance');
+    Route::get('finance/topup-requests', [FinanceController::class, 'topupRequests'])->name('admin.finance.topup-requests');
+    Route::post('finance/approve-topup/{id}', [FinanceController::class, 'approveTopup'])->name('admin.finance.approve-topup');
+    Route::post('finance/reject-topup/{id}', [FinanceController::class, 'rejectTopup'])->name('admin.finance.reject-topup');
+});
+Route::prefix('customer')->middleware('auth')->group(function () {
+    Route::get('/', [DashboardController::class, 'index'])->name('customer.index');
+
+    Route::get('/wallet', [FinanceController::class, 'index'])->name('customer.wallet');
+    Route::post('/wallet/topup', [FinanceController::class, 'topup'])->name('customer.finance.topup');
+    Route::post('/order-upload', [SupplierFulfillmentController::class, 'uploadCustomerFulfillmentFile'])->name('customer.order-upload');
+    Route::get('/order-list', [SupplierFulfillmentController::class, 'getCustomerUploadedFiles'])->name('customer.order-list');
+    Route::post('/delete-files', [SupplierFulfillmentController::class, 'deleteFiles'])->name('customer.delete-files');
+    Route::get('/order-customer', [SupplierFulfillmentController::class, 'getCustomerOrders'])->name('customer.order-customer');
+    Route::get('/orders/{id}', [SupplierFulfillmentController::class, 'getCustomerOrderDetail'])
+        ->name('customer.orders.detail');
 });
 
 // Nhóm route authentication
-Route::controller(LoginController::class)->group(function () {
-    Route::get('login', 'showLoginForm')->name('login');
-    Route::post('login', 'login');
-    Route::post('logout', 'logout')->name('logout');
-});
-
 Route::controller(RegisterController::class)->group(function () {
     Route::get('register', 'showRegistrationForm')->name('register');
     Route::post('register', 'register');
     Route::get('verify-email/{token}', 'verifyEmail');
     Route::get('verification-code-form', 'showVerificationCodeForm')->name('verification.code.form');
     Route::post('verify-code', 'verifyCode')->name('verify.code');
+    Route::get('signin', 'showLoginForm')->name('signin');
+    Route::post('signin', 'login');
+    Route::post('logout', 'logout')->name('logout');
 });
 
 // Trang fulfill (cần đăng nhập)
 Route::view('fulfill', 'fulfill')->middleware('auth');
 
 Route::get('/test-order', [OrderUploadController::class, 'testOrder']);
+Route::post('/find-variant-sku/{productId}', [ProductController::class, 'findVariantSku'])->name('products.find-variant-sku');
+Route::get('/products/{slug}', [ProductController::class, 'productList']);
+Route::post('/products/import', [ProductController::class, 'import'])->name('products.import');
+
+// Admin Topup Routes

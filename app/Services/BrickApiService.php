@@ -67,28 +67,60 @@ class BrickApiService
                 ];
             }
 
-            // Cập nhật status thành 'failed' nếu thất bại
-            \App\Models\ExcelOrder::where('id', $orderId)
-                ->update(['status' => 'failed']);
-
-            return [
-                'success' => false,
-                'error' => $response->json() ?? $response->body(),
-                'status' => $response->status()
-            ];
-        } catch (\Exception $e) {
-            // Cập nhật status thành 'failed' nếu có lỗi
-            \App\Models\ExcelOrder::where('id', $orderId)
-                ->update(['status' => 'failed']);
-
-            Log::error('Brick API Error:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+            // Log chi tiết lỗi từ API
+            Log::error('Brick API Error Response:', [
+                'order_id' => $orderId,
+                'status_code' => $response->status(),
+                'error_response' => $response->json() ?? $response->body(),
+                'request_data' => [
+                    'url' => $this->apiUrl . '/orders.php',
+                    'headers' => $headers,
+                    'parameters' => $parameters,
+                    'body' => $orderData
+                ]
             ]);
 
+            // Cập nhật status thành 'failed' và lưu thông tin lỗi
+            \App\Models\ExcelOrder::where('id', $orderId)
+                ->update([
+                    'status' => 'failed',
+                    'api_response' => $response->json() ?? $response->body()
+                ]);
+
             return [
                 'success' => false,
-                'error' => $e->getMessage()
+                'error' => $response->json()['error'] ?? 'Unknown error'
+            ];
+        } catch (\Exception $e) {
+            // Log chi tiết lỗi exception
+            Log::error('Brick API Exception:', [
+                'order_id' => $orderId,
+                'exception' => [
+                    'message' => $e->getMessage(),
+                    'code' => $e->getCode(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine(),
+                    'trace' => $e->getTraceAsString()
+                ],
+                'request_data' => $orderData
+            ]);
+
+            // Cập nhật status thành 'failed' và lưu thông tin lỗi
+            \App\Models\ExcelOrder::where('id', $orderId)
+                ->update([
+                    'status' => 'failed',
+                    'api_response' => $e->getMessage()
+                ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage(),
+                'error_details' => [
+                    'exception' => $e->getMessage(),
+                    'code' => $e->getCode(),
+                    'file' => $e->getFile(),
+                    'line' => $e->getLine()
+                ]
             ];
         }
     }
@@ -99,7 +131,7 @@ class BrickApiService
             $queryParams = array_merge([
                 'AppId' => $this->appId,
                 'page' => 1,
-                'limit' => 50,
+                'limit' => 1000,
                 'format' => 'JSON'
             ], $params);
 
@@ -133,6 +165,55 @@ class BrickApiService
             ];
         } catch (\Exception $e) {
             Log::error('Brick API getOrders error:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return [
+                'success' => false,
+                'error' => $e->getMessage()
+            ];
+        }
+    }
+
+    public function getOrderDetails($orderId)
+    {
+        try {
+            $queryParams = [
+                'id' => $orderId,
+                'AppId' => $this->appId
+            ];
+
+            // Tạo query string không bao gồm Signature
+            $queryString = http_build_query($queryParams);
+
+            // Tính signature: sha1(query string + secret key)
+            $signature = sha1($queryString . $this->secretKey);
+
+            // Thêm signature vào query parameters
+            $queryParams['Signature'] = $signature;
+
+            // Log request details
+            Log::info('Brick API getOrderDetails Request:', [
+                'url' => $this->apiUrl . '/order.php',
+                'query_params' => $queryParams
+            ]);
+
+            $response = Http::get($this->apiUrl . '/order.php?' . http_build_query($queryParams));
+
+            if ($response->successful()) {
+                return [
+                    'success' => true,
+                    'data' => $response->json()
+                ];
+            }
+
+            return [
+                'success' => false,
+                'error' => $response->json()['error'] ?? 'Unknown error'
+            ];
+        } catch (\Exception $e) {
+            Log::error('Brick API getOrderDetails error:', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);

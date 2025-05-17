@@ -17,7 +17,7 @@ return new class extends Migration
             $table->string('slug', 191)->unique();
             $table->integer('status');
             $table->text('description')->nullable();
-            $table->decimal('base_price', 10, 2);
+           
             $table->foreignId('category_id')->nullable()->constrained('categories')->onDelete('set null');
             $table->string('template_link')->nullable();
             $table->timestamps();

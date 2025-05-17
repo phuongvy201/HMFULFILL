@@ -29,59 +29,33 @@ class Product extends Model
     }
 
     /**
-     * Quan hệ với bảng product_images
+     * Quan hệ với bảng images
      */
-    public function images(): HasMany
+    public function images()
     {
         return $this->hasMany(ProductImage::class);
     }
 
-    /**
-     * Lấy ảnh chính của sản phẩm
-     */
-    public function primaryImage()
+    public function variants()
     {
-        return $this->hasOne(ProductImage::class)->where('is_primary', true);
+        return $this->hasMany(ProductVariant::class, 'product_id');
     }
 
-    /**
-     * Quan hệ với bảng attributes thông qua product_attributes
-     */
-    public function attributes(): BelongsToMany
+    public function attributes()
     {
-        return $this->belongsToMany(Attribute::class, 'product_attributes')
-            ->withPivot('value', 'image_url')
-            ->withTimestamps();
+        return $this->hasManyThrough(
+            VariantAttribute::class,
+            ProductVariant::class,
+            'product_id',
+            'variant_id'
+        );
     }
 
-    /**
-     * Quan hệ trực tiếp với bảng product_attributes
-     */
-    public function productAttributes(): HasMany
+    public function fulfillmentLocations()
     {
-        return $this->hasMany(ProductAttribute::class);
+        return $this->hasMany(FulfillmentLocation::class);
     }
 
-    /**
-     * Quan hệ với bảng variants
-     */
-    public function variants(): HasMany
-    {
-        return $this->hasMany(Variant::class);
-    }
-
-    /**
-     * Quan hệ với bảng fulfillment_regions thông qua product_fulfillments
-     */
-    public function fulfillmentRegions(): BelongsToMany
-    {
-        return $this->belongsToMany(FulfillmentRegion::class, 'product_fulfillments')
-            ->withTimestamps();
-    }
-
-    /**
-     * Scope để lọc sản phẩm theo trạng thái
-     */
     public function scopeActive($query)
     {
         return $query->where('status', 1);
@@ -124,5 +98,15 @@ class Product extends Model
                 $product->slug = Str::slug($product->name);
             }
         });
+    }
+
+    public function getGroupedAttributes()
+    {
+        return $this->attributes()
+            ->get()
+            ->groupBy('name')
+            ->map(function ($items) {
+                return $items->pluck('value')->unique()->values();
+            });
     }
 }

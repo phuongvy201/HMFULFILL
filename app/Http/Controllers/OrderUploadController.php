@@ -2,11 +2,14 @@
 
 namespace App\Http\Controllers;
 
+use App\Helpers\GoogleDriveHelper;
 use App\Models\ExcelOrder;
 use App\Services\BrickApiService;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\DB;
+use App\Helpers\UrlHelper;
+use Illuminate\Support\Facades\Http;
 
 class OrderUploadController extends Controller
 {
@@ -17,6 +20,160 @@ class OrderUploadController extends Controller
         $this->brickApiService = $brickApiService;
     }
 
+    // public function upload(Request $request)
+    // {
+    //     try {
+    //         $orderIds = $request->input('order_ids');
+
+    //         if (empty($orderIds)) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'Don\'t have any order selected'
+    //             ]);
+    //         }
+
+    //         // Thêm logging để debug
+    //         Log::info('Selected order IDs:', ['order_ids' => $orderIds]);
+
+    //         $orders = ExcelOrder::with(['items'])
+    //             ->whereIn('id', $orderIds)
+    //             ->get();
+
+    //         // Kiểm tra xem có lấy được orders không
+    //         Log::info('Found orders:', ['count' => $orders->count()]);
+
+    //         if ($orders->isEmpty()) {
+    //             return response()->json([
+    //                 'success' => false,
+    //                 'message' => 'Don\'t have any order selected'
+    //             ]);
+    //         }
+
+    //         $results = [];
+    //         foreach ($orders as $order) {
+    //             // Kiểm tra các relationship
+    //             if (!$order->items) {
+    //                 Log::warning('Missing relationships for order:', [
+    //                     'order_id' => $order->id,
+    //                     'has_items' => $order->items ? true : false,
+    //                 ]);
+    //                 continue;
+    //             }
+
+    //             $items = $order->items;
+    //             foreach ($items as &$item) {
+    //                 if (isset($item['designs'])) {
+    //                     foreach ($item['designs'] as &$design) {
+    //                         if (strpos($design['src'], 'drive.google.com') !== false) {
+    //                             $design['src'] = GoogleDriveHelper::convertToDirectLink($design['src']);
+    //                         }
+    //                     }
+    //                 }
+    //             }
+    //             $order->items = $items;
+
+    //             $orderData = [
+    //                 'external_id' => $order->external_id,
+    //                 'brand' => $order->brand,
+    //                 'channel' => $order->channel,
+    //                 'buyer_email' => $order->buyer_email,
+    //                 'comments' => $order->comment,
+    //                 'shipping_address' => [
+    //                     'firstName' => $order->first_name,
+    //                     'lastName' => $order->last_name,
+    //                     'company' => $order->company,
+    //                     'address1' => $order->address1,
+    //                     'address2' => $order->address2,
+    //                     'city' => $order->city,
+    //                     'county' => $order->county,
+    //                     'postcode' => $order->post_code,
+    //                     'country' => $order->country,
+    //                     'phone1' => $order->phone1,
+    //                     'phone2' => $order->phone2
+    //                 ],
+    //                 'items' => $order->items->map(function ($item) {
+    //                     return [
+    //                         'id' => $item->id,
+    //                         'pn' => $item->part_number,
+    //                         'external_id' => $item->external_id,
+    //                         'title' => $item->title,
+    //                         'retailPrice' => $item->retail_price,
+    //                         'retailCurrency' => $item->retail_currency ?? 'GBP',
+    //                         'quantity' => $item->quantity,
+    //                         'description' => $item->description,
+    //                         'label' => [
+    //                             'id' => $item->label_id ?? 0,
+    //                             'name' => $item->label_name ?? '',
+    //                             'type' => $item->label_type ?? 'Printed'
+    //                         ],
+    //                         'mockups' => $item->mockups->map(function ($mockup) {
+    //                             return [
+    //                                 'title' => $mockup->title,
+    //                                 'src' => $mockup->url
+    //                             ];
+    //                         })->toArray(),
+    //                         'designs' => $item->designs->map(function ($design) {
+    //                             return [
+    //                                 'title' => $design->title,
+    //                                 'src' => $design->url
+    //                             ];
+    //                         })->toArray()
+    //                     ];
+    //                 })->toArray(),
+    //                 // 'comments' => $order->comment
+    //             ];
+    //             // Thêm logging để debug
+    //             Log::info('Order Data:', [
+    //                 'order_id' => $order->id,
+    //                 'comment' => $order->comment,
+    //                 'comment_type' => gettype($order->comment),
+    //                 'raw_order' => $order->toArray()
+    //             ]);
+
+    //             // Log thông tin request
+    //             Log::info('Brick API Request Details:', [
+    //                 'order_id' => $order->id,
+    //                 'external_id' => $order->external_id,
+    //                 'request_body' => $orderData
+    //             ]);
+
+    //             $result = $this->brickApiService->sendOrder($orderData, $order->id);
+
+    //             // Kiểm tra status code 201
+    //             if ($result['success']) {
+    //                 $results[] = [
+    //                     'order_id' => $order->id,
+    //                     'external_id' => $order->external_id,
+    //                     'success' => true,
+    //                     'message' => 'Upload success'
+    //                 ];
+    //             } else {
+    //                 $results[] = [
+    //                     'order_id' => $order->id,
+    //                     'external_id' => $order->external_id,
+    //                     'success' => false,
+    //                     'message' => $result['error'] ?? 'Unknown error'
+    //                 ];
+    //             }
+    //         }
+
+    //         return response()->json([
+    //             'success' => true,
+    //             'message' => 'Processed orders successfully',
+    //             'results' => $results
+    //         ]);
+    //     } catch (\Exception $e) {
+    //         Log::error('Order upload error:', [
+    //             'message' => $e->getMessage(),
+    //             'trace' => $e->getTraceAsString()
+    //         ]);
+
+    //         return response()->json([
+    //             'success' => false,
+    //             'message' => 'An error occurred while processing orders'
+    //         ], 500);
+    //     }
+    // }
     public function upload(Request $request)
     {
         try {
@@ -75,6 +232,9 @@ class OrderUploadController extends Controller
                         'phone1' => $order->phone1,
                         'phone2' => $order->phone2
                     ],
+                    'shipping' => [
+                        'shippingMethod' => $order->shipping_method ?? null,
+                    ],
                     'items' => $order->items->map(function ($item) {
                         return [
                             'pn' => $item->part_number,
@@ -94,7 +254,7 @@ class OrderUploadController extends Controller
                             })->toArray()
                         ];
                     })->toArray(),
-                    'comments' => $order->comments
+                    'comment' => $order->comment
                 ];
 
                 // Log thông tin request
@@ -105,12 +265,30 @@ class OrderUploadController extends Controller
                 ]);
 
                 $result = $this->brickApiService->sendOrder($orderData, $order->id);
-                $results[] = [
-                    'order_id' => $order->id,
-                    'external_id' => $order->external_id,
-                    'success' => $result['success'],
-                    'message' => $result['success'] ? 'Upload success' : ($result['error'] ?? 'Unknown error')
-                ];
+
+                // Cập nhật trạng thái đơn hàng dựa trên kết quả API
+                if ($result['success']) {
+                    $order->update([
+                        'status' => 'processed'
+                    ]);
+                    $results[] = [
+                        'order_id' => $order->id,
+                        'external_id' => $order->external_id,
+                        'success' => true,
+                        'message' => 'Upload success'
+                    ];
+                } else {
+                    $order->update([
+                        'status' => 'failed',
+                        'error_message' => $result['error'] ?? 'Unknown error'
+                    ]);
+                    $results[] = [
+                        'order_id' => $order->id,
+                        'external_id' => $order->external_id,
+                        'success' => false,
+                        'message' => $result['error'] ?? 'Unknown error'
+                    ];
+                }
             }
 
             return response()->json([
@@ -121,7 +299,6 @@ class OrderUploadController extends Controller
         } catch (\Exception $e) {
             Log::error('Order upload error:', [
                 'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
             ]);
 
             return response()->json([
@@ -130,7 +307,6 @@ class OrderUploadController extends Controller
             ], 500);
         }
     }
-
     public function testOrder()
     {
         try {
@@ -219,15 +395,54 @@ class OrderUploadController extends Controller
                 $params['page'] = 1;
             }
             if ($request->has('limit')) {
-                $params['limit'] = 1000;
+                $params['limit'] = $request->input('limit');
+            } else {
+                $params['limit'] = 1000; // Số lượng đơn hàng mỗi trang
             }
 
             $result = $this->brickApiService->getOrders($params);
 
             if ($result['success']) {
-                // Trả về view với dữ liệu đơn hàng
+                // Format và sắp xếp dữ liệu trước khi gửi đến view
+                $orders = collect($result['data']['orders'])->map(function ($item) {
+                    $order = $item['order'];
+                    return [
+                        'id' => $order['id'],
+                        'external_id' => $order['external_id'],
+                        'created_at' => \Carbon\Carbon::parse($order['created_at'])->format('Y-m-d H:i:s'),
+                        'status' => $order['status'],
+                        'brand' => $order['brand'],
+                        'channel' => $order['channel'],
+                        'buyer_email' => $order['buyer_email'],
+                        'shipping_address' => $order['shipping_address'],
+                        'items' => collect($order['items'])->map(function ($item) {
+                            return [
+                                'id' => $item['id'],
+                                'pn' => $item['pn'],
+                                'title' => $item['title'],
+                                'quantity' => $item['quantity'],
+                                'mockups' => $item['mockups'],
+                                'designs' => $item['designs']
+                            ];
+                        })->toArray(),
+                        'summary' => $order['summary'],
+                        'shipping' => $order['shipping'],
+                        'payment' => $order['payment'],
+                        'fulfillments' => $order['fulfillments']
+                    ];
+                })->sortByDesc('created_at')->values();
+
+                // Sử dụng phân trang
+                $perPage = $params['limit'];
+                $currentPage = $params['page'] ?? 1;
+                $pagedData = $orders->slice(($currentPage - 1) * $perPage, $perPage)->all();
+                $paginatedOrders = new \Illuminate\Pagination\LengthAwarePaginator($pagedData, $orders->count(), $perPage, $currentPage, [
+                    'path' => $request->url(),
+                    'query' => $request->query(),
+                ]);
+
                 return view('admin.orders.submitted-order-list', [
-                    'orders' => $result['data']['orders']
+                    'orders' => $paginatedOrders
                 ]);
             }
 
@@ -247,6 +462,7 @@ class OrderUploadController extends Controller
             ], 500);
         }
     }
+
 
     public function destroy($id)
     {
@@ -306,6 +522,55 @@ class OrderUploadController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'An error occurred while deleting the orders'
+            ], 500);
+        }
+    }
+
+    public function getOrderDetails(Request $request)
+    {
+        try {
+            $orderId = $request->query('id');
+
+            Log::info('Received order ID:', ['orderId' => $orderId]); // 👉 Ghi log order ID
+
+            if (empty($orderId)) {
+                Log::warning('Missing order ID in request');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Missing order ID'
+                ], 400);
+            }
+
+            $result = $this->brickApiService->getOrderDetails($orderId);
+
+            // 👉 Ghi log kết quả từ API
+            Log::info('Order details API result:', $result);
+
+            if ($result['success']) {
+                // Log chi tiết đơn hàng nếu cần
+                Log::info('Order details:', $result['data']);
+
+                // Trả về dữ liệu dưới dạng JSON
+                return view('admin.orders.submitted-order-detail', [
+                    'order' => $result['data']
+                ]);
+            }
+
+            Log::error('Failed to fetch order details:', ['error' => $result['error']]);
+
+            return response()->json([
+                'success' => false,
+                'message' => $result['error']
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('Error fetching order details:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while fetching order details'
             ], 500);
         }
     }

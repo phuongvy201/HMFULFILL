@@ -2,7 +2,7 @@
 
     @section('title', 'Register')
 
-    @section('content')
+    @section('content-auth')
     <div class="flex items-center justify-center min-h-screen bg-gray-50 product-sans-regular form-login">
 
         <form action="{{ route('register') }}" method="POST" class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md my-10">
@@ -12,7 +12,7 @@
             </div>
             <div class="mb-6 mx-auto">
                 <label for="email" class="block mb-2 product-sans-regular text-gray-900 dark:text-white">Email address <span class="text-red-500">(*)</span></label>
-                <input type="email" id="email" name="email" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your email address" required />
+                <input type="email" value="{{ old('email') }}" id="email" name="email" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your email address" required />
 
                 @if ($errors->has('email'))
                 <span class="text-red-500 text-sm">{{ $errors->first('email') }}</span>
@@ -23,7 +23,7 @@
             <div class="mb-6 flex flex-col md:flex-row md:space-x-4">
                 <div class="flex-1 mb-4 md:mb-0">
                     <label for="first_name" class="block mb-2 text-gray-900 dark:text-white">First Name <span class="text-red-500">(*)</span></label>
-                    <input type="text" id="first_name" name="first_name" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your first name" required />
+                    <input type="text" value="{{ old('first_name') }}" id="first_name" name="first_name" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your first name" required />
 
                     @if ($errors->has('first_name'))
                     <span class="text-red-500 text-sm">{{ $errors->first('first_name') }}</span>
@@ -31,7 +31,7 @@
                 </div>
                 <div class="flex-1">
                     <label for="last_name" class="block mb-2 text-gray-900 dark:text-white">Last Name <span class="text-red-500">(*)</span></label>
-                    <input type="text" id="last-name" name="last_name" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your last name" required />
+                    <input type="text" value="{{ old('last_name') }}" id="last-name" name="last_name" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your last name" required />
 
                     @if ($errors->has('last_name'))
                     <span class="text-red-500 text-sm">{{ $errors->first('last_name') }}</span>
@@ -40,7 +40,7 @@
             </div>
             <div class="mb-6">
                 <label for="phone" class="block mb-2 text-gray-900 dark:text-white">Phone number (Optional)</label>
-                <input type="text" id="phone" name="phone" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your phone number" />
+                <input type="text" value="{{ old('phone') }}" id="phone" name="phone" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your phone number" />
 
                 @if ($errors->has('phone'))
                 <span class="text-red-500 text-sm">{{ $errors->first('phone') }}</span>
@@ -48,7 +48,7 @@
             </div>
             <div class="mb-6">
                 <label for="password" class="block mb-2 text-gray-900 dark:text-white">Password <span class="text-red-500">(*)</span></label>
-                <input type="password" id="password" name="password" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your password" required />
+                <input type="password" value="{{ old('password') }}" id="password" name="password" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your password" required />
 
                 @if ($errors->has('password'))
                 <span class="text-red-500 text-sm">{{ $errors->first('password') }}</span>
@@ -56,7 +56,7 @@
             </div>
             <div class="mb-6">
                 <label for="password" class="block mb-2 text-gray-900 dark:text-white">Confirm Password <span class="text-red-500">(*)</span></label>
-                <input type="password" id="password" name="password_confirmation" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your confirm password" required />
+                <input type="password" value="{{ old('password_confirmation') }}" id="password" name="password_confirmation" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your confirm password" required />
 
                 @if ($errors->has('password_confirmation'))
                 <span class="text-red-500 text-sm">{{ $errors->first('password_confirmation') }}</span>

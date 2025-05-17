@@ -2,24 +2,24 @@
 
 @section('title', 'Login')
 
-@section('content')
+@section('content-auth')
 <div class="flex items-center justify-center min-h-screen bg-gray-50 product-sans-regular form-login">
 
-    <form class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md" action="{{ route('login') }}" method="POST">
+    <form class="max-w-2xl mx-auto bg-white p-8 rounded-lg shadow-md" action="{{ route('signin') }}" method="POST">
         @csrf
         <div class="flex justify-center mb-6">
             <img src="{{ asset('assets/images/logo HM-02.png') }}" alt="Sign In Image 2" class="h-32">
         </div>
         <div class="mb-6 w-64 md:w-96 mx-auto">
             <label for="email" class="block mb-2 product-sans-regular text-gray-900 dark:text-white">Email or phone number</label>
-            <input type="email" id="email" name="email" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900  rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your email or phone number" required />
+            <input type="email" value="{{ old('email') }}" id="email" name="email" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900  rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your email or phone number" required />
             @if ($errors->has('email'))
             <span class="text-red-500 text-sm">{{ $errors->first('email') }}</span>
             @endif
         </div>
         <div class="mb-6">
             <label for="password" class="block mb-2 text-gray-900 dark:text-white">Password</label>
-            <input type="password" id="password" name="password" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your password" required />
+            <input type="password" value="{{ old('password') }}" id="password" name="password" class="shadow-lg bg-gray-50 border border-gray-300 text-gray-900 rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-3 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Enter your password" required />
             @if ($errors->has('password'))
             <span class="text-red-500 text-sm">{{ $errors->first('password') }}</span>
             @endif

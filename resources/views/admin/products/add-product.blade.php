@@ -3,8 +3,22 @@
 @section('title', 'Add Product')
 
 @section('content-admin')
+
 <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
-    <!-- Phần Breadcrumb -->
+    <!-- Thông báo thành công hoặc lỗi -->
+    @if (session('success'))
+    <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded relative" role="alert">
+        <strong class="font-bold">Success!</strong>
+        <span class="block sm:inline">{{ session('success') }}</span>
+    </div>
+    @elseif (session('error'))
+    <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+        <strong class="font-bold">Error!</strong>
+        <span class="block sm:inline">{{ session('error') }}</span>
+    </div>
+    @endif
+
+    <!-- Breadcrumb Start -->
     <div x-data="{ pageName: `Add Product`}">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
             <h2
@@ -41,627 +55,640 @@
             </nav>
         </div>
     </div>
-
-    <div class="grid grid-cols-1 gap-6 sm:grid-cols-2">
-        <!-- Cột trái - Thông tin sản phẩm -->
-        <div class="space-y-6">
-            <!-- Card thông tin cơ bản -->
-            <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-                <div class="px-5 py-4 sm:px-6 sm:py-5">
-                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">
-                        Product Information
-                    </h3>
-                </div>
-                <div class="p-5 space-y-6 border-t border-gray-100 dark:border-gray-800 sm:p-6">
-                    <form>
-                        <div class="-mx-2.5 flex flex-wrap gap-y-5">
-                            <div class="w-full px-2.5">
-                                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                                    Product Name
-                                </label>
-                                <input id="name" name="name" type="text" placeholder="Enter product name" class="dark:bg-dark-900 h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800">
-                            </div>
-                            <div class="w-full px-2.5">
-                                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                                    Description
-                                </label>
-                                <textarea id="editor" name="description" placeholder="Enter product description" rows="6" class="dark:bg-dark-900 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800"></textarea>
-                            </div>
-                            <div class="w-full px-2.5">
-                                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                                    Category
-                                </label>
-                                <div x-data="{ isOptionSelected: false }" class="relative z-20 bg-transparent">
-                                    <select class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 h-11 w-full appearance-none rounded-lg border border-gray-300 bg-transparent bg-none px-4 py-2.5 pr-11 text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30" :class="isOptionSelected && 'text-gray-800 dark:text-white/90'" @change="isOptionSelected = true">
-                                        <option value="" class="text-gray-700 dark:bg-gray-900 dark:text-gray-400">
-                                            Select Category
-                                        </option>
-                                        <option value="" class="text-gray-700 dark:bg-gray-900 dark:text-gray-400">
-                                            Marketing
-                                        </option>
-                                        <option value="" class="text-gray-700 dark:bg-gray-900 dark:text-gray-400">
-                                            Template
-                                        </option>
-                                        <option value="" class="text-gray-700 dark:bg-gray-900 dark:text-gray-400">
-                                            Development
-                                        </option>
-                                    </select>
-                                    <span class="pointer-events-none absolute top-1/2 right-4 z-30 -translate-y-1/2 text-gray-700 dark:text-gray-400">
-                                        <svg class="stroke-current" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                            <path d="M4.79175 7.396L10.0001 12.6043L15.2084 7.396" stroke="" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                                        </svg>
-                                    </span>
-                                </div>
-
-                            </div>
-                            <div class="w-full px-2.5">
-                                <div>
-                                    <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                                        Template URL
-                                    </label>
-                                    <div class="relative">
-                                        <span class="absolute top-1/2 left-0 inline-flex h-11 -translate-y-1/2 items-center justify-center border-r border-gray-200 py-3 pr-3 pl-3.5 text-gray-500 dark:border-gray-800 dark:text-gray-400">
-                                            https://
-                                        </span>
-                                        <input type="url" placeholder="hmfulfill.com" class="dark:bg-dark-900 shadow-theme-xs focus:border-brand-300 focus:ring-brand-500/10 dark:focus:border-brand-800 h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 pl-[90px] text-sm text-gray-800 placeholder:text-gray-400 focus:ring-3 focus:outline-hidden dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30" data-listener-added_317ee790="true">
-                                    </div>
-                                </div>
-
-                            </div>
-
-                            <div class="w-full px-2.5 xl:w-1/2 ">
-                                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                                    Base Price
-                                </label>
-                                <input type="number" placeholder="Enter product base price" class="dark:bg-dark-900 h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800">
-                            </div>
-                            <div class="w-full px-2.5 xl:w-1/2">
-                                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                                    Status
-                                </label>
-                                <select class="w-full px-4 py-3 text-sm text-gray-800 bg-transparent border border-gray-300 rounded-lg appearance-none dark:bg-dark-900 h-11 bg-none shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800" :class="isOptionSelected && 'text-gray-500 dark:text-gray-400'" @change="isOptionSelected = true">
-                                    <option value="" class="text-gray-500">
-                                        -- Status --
-                                    </option>
-                                    <option value="1" class="text-gray-500">
-                                        -- Active --
-                                    </option>
-                                    <option value="2" class="text-gray-500">
-                                        -- Inactive --
-                                    </option>
-                                </select>
-                            </div>
-
-
-                        </div>
-                    </form>
-                </div>
+    <!-- Breadcrumb End -->
+    <form action="{{ route('admin.products.store') }}" method="POST" enctype="multipart/form-data">
+        @csrf
+        <div class="grid gap-6 mb-6 md:grid-cols-2">
+            <div>
+                <label for="name" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Name</label>
+                <input type="text" id="name" value="{{ old('name') }}" name="name" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="Product Name" required />
+                @error('name')
+                <span class="text-red-500">{{ $message }}</span>
+                @enderror
             </div>
-            <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-                <div class="px-5 py-4 sm:px-6 sm:py-5">
-                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">
-                        Area Fulfillment
-                    </h3>
-                </div>
-                <div class="space-y-6 border-t border-gray-100 p-5 sm:p-6 dark:border-gray-800">
-                    <!-- Elements -->
-                    <div class="flex flex-col items-start gap-8">
-                        <div x-data="{ checkboxToggle: false }">
-                            <label for="checkboxLabelOne" class="flex cursor-pointer items-center text-sm font-medium text-gray-700 select-none dark:text-gray-400">
-                                <div class="relative">
-                                    <input type="checkbox" id="checkboxLabelOne" class="sr-only" @change="checkboxToggle = !checkboxToggle">
-                                    <div :class="checkboxToggle ? 'border-brand-500 bg-brand-500' : 'bg-transparent border-gray-300 dark:border-gray-700'" class="f hover:border-brand-500 dark:hover:border-brand-500 mr-3 flex h-5 w-5 items-center justify-center rounded-md border-[1.25px] bg-transparent border-gray-300 dark:border-gray-700">
-                                        <span :class="checkboxToggle ? '' : 'opacity-0'" class="opacity-0">
-                                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M11.6666 3.5L5.24992 9.91667L2.33325 7" stroke="white" stroke-width="1.94437" stroke-linecap="round" stroke-linejoin="round"></path>
-                                            </svg>
-                                        </span>
-                                    </div>
-                                </div>
-                                United States
-                            </label>
-                        </div>
-
-                        <div x-data="{ checkboxToggle: true }">
-                            <label for="checkboxLabelTwo" class="flex cursor-pointer items-center text-sm font-medium text-gray-700 select-none dark:text-gray-400">
-                                <div class="relative">
-                                    <input type="checkbox" id="checkboxLabelTwo" class="sr-only" @change="checkboxToggle = !checkboxToggle">
-                                    <div :class="checkboxToggle ? 'border-brand-500 bg-brand-500' : 'bg-transparent border-gray-300 dark:border-gray-700'" class="hover:border-brand-500 dark:hover:border-brand-500 mr-3 flex h-5 w-5 items-center justify-center rounded-md border-[1.25px] bg-transparent border-gray-300 dark:border-gray-700">
-                                        <span :class="checkboxToggle ? '' : 'opacity-0'" class="opacity-0">
-                                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M11.6666 3.5L5.24992 9.91667L2.33325 7" stroke="white" stroke-width="1.94437" stroke-linecap="round" stroke-linejoin="round"></path>
-                                            </svg>
-                                        </span>
-                                    </div>
-                                </div>
-                                United Kingdom
-                            </label>
-                        </div>
-                        <div x-data="{ checkboxToggle: true }">
-                            <label for="checkboxLabelTwo" class="flex cursor-pointer items-center text-sm font-medium text-gray-700 select-none dark:text-gray-400">
-                                <div class="relative">
-                                    <input type="checkbox" id="checkboxLabelTwo" class="sr-only" @change="checkboxToggle = !checkboxToggle">
-                                    <div :class="checkboxToggle ? 'border-brand-500 bg-brand-500' : 'bg-transparent border-gray-300 dark:border-gray-700'" class="hover:border-brand-500 dark:hover:border-brand-500 mr-3 flex h-5 w-5 items-center justify-center rounded-md border-[1.25px] bg-transparent border-gray-300 dark:border-gray-700">
-                                        <span :class="checkboxToggle ? '' : 'opacity-0'" class="opacity-0">
-                                            <svg width="14" height="14" viewBox="0 0 14 14" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path d="M11.6666 3.5L5.24992 9.91667L2.33325 7" stroke="white" stroke-width="1.94437" stroke-linecap="round" stroke-linejoin="round"></path>
-                                            </svg>
-                                        </span>
-                                    </div>
-                                </div>
-                                Vietnam
-                            </label>
-                        </div>
-                    </div>
-                </div>
+            <div>
+                <label for="categories" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Category</label>
+                <select id="categories" value="{{ old('category_id') }}" name="category_id" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
+                    <option selected>Choose a category</option>
+                    @foreach ($categories as $category)
+                    <option value="{{ $category->id }}">{{ $category->name }}</option>
+                    @endforeach
+                </select>
+                @error('category_id')
+                <span class="text-red-500">{{ $message }}</span>
+                @enderror
             </div>
-
-        </div>
-
-        <div class="space-y-6">
-            <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-                <div class="px-5 py-4 sm:px-6 sm:py-5">
-                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">
-                        Product Media
-                    </h3>
-                </div>
-                <div class="space-y-6 border-t border-gray-100 p-5 sm:p-6 dark:border-gray-800">
-                    <form class="dropzone hover:border-brand-500! dark:hover:border-brand-500! rounded-xl border border-dashed! border-gray-300! bg-gray-50 p-7 lg:p-10 dark:border-gray-700! dark:bg-gray-900 dz-clickable" id="demo-upload" action="/upload">
-                        <div class="dz-message m-0!">
-                            <div class="mb-[22px] flex justify-center">
-                                <div class="flex h-[68px] w-[68px] items-center justify-center rounded-full bg-gray-200 text-gray-700 dark:bg-gray-800 dark:text-gray-400">
-                                    <svg class="fill-current" width="29" height="28" viewBox="0 0 29 28" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                        <path fill-rule="evenodd" clip-rule="evenodd" d="M14.5019 3.91699C14.2852 3.91699 14.0899 4.00891 13.953 4.15589L8.57363 9.53186C8.28065 9.82466 8.2805 10.2995 8.5733 10.5925C8.8661 10.8855 9.34097 10.8857 9.63396 10.5929L13.7519 6.47752V18.667C13.7519 19.0812 14.0877 19.417 14.5019 19.417C14.9161 19.417 15.2519 19.0812 15.2519 18.667V6.48234L19.3653 10.5929C19.6583 10.8857 20.1332 10.8855 20.426 10.5925C20.7188 10.2995 20.7186 9.82463 20.4256 9.53184L15.0838 4.19378C14.9463 4.02488 14.7367 3.91699 14.5019 3.91699ZM5.91626 18.667C5.91626 18.2528 5.58047 17.917 5.16626 17.917C4.75205 17.917 4.41626 18.2528 4.41626 18.667V21.8337C4.41626 23.0763 5.42362 24.0837 6.66626 24.0837H22.3339C23.5766 24.0837 24.5839 23.0763 24.5839 21.8337V18.667C24.5839 18.2528 24.2482 17.917 23.8339 17.917C23.4197 17.917 23.0839 18.2528 23.0839 18.667V21.8337C23.0839 22.2479 22.7482 22.5837 22.3339 22.5837H6.66626C6.25205 22.5837 5.91626 22.2479 5.91626 21.8337V18.667Z" fill=""></path>
-                                    </svg>
-                                </div>
-                            </div>
-
-                            <h4 class="text-theme-xl mb-3 font-semibold text-gray-800 dark:text-white/90">
-                                Drag &amp; Drop File Here
-                            </h4>
-                            <span class="mx-auto mb-5 block w-full max-w-[290px] text-sm text-gray-700 dark:text-gray-400">
-                                Drag and drop your PNG, JPG, WebP, SVG images here or
-                                browse
-                            </span>
-
-                            <span class="text-theme-sm text-brand-500 font-medium underline">
-                                Browse File
-                            </span>
-                        </div>
-                    </form>
-                </div>
+            <div>
+                <label for="status" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Status</label>
+                <select id="status" value="{{ old('status') }}" name="status" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
+                    <option selected>Choose a status</option>
+                    <option value="1">Active</option>
+                    <option value="2">Inactive</option>
+                </select>
+                @error('status')
+                <span class="text-red-500">{{ $message }}</span>
+                @enderror
             </div>
-
-            <div class="rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-                <div class="px-5 py-4 sm:px-6 sm:py-5">
-                    <h3 class="text-base font-medium text-gray-800 dark:text-white/90">
-                        Product Variants
-                    </h3>
-                </div>
-                <div class="p-5 space-y-6 border-t border-gray-100 dark:border-gray-800 sm:p-6">
-                    <form>
-                        <button id="addVariantBtn" type="button"
-                            class="mb-4 inline-flex items-center gap-2 rounded-lg bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-theme-xs ring-1 ring-gray-300 transition hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-400 dark:ring-gray-700 dark:hover:bg-white/[0.03]">
-                            <svg class="fill-current" width="20" height="20" viewBox="0 0 20 20" fill="none"
-                                xmlns="http://www.w3.org/2000/svg">
-                                <path fill-rule="evenodd" clip-rule="evenodd"
-                                    d="M10 2C10.5523 2 11 2.44772 11 3V8H16C16.5523 8 17 8.44772 17 9C17 9.55228 16.5523 10 16 10H11V15C11 15.5523 10.5523 16 10 16C9.44772 16 9 15.5523 9 15V10H4C3.44772 10 3 9.55228 3 9C3 8.44772 3.44772 8 4 8H9V3C9 2.44772 9.44772 2 10 2Z"
-                                    fill="currentColor" />
-                            </svg>
-                            Add Variant
-                        </button>
-
-                        <!-- Khu vực chứa các variant -->
-                        <div id="variantContainer"></div>
-                    </form>
-                </div>
+            <div>
+                <label for="base_price" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Base Price</label>
+                <input type="number" id="base_price" step="0.01" value="{{ old('base_price') }}" name="base_price" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="0.00" required />
+                @error('base_price')
+                <span class="text-red-500">{{ $message }}</span>
+                @enderror
             </div>
-        </div>
-
-    </div>
-    <div class="my-6 w-full h-screen rounded-2xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-white/[0.03]">
-        <div class="px-5 py-4 sm:px-6 sm:py-5">
-            <h3 class="text-base font-medium text-gray-800 dark:text-white/90">
-                List of Variant
-            </h3>
-            <div class="border-t border-gray-100 p-6 dark:border-gray-800">
-                <div x-data="{isModalOpen: false}">
-                    <button class="px-4 py-3 text-sm font-medium text-white rounded-lg bg-brand-500 shadow-theme-xs hover:bg-brand-600" @click="isModalOpen = !isModalOpen">
-                        Open Modal
-                    </button>
-
-                    <div x-show="isModalOpen" class="fixed inset-0 flex items-center justify-center p-5 overflow-y-auto modal z-99999" style="display: none;">
-                        <div class="modal-close-btn fixed inset-0 h-full w-full bg-gray-400/50 backdrop-blur-[32px]"></div>
-                        <div @click.outside="isModalOpen = false" class="relative w-full max-w-[600px] rounded-3xl bg-white p-6 dark:bg-gray-900 lg:p-10">
-                            <!-- close btn -->
-                            <button @click="isModalOpen = false" class="absolute right-3 top-3 z-999 flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white sm:right-6 sm:top-6 sm:h-11 sm:w-11">
-                                <svg class="fill-current" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                    <path fill-rule="evenodd" clip-rule="evenodd" d="M6.04289 16.5413C5.65237 16.9318 5.65237 17.565 6.04289 17.9555C6.43342 18.346 7.06658 18.346 7.45711 17.9555L11.9987 13.4139L16.5408 17.956C16.9313 18.3466 17.5645 18.3466 17.955 17.956C18.3455 17.5655 18.3455 16.9323 17.955 16.5418L13.4129 11.9997L17.955 7.4576C18.3455 7.06707 18.3455 6.43391 17.955 6.04338C17.5645 5.65286 16.9313 5.65286 16.5408 6.04338L11.9987 10.5855L7.45711 6.0439C7.06658 5.65338 6.43342 5.65338 6.04289 6.0439C5.65237 6.43442 5.65237 7.06759 6.04289 7.45811L10.5845 11.9997L6.04289 16.5413Z" fill=""></path>
-                                </svg>
-                            </button>
-
-                            <div>
-                                <h4 class="font-semibold text-gray-800 mb-7 text-title-sm dark:text-white/90">
-                                    Modal Heading
-                                </h4>
-                                <p class="text-sm leading-6 text-gray-500 dark:text-gray-400">
-                                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque
-                                    euismod est quis mauris lacinia pharetra. Sed a ligula ac odio
-                                    condimentum aliquet a nec nulla. Aliquam bibendum ex sit amet ipsum
-                                    rutrum feugiat ultrices enim quam.
-                                </p>
-                                <p class="mt-5 text-sm leading-6 text-gray-500 dark:text-gray-400">
-                                    Lorem ipsum dolor sit amet, consectetur adipiscing elit. Pellentesque
-                                    euismod est quis mauris lacinia pharetra. Sed a ligula ac odio.
-                                </p>
-
-                                <div class="flex items-center justify-end w-full gap-3 mt-8">
-                                    <button @click="isModalOpen = false" type="button" class="flex w-full justify-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200 sm:w-auto">
-                                        Close
-                                    </button>
-                                    <button type="button" class="flex justify-center w-full px-4 py-3 text-sm font-medium text-white rounded-lg bg-brand-500 shadow-theme-xs hover:bg-brand-600 sm:w-auto">
-                                        Save Changes
-                                    </button>
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
+            <div>
+                <label for="template_link" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Template Link</label>
+                <input type="url" id="template_link" value="{{ old('template_link') }}" name="template_link" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" placeholder="flowbite.com" required />
+                @error('template_link')
+                <span class="text-red-500">{{ $message }}</span>
+                @enderror
             </div>
-            <!-- Breadcrumb End -->
-        </div>
-        <div class="border-t border-gray-100 p-5 dark:border-gray-800 sm:p-6">
-            <!-- DataTable Three -->
-            <div x-data="dataTableThree()" class="overflow-hidden rounded-xl border border-gray-200 bg-white pt-4 dark:border-gray-800 dark:bg-white/[0.03]">
-                <div class="mb-4 flex flex-col gap-2 px-4 sm:flex-row sm:items-center sm:justify-between">
-                    <div class="flex items-center gap-3">
-                        <div class="px-6 py-5">
-                            <h3 class="text-base font-medium text-gray-800 dark:text-white/90">
-                                List by
-                            </h3>
-                        </div>
-                        <div class=" border-gray-00 border-l p-3 dark:border-gray-800 sm:p-6">
-                            <div class="custom-scrollbar max-w-full px-2 overflow-x-auto pb-3 xsm:pb-0">
-                                <div class="min-w-[309px]">
-                                    <div class="inline-flex flex-wrap gap-2 items-center shadow-theme-xs">
-
-
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                    </div>
-
-                </div>
-
-                <div class="max-w-full overflow-x-auto">
-                    <div class="min-w-[1102px]">
-                        <!-- table header start -->
-                        <div class="grid grid-cols-12 border-t border-gray-200 dark:border-gray-800">
-                            <div class="col-span-3 flex items-center border-r border-gray-200 px-4 py-3 dark:border-gray-800">
-                                <div class="flex w-full cursor-pointer items-center justify-between" @click="sortBy('user')">
-                                    <div class="flex items-center gap-3">
-                                        <div x-data="{ checkboxToggle: false }">
-                                            <label class="flex cursor-pointer select-none items-center text-sm font-medium text-gray-700 dark:text-gray-400">
-                                                <span class="relative">
-                                                    <input type="checkbox" class="sr-only" @change="checkboxToggle = !checkboxToggle">
-                                                    <span :class="checkboxToggle ? 'border-brand-500 bg-brand-500' : 'bg-transparent border-gray-300 dark:border-gray-700'" class="flex h-4 w-4 items-center justify-center rounded-sm border-[1.25px] bg-transparent border-gray-300 dark:border-gray-700">
-                                                        <span :class="checkboxToggle ? '' : 'opacity-0'" class="opacity-0">
-                                                            <svg width="12" height="12" viewBox="0 0 12 12" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                                <path d="M10 3L4.5 8.5L2 6" stroke="white" stroke-width="1.6666" stroke-linecap="round" stroke-linejoin="round"></path>
-                                                            </svg>
-                                                        </span>
-                                                    </span>
-                                                </span>
-                                            </label>
-                                        </div>
-
-                                        <p class="text-theme-xs font-medium text-gray-700 dark:text-gray-400">
-                                            Options
-                                        </p>
-                                    </div>
-
-
-                                </div>
-                            </div>
-                            <div class="col-span-3 flex items-center border-r border-gray-200 px-4 py-3 dark:border-gray-800">
-                                <div class="flex w-full cursor-pointer items-center justify-between" @click="sortBy('position')">
-                                    <p class="text-theme-xs font-medium text-gray-700 dark:text-gray-400">
-                                        Gallery
-                                    </p>
-
-
-                                </div>
-                            </div>
-                            <div class="col-span-2 flex items-center border-r border-gray-200 px-4 py-3 dark:border-gray-800">
-                                <div class="flex w-full cursor-pointer items-center justify-between" @click="sortBy('office')">
-                                    <p class="text-theme-xs font-medium text-gray-700 dark:text-gray-400">
-                                        SKU
-                                    </p>
-
-                                </div>
-                            </div>
-                            <div class="col-span-2 flex items-center border-r border-gray-200 px-4 py-3 dark:border-gray-800">
-                                <div class="flex w-full cursor-pointer items-center justify-between" @click="sortBy('age')">
-                                    <p class="text-theme-xs font-medium text-gray-700 dark:text-gray-400">
-                                        Price
-                                    </p>
-
-                                </div>
-                            </div>
-
-                            <div class="col-span-2 flex items-center border-r border-gray-200 px-4 py-3 dark:border-gray-800">
-                                <div class="flex w-full cursor-pointer items-center justify-between">
-                                    <p class="text-theme-xs font-medium text-gray-700 dark:text-gray-400">
-                                        Action
-                                    </p>
-
-                                </div>
-                            </div>
-                        </div>
-                        <!-- table header end -->
-
-                        <!-- table body start -->
-
-
-                        <!-- table body end -->
-                    </div>
-                </div>
-
-            </div>
-
-
-            <!-- DataTable Three -->
-        </div>
-    </div>
+            <div>
+    <label for="description" class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Description</label>
+    <textarea id="description" name="description">{{ old('description') }}</textarea>
+    @error('description')
+    <span class="text-red-500">{{ $message }}</span>
+    @enderror
 </div>
+            <div>
+                <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">Countries</label>
 
-<script>
-    let variants = [];
-    let variantCombinations = [];
-    let selectedOptions = [];
+                <div class="flex items-center my-4">
+                    <input type="checkbox" value="US" name="fulfillment_locations[0][country_code]" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-700 dark:focus:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500">
+                    <label for="country-US" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">United States</label>
+                </div>
+                <div class="flex items-center my-4">
+                    <input type="checkbox" value="UK" name="fulfillment_locations[1][country_code]" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-700 dark:focus:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500">
+                    <label for="country-UK" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">United Kingdom</label>
+                </div>
+                <div class="flex items-center my-4">
+                    <input type="checkbox" value="VN" name="fulfillment_locations[2][country_code]" class="w-4 h-4 text-blue-600 bg-gray-100 border-gray-300 rounded focus:ring-blue-500 dark:focus:ring-blue-600 dark:ring-offset-gray-700 dark:focus:ring-offset-gray-700 focus:ring-2 dark:bg-gray-600 dark:border-gray-500">
+                    <label for="country-VN" class="ml-2 text-sm font-medium text-gray-900 dark:text-gray-300">Vietnam</label>
+                </div>
 
-    // Hàm tạo tổ hợp các variants
-    function generateCombinations() {
-        if (variants.length === 0) return [];
+                @error('fulfillment_locations.*.country_code')
+                <span class="text-red-500">{{ $message }}</span>
+                @enderror
+            </div>
+        </div>
 
-        // Lấy các options từ mỗi variant
-        const optionsArray = variants.map(v => v.options);
+        <div class="flex items-center justify-center w-full">
+            <label for="dropzone-file" class="flex flex-col items-center justify-center w-full h-64 border-2 border-gray-300 border-dashed rounded-lg cursor-pointer bg-gray-50 dark:hover:bg-gray-800 dark:bg-gray-700 hover:bg-gray-100 dark:border-gray-600 dark:hover:border-gray-500 dark:hover:bg-gray-600">
+                <div class="flex flex-col items-center justify-center pt-5 pb-6">
+                    <svg class="w-8 h-8 mb-4 text-gray-500 dark:text-gray-400" aria-hidden="true" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 20 16">
+                        <path stroke="currentColor" stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 13h3a3 3 0 0 0 0-6h-.025A5.56 5.56 0 0 0 16 6.5 5.5 5.5 0 0 0 5.207 5.021C5.137 5.017 5.071 5 5 5a4 4 0 0 0 0 8h2.167M10 15V6m0 0L8 8m2-2 2 2" />
+                    </svg>
+                    <p class="mb-2 text-sm text-gray-500 dark:text-gray-400"><span class="font-semibold">Click to upload</span> or drag and drop</p>
+                    <p class="text-xs text-gray-500 dark:text-gray-400">SVG, PNG, JPG or GIF (MAX. 800x400px)</p>
+                </div>
+                <input id="dropzone-file" name="images[]" type="file" class="hidden" multiple accept="image/*" onchange="previewImages(event)" />
+            </label>
+            @error('images.*.image_url')
+            <span class="text-red-500">{{ $message }}</span>
+            @enderror
+        </div>
 
-        // Hàm đệ quy để tạo tổ hợp
-        function combine(current, arrays) {
-            if (arrays.length === 0) {
-                return [current];
-            }
+        <!-- Thêm phần preview -->
+        <div id="image-preview" class="grid grid-cols-2 md:grid-cols-4 gap-4 mt-4"></div>
 
-            const results = [];
-            const currentArray = arrays[0];
-            const remainingArrays = arrays.slice(1);
+        <div class="max-w-full">
+            <div class="flex flex-wrap gap-6 mb-4">
+                <div class="flex flex-col w-1/2">
+                    <label for="optionName" class="text-[13px] font-semibold mb-1 tracking-wide">OPTION NAME</label>
+                    <input id="optionName" type="text" class="border border-[#1d9bf0] rounded-md px-3 py-2 text-[14px] font-serif" />
+                </div>
+                <div class="flex flex-col w-1/2">
+                    <label for="values" class="text-[13px] font-semibold mb-1 tracking-wide">VALUES</label>
+                    <input id="values" type="text" class="border border-[#1d4ef0] rounded-md px-3 py-2 text-[14px] font-serif" placeholder="Black,Blue,White" />
+                </div>
+            </div>
+            <button type="button" onclick="addOption()" class="bg-[#228b22] text-white text-[14px] font-serif px-5 py-2 rounded-md mb-6">
+                ADD OPTION
+            </button>
 
-            for (const item of currentArray) {
-                results.push(...combine([...current, item], remainingArrays));
-            }
+            <div id="optionsContainer" class="mb-4 text-[14px] font-serif">
+                <p class="mb-2">Options:</p>
+            </div>
 
-            return results;
-        }
+            <div class="flex gap-3 mb-4">
+                <button type="button" onclick="setBulkPrice()" class="bg-[#2563eb] text-white rounded-md px-5 py-2 text-[14px] font-serif">
+                    Set Bulk Price
+                </button>
+                <button type="button" onclick="setBulkSKU()" class="bg-[#2563eb] text-white rounded-md px-5 py-2 text-[14px] font-serif">
+                    Set Bulk SKU
+                </button>
+            </div>
 
-        return combine([], optionsArray);
-    }
+            <div id="variantsTable" class="overflow-x-auto border border-black rounded-md max-w-full">
+                <!-- Table will be dynamically generated here -->
+            </div>
+        </div>
 
-    // Cập nhật hàm updateVariantsList để hiển thị cả trong bảng
-    function updateVariantsList() {
-        const variantsList = document.querySelector('.inline-flex.flex-wrap.gap-2');
-        variantsList.innerHTML = '';
-
-        // Hiển thị các tags
-        variants.forEach(variant => {
-            variant.options.forEach(option => {
-                const button = document.createElement('button');
-                button.type = 'button';
-                button.className = 'inline-flex items-center justify-center px-4 py-2 text-sm font-medium text-gray-800 border border-gray-300 rounded-md hover:text-white hover:bg-blue-700 dark:bg-white/[0.03] dark:text-gray-200 dark:border-gray-700 dark:hover:bg-white/[0.03]';
-                button.textContent = option;
-
-                // Thêm sự kiện click cho button
-                button.addEventListener('click', () => {
-                    handleOptionClick(button, option);
-                });
-
-                variantsList.appendChild(button);
-            });
-        });
-
-        // Tạo các tổ hợp variant và cập nhật bảng
-        variantCombinations = generateCombinations();
-        const tableBody = document.querySelector('[x-data="dataTableThree()"]');
-        if (!tableBody) return;
-
-        // Xóa các hàng cũ
-        const existingRows = tableBody.querySelectorAll('.variant-row');
-        existingRows.forEach(row => row.remove());
-
-        // Thêm các hàng mới
-        variantCombinations.forEach((combination, index) => {
-            const row = document.createElement('div');
-            row.className = 'variant-row grid grid-cols-12 border-t border-gray-100 dark:border-gray-800';
-
-            row.innerHTML = `
-                <div class="col-span-3 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
-                    <div class="flex gap-3">
-                        <div class="mt-1">
-                            <label class="flex cursor-pointer select-none items-center text-sm font-medium text-gray-700 dark:text-gray-400">
-                                <input type="checkbox" class="form-checkbox h-4 w-4 text-brand-500 rounded border-gray-300 focus:ring-brand-500 dark:border-gray-700 dark:bg-gray-900" data-combination="${combination.join(' / ')}">
-                            </label>
+        <!-- Modal Set Bulk Price -->
+        <div id="bulkPriceModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                <div class="mt-3">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">Set Bulk Price</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Ship by tiktok 1 item</label>
+                            <input type="number" step="0.01" id="bulkPrice1" name="bulkPrice1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                         <div>
-                            <p class="block text-theme-sm font-medium text-gray-800 dark:text-white/90">
-                                ${combination.join(' / ')}
-                            </p>
+                            <label class="block text-sm font-medium text-gray-700">Ship by tiktok từ 2 item</label>
+                            <input type="number" step="0.01" id="bulkPrice2" name="bulkPrice2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Ship by seller 1 item</label>
+                            <input type="number" step="0.01" id="bulkPrice3" name="bulkPrice3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">Ship by seller từ 2 item</label>
+                            <input type="number" step="0.01" id="bulkPrice4" name="bulkPrice4" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
                         </div>
                     </div>
-                </div>
-                <div class="col-span-3 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
-                    <div class="w-20 h-20 bg-gray-200 rounded flex items-center justify-center">
-                        <svg class="w-8 h-8 text-gray-500" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 16l4.586-4.586a2 2 0 012.828 0L16 16m-2-2l1.586-1.586a2 2 0 012.828 0L20 14m-6-6h.01M6 20h12a2 2 0 002-2V6a2 2 0 00-2-2H6a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                        </svg>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button type="button" onclick="closeBulkPriceModal()" class="px-4 py-2 bg-gray-200 text-gray-800 text-sm font-medium rounded-md hover:bg-gray-300">
+                            Cancel
+                        </button>
+                        <button type="button" onclick="applyBulkPrice()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
+                            Apply
+                        </button>
                     </div>
                 </div>
-                <div class="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
-                    <div>
-                    
-                        <input type="text" id="sku" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500"  required />
+            </div>
         </div>
+
+        <!-- Modal Set Bulk SKU -->
+        <div id="bulkSKUModal" class="hidden fixed inset-0 bg-gray-600 bg-opacity-50 overflow-y-auto h-full w-full">
+            <div class="relative top-20 mx-auto p-5 border w-96 shadow-lg rounded-md bg-white">
+                <div class="mt-3">
+                    <h3 class="text-lg font-medium leading-6 text-gray-900 mb-4">Set Bulk SKU</h3>
+                    <div class="space-y-4">
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">SKU</label>
+                            <input type="text" id="bulkSKU1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">SKU Two fifteen</label>
+                            <input type="text" id="bulkSKU2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-medium text-gray-700">SKU flash ship</label>
+                            <input type="text" id="bulkSKU3" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                    <div class="flex justify-end gap-3 mt-6">
+                        <button type="button" onclick="closeBulkSKUModal()" class="px-4 py-2 bg-gray-200 text-gray-800 text-sm font-medium rounded-md hover:bg-gray-300">
+                            Cancel
+                        </button>
+                        <button type="button" onclick="applyBulkSKU()" class="px-4 py-2 bg-blue-600 text-white text-sm font-medium rounded-md hover:bg-blue-700">
+                            Apply
+                        </button>
+                    </div>
                 </div>
-                <div class="col-span-2 flex items-center border-r border-gray-100 px-4 py-3 dark:border-gray-800">
-                   <input type="number" id="price" class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500" required />
-                </div>
-                <div class="col-span-2 flex items-center px-4 py-3">
-                 
-                                        <button class="delete-category inline-flex items-center justify-center w-8 h-8 text-red-500 hover:text-red-600 hover:bg-red-100 rounded-full dark:text-red-400 dark:hover:bg-red-900" >
-                                            <svg class="cursor-pointer hover:fill-error-500 dark:hover:fill-error-500 fill-gray-700 dark:fill-gray-400" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                                                <path fill-rule="evenodd" clip-rule="evenodd" d="M6.54142 3.7915C6.54142 2.54886 7.54878 1.5415 8.79142 1.5415H11.2081C12.4507 1.5415 13.4581 2.54886 13.4581 3.7915V4.0415H15.6252H16.666C17.0802 4.0415 17.416 4.37729 17.416 4.7915C17.416 5.20572 17.0802 5.5415 16.666 5.5415H16.3752V8.24638V13.2464V16.2082C16.3752 17.4508 15.3678 18.4582 14.1252 18.4582H5.87516C4.63252 18.4582 3.62516 17.4508 3.62516 16.2082V13.2464V8.24638V5.5415H3.3335C2.91928 5.5415 2.5835 5.20572 2.5835 4.7915C2.5835 4.37729 2.91928 4.0415 3.3335 4.0415H4.37516H6.54142V3.7915ZM14.8752 13.2464V8.24638V5.5415H13.4581H12.7081H7.29142H6.54142H5.12516V8.24638V13.2464V16.2082C5.12516 16.6224 5.46095 16.9582 5.87516 16.9582H14.1252C14.5394 16.9582 14.8752 16.6224 14.8752 16.2082V13.2464ZM8.04142 4.0415H11.9581V3.7915C11.9581 3.37729 11.6223 3.0415 11.2081 3.0415H8.79142C8.37721 3.0415 8.04142 3.37729 8.04142 3.7915V4.0415ZM8.3335 7.99984C8.74771 7.99984 9.0835 8.33562 9.0835 8.74984V13.7498C9.0835 14.1641 8.74771 14.4998 8.3335 14.4998C7.91928 14.4998 7.5835 14.1641 7.5835 13.7498V8.74984C7.5835 8.33562 7.91928 7.99984 8.3335 7.99984ZM12.4168 8.74984C12.4168 8.33562 12.081 7.99984 11.6668 7.99984C11.2526 7.99984 10.9168 8.33562 10.9168 8.74984V13.7498C10.9168 14.1641 11.2526 14.4998 11.6668 14.4998C12.081 14.4998 12.4168 14.1641 12.4168 13.7498V8.74984Z" fill=""></path>
+            </div>
+        </div>
+
+        <script>
+            function previewImages(event) {
+                const preview = document.getElementById('image-preview');
+                preview.innerHTML = ''; // Xóa preview cũ
+
+                const files = event.target.files;
+
+                for (let i = 0; i < files.length; i++) {
+                    const file = files[i];
+                    if (!file.type.startsWith('image/')) continue;
+
+                    const reader = new FileReader();
+                    reader.onload = function(e) {
+                        const div = document.createElement('div');
+                        div.className = 'relative';
+
+                        const img = document.createElement('img');
+                        img.src = e.target.result;
+                        img.className = 'w-full h-48 object-cover rounded-lg';
+
+                        const removeBtn = document.createElement('button');
+                        removeBtn.innerHTML = '×';
+                        removeBtn.className = 'absolute top-0 right-0 bg-red-500 text-white rounded-full w-6 h-6 flex items-center justify-center cursor-pointer hover:bg-red-600';
+                        removeBtn.onclick = function() {
+                            div.remove();
+                        };
+                        div.appendChild(img);
+                        div.appendChild(removeBtn);
+                        preview.appendChild(div);
+                    };
+                    reader.readAsDataURL(file);
+                }
+            }
+
+            let options = []; // Bỏ JSON old cho options
+
+            let variants = []; // Bỏ JSON old cho variants
+
+            function addOption() {
+                const name = document.getElementById('optionName').value;
+                const values = document.getElementById('values').value.split(',').map(v => v.trim());
+
+                if (!name || values.length === 0) return;
+
+                options.push({
+                    name,
+                    values: values.map(value => ({
+                        value,
+                        selected: false
+                    }))
+                });
+
+                renderOptions();
+                generateVariants();
+
+                // Clear inputs
+                document.getElementById('optionName').value = '';
+                document.getElementById('values').value = '';
+            }
+
+            function toggleValue(optionName, value) {
+                // Cập nhật trạng thái selected của option
+                const option = options.find(opt => opt.name === optionName);
+                if (option) {
+                    const valueObj = option.values.find(v => v.value === value);
+                    if (valueObj) {
+                        valueObj.selected = !valueObj.selected;
+                    }
+                }
+
+                // Render lại options để cập nhật giao diện
+                renderOptions();
+
+                // Cập nhật variants dựa trên các options được chọn
+                updateVariantSelection();
+            }
+
+            function updateVariantSelection() {
+                // Lấy tất cả các options và values đã được chọn
+                const selectedOptions = options.map(opt => ({
+                    name: opt.name,
+                    selectedValues: opt.values.filter(v => v.selected).map(v => v.value)
+                })).filter(opt => opt.selectedValues.length > 0);
+
+                // Lấy tất cả các checkbox trong bảng variants
+                const checkboxes = document.querySelectorAll('.variant-checkbox');
+
+                checkboxes.forEach(checkbox => {
+                    const variantText = checkbox.getAttribute('data-variant');
+                    const variantValues = variantText.split('/');
+
+                    // Kiểm tra xem variant có match với tất cả các options được chọn không
+                    const shouldBeSelected = selectedOptions.every(opt => {
+                        const optIndex = options.findIndex(o => o.name === opt.name);
+                        const variantValue = variantValues[optIndex];
+                        return opt.selectedValues.includes(variantValue);
+                    });
+
+                    checkbox.checked = selectedOptions.length > 0 ? shouldBeSelected : false;
+                });
+            }
+
+            function renderOptions() {
+                const container = document.getElementById('optionsContainer');
+                container.innerHTML = '<p class="mb-2">Options:</p>';
+
+                options.forEach((option, optionIndex) => {
+                    const optionDiv = document.createElement('div');
+                    optionDiv.className = 'flex flex-wrap items-center gap-3 mb-2';
+                    optionDiv.innerHTML = `
+                    
+                        <div class="flex items-center gap-2 min-w-[50px]">
+                            <span>${option.name}:</span>
+                            <button type="button" 
+                                onclick="deleteOption(${optionIndex})"
+                                class="text-red-600 hover:text-red-800 font-bold"
+                            >
+                                ×
+                            </button>
+                        </div>
+                        ${option.values.map((valueObj, valueIndex) => `
+                            <div class="relative">
+                                <button type="button" 
+                                    onclick="toggleValue('${option.name}', '${valueObj.value}')"
+                                    class="value-btn border border-black rounded-md px-4 py-1 text-[14px] font-serif hover:bg-gray-100 
+                                    ${valueObj.selected ? 'bg-[#228b22] text-white' : ''}"
+                                    data-option="${option.name}"
+                                    data-value="${valueObj.value}">
+                                    ${valueObj.value}
+                                </button>
+                                <button type="button"
+                                    onclick="deleteOptionValue(${optionIndex}, ${valueIndex})"
+                                    class="absolute -top-2 -right-2 text-red-600 hover:text-red-800 font-bold"
+                                >
+                                    ×
+                                </button>
+                            </div>
+                        `).join('')}
+                    `;
+                    container.appendChild(optionDiv);
+                });
+            }
+
+            function deleteOption(optionIndex) {
+                options.splice(optionIndex, 1);
+                renderOptions();
+                generateVariants();
+            }
+
+            function deleteOptionValue(optionIndex, valueIndex) {
+                options[optionIndex].values.splice(valueIndex, 1);
+                if (options[optionIndex].values.length === 0) {
+                    options.splice(optionIndex, 1);
+                }
+                renderOptions();
+                generateVariants();
+            }
+
+            function generateVariants() {
+                // Tạo tất cả tổ hợp có thể từ tất cả các options và values
+                const allOptions = options.map(option => ({
+                    name: option.name,
+                    values: option.values.map(v => v.value)
+                }));
+
+                if (allOptions.length === 0) {
+                    variants = [];
+                    renderVariantsTable();
+                    return;
+                }
+
+                function combine(arrays, current = [], index = 0) {
+                    if (index === arrays.length) {
+                        return [current];
+                    }
+
+                    const results = [];
+                    for (const value of arrays[index]) {
+                        results.push(...combine(arrays, [...current, value], index + 1));
+                    }
+                    return results;
+                }
+
+                const arraysToCombine = allOptions.map(option => option.values);
+                const combinations = combine(arraysToCombine);
+                variants = combinations.map(combination => ({
+                    variant: combination.join('/'),
+                    selected: false
+                }));
+
+                renderVariantsTable();
+            }
+
+            function renderVariantsTable() {
+                const table = document.getElementById('variantsTable');
+                table.innerHTML = `
+                    <div class="relative overflow-x-auto">
+                        ${variants.map((variant, index) => {
+                            // Tách variant thành mảng các giá trị
+                            const variantValues = variant.variant.split('/');
+                            
+                            // Tạo mảng các cặp option-value
+                            const optionValuePairs = options.map((option, optIndex) => ({
+                                name: option.name,
+                                value: variantValues[optIndex]
+                            }));
+
+                            return `
+                            <div class="mb-6 border border-gray-200 rounded-lg overflow-hidden shadow-sm hover:shadow-md transition-shadow duration-200">
+                                <div class="p-4 bg-gradient-to-r from-gray-50 to-gray-100 dark:from-gray-800 dark:to-gray-700 flex justify-between items-center border-b">
+                                    <div class="flex items-center gap-4">
+                                        <input type="checkbox"
+                                            name="variants[${index}][selected]"
+                                            id="variant_${index}"
+                                            data-variant="${variant.variant}"
+                                            ${variant.selected ? 'checked' : ''}
+                                            class="w-5 h-5 text-blue-600 rounded border-gray-300 focus:ring-blue-500 variant-checkbox" />
+                                        <h3 class="font-medium text-gray-900 dark:text-white text-lg">${variant.variant}</h3>
+                                        ${optionValuePairs.map((pair, pairIndex) => `
+                                            <input type="hidden" 
+                                                name="variants[${index}][attributes][${pairIndex}][name]" 
+                                                value="${pair.name}" />
+                                            <input type="hidden" 
+                                                name="variants[${index}][attributes][${pairIndex}][value]" 
+                                                value="${pair.value}" />
+                                        `).join('')}
+                                    </div>
+                                    <div class="flex items-center gap-2">
+                                        <span class="text-sm text-gray-500">Variant #${index + 1}</span>
+                                        <button
+                                            type="button"
+                                            onclick="deleteVariant(${index})"   
+                                            class="text-red-600 hover:text-red-800 p-1 rounded-full hover:bg-red-50">
+                                            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24" xmlns="http://www.w3.org/2000/svg">
+                                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
                                             </svg>
                                         </button>
-                </div>
-            `;
+                                    </div>
+                                </div>
+                                <div class="p-5 bg-white dark:bg-gray-800">
+                                    <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                                        <div class="bg-gray-50 dark:bg-gray-700 p-4 rounded-lg">
+                                            <h4 class="font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2">SKU Information</h4>
+                                            <div class="space-y-4">
+                                                <div>
+                                                    <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">SKU</label>
+                                                    <input type="text"
+                                                        value="{{ old('sku') }}"
+                                                        name="variants[${index}][sku]"
+                                                        class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
+                                                        placeholder="Enter SKU" />
+                                                </div>
+                                                <div>
+                                                    <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">SKU Two fifteen</label>
+                                                    <input type="text"
+                                                        value="{{ old('twofifteen_sku') }}"
+                                                        name="variants[${index}][twofifteen_sku]"
+                                                        class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
+                                                        placeholder="Enter Two fifteen SKU" />
+                                                </div>
+                                                <div>
+                                                    <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">SKU flash ship</label>
+                                                    <input type="text"
+                                                        value="{{ old('flashship_sku') }}"
+                                                        name="variants[${index}][flashship_sku]"
+                                                        class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
+                                                        placeholder="Enter Flash ship SKU" />
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="bg-blue-50 dark:bg-blue-900/20 p-4 rounded-lg">
+                                            <h4 class="font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2">Ship by TikTok</h4>
+                                            <div class="space-y-4">
+                                                <div>
+                                                    <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">1 item price</label>
+                                                    <div class="relative">
+                                                        <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                                            <span class="text-gray-500">$</span>
+                                                        </div>
+                                                        <input type="text"
+                                                            step="0.01"
+                                                            value="{{ old('ship_tiktok_1') }}"
+                                                            id="ship_tiktok_1_${index}"
+                                                            name="variants[${index}][ship_tiktok_1]"
+                                                            class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
+                                                            placeholder="0.00" />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">2+ items price</label>
+                                                    <div class="relative">
+                                                        <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                                            <span class="text-gray-500">$</span>
+                                                        </div>
+                                                        <input type="text"
+                                                            id="ship_tiktok_2_${index}"
+                                                            step="0.01"
+                                                            value="{{ old('ship_tiktok_2') }}"
+                                                            name="variants[${index}][ship_tiktok_2]"
+                                                            class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
+                                                            placeholder="0.00" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                        
+                                        <div class="bg-green-50 dark:bg-green-900/20 p-4 rounded-lg">
+                                            <h4 class="font-semibold text-gray-900 dark:text-white mb-3 border-b pb-2">Ship by Seller</h4>
+                                            <div class="space-y-4">
+                                                <div>
+                                                    <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">1 item price</label>
+                                                    <div class="relative">
+                                                        <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                                            <span class="text-gray-500">$</span>
+                                                        </div>
+                                                        <input type="text"
+                                                            id="ship_seller_1_${index}"
+                                                            step="0.01"
+                                                            value="{{ old('ship_seller_1') }}"
+                                                            name="variants[${index}][ship_seller_1]"
+                                                            class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
+                                                            placeholder="0.00" />
+                                                    </div>
+                                                </div>
+                                                <div>
+                                                    <label class="block mb-2 text-sm font-medium text-gray-700 dark:text-gray-300">2+ items price</label>
+                                                    <div class="relative">
+                                                        <div class="absolute inset-y-0 left-0 flex items-center pl-3 pointer-events-none">
+                                                            <span class="text-gray-500">$</span>
+                                                        </div>
+                                                        <input type="text"
+                                                            id="ship_seller_2_${index}"
+                                                            value="{{ old('ship_seller_2') }}"
+                                                            step="0.01"
+                                                            name="variants[${index}][ship_seller_2]"
+                                                            class="bg-white border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full pl-7 p-2.5 dark:bg-gray-600 dark:border-gray-500 dark:placeholder-gray-400 dark:text-white"
+                                                            placeholder="0.00" />
+                                                    </div>
+                                                </div>
+                                            </div>
+                                        </div>
+                                    </div>
+                                </div>
+                            </div>
+                            `;
+                        }).join('')}
+                    </div>
+                `;
+            }
 
-            tableBody.appendChild(row);
+            function selectAllVariants(checkbox) {
+                const checkboxes = document.querySelectorAll('#variantsTable input[type="checkbox"]');
+                checkboxes.forEach(cb => cb.checked = checkbox.checked);
+            }
+
+            function setBulkPrice() {
+                document.getElementById('bulkPriceModal').classList.remove('hidden');
+            }
+
+            function closeBulkPriceModal() {
+                document.getElementById('bulkPriceModal').classList.add('hidden');
+            }
+
+            function applyBulkPrice() {
+                const price1 = document.getElementById('bulkPrice1').value;
+                const price2 = document.getElementById('bulkPrice2').value;
+                const price3 = document.getElementById('bulkPrice3').value;
+                const price4 = document.getElementById('bulkPrice4').value;
+
+                // Get all checked variants
+                const checkedRows = document.querySelectorAll('#variantsTable input[type="checkbox"]:checked');
+
+                checkedRows.forEach((checkbox, idx) => {
+                    const variantContainer = checkbox.closest('.mb-6');
+
+                    // Update prices for the variant
+                    if (price1) variantContainer.querySelector(`#ship_tiktok_1_${idx}`).value = price1;
+                    if (price2) variantContainer.querySelector(`#ship_tiktok_2_${idx}`).value = price2;
+                    if (price3) variantContainer.querySelector(`#ship_seller_1_${idx}`).value = price3;
+                    if (price4) variantContainer.querySelector(`#ship_seller_2_${idx}`).value = price4;
+                });
+
+                closeBulkPriceModal();
+            }
+
+            function setBulkSKU() {
+                document.getElementById('bulkSKUModal').classList.remove('hidden');
+            }
+
+            function closeBulkSKUModal() {
+                document.getElementById('bulkSKUModal').classList.add('hidden');
+            }
+
+            function applyBulkSKU() {
+                const sku1 = document.getElementById('bulkSKU1').value;
+                const sku2 = document.getElementById('bulkSKU2').value;
+                const sku3 = document.getElementById('bulkSKU3').value;
+
+                // Get all checked variants
+                const checkedRows = document.querySelectorAll('#variantsTable input[type="checkbox"]:checked');
+
+                checkedRows.forEach(checkbox => {
+                    const variantContainer = checkbox.closest('.mb-6');
+
+                    // Update SKUs for the variant
+                    const inputs = variantContainer.querySelectorAll('input[type="text"]');
+                    if (sku1) inputs[0].value = sku1; // SKU
+                    if (sku2) inputs[1].value = sku2; // SKU Two fifteen
+                    if (sku3) inputs[2].value = sku3; // SKU flash ship
+                });
+
+                closeBulkSKUModal();
+            }
+
+            function deleteVariant(index) {
+                variants.splice(index, 1);
+                renderVariantsTable();
+            }
+
+            // Initialize the interface
+            renderOptions();
+            renderVariantsTable();
+        </script>
+
+<script src="https://cdn.ckeditor.com/ckeditor5/40.1.0/classic/ckeditor.js"></script>
+
+<script>
+    ClassicEditor
+        .create(document.querySelector('#description'), {
+            toolbar: ['heading', '|', 'bold', 'italic', 'link', 'bulletedList', 'numberedList', '|', 'undo', 'redo'],
+            height: '300px'
+        })
+        .catch(error => {
+            console.error(error);
         });
-
-        // Cập nhật trạng thái hiển thị bảng
-        const tableContainer = document.querySelector('[x-data]');
-        if (tableContainer && tableContainer.__x) {
-            tableContainer.__x.$data.hasVariants = variants.length > 0;
-        }
-    }
-
-    // Định nghĩa removeOption trong global scope
-    window.removeOption = function(element, variantId, value) {
-        // Xóa tag
-        element.parentElement.remove();
-
-        // Cập nhật mảng variants
-        const variant = variants.find(v => v.id === variantId);
-        if (variant) {
-            variant.options = variant.options.filter(opt => opt !== value);
-            if (variant.options.length === 0) {
-                variants = variants.filter(v => v.id !== variantId);
-            }
-        }
-
-        updateVariantsList();
-    }
-
-    document.getElementById('addVariantBtn').addEventListener('click', function() {
-        const variantContainer = document.getElementById('variantContainer');
-
-        // Tạo div mới cho variant
-        const newVariant = document.createElement('div');
-        newVariant.className = "-mx-2.5 flex flex-wrap gap-y-5 border-b pb-4 mb-4";
-
-        // Tạo ID duy nhất cho variant mới
-        const variantId = Date.now();
-
-        newVariant.innerHTML = `
-            <div class="w-full px-2.5 xl:w-1/2">
-                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Variant Type
-                </label>
-                <div class="relative z-20 bg-transparent">
-                    <select class="variantType w-full px-4 py-3 text-sm text-gray-800 bg-transparent border border-gray-300 rounded-lg appearance-none dark:bg-dark-900 h-11 bg-none shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800" data-variant-id="${variantId}">
-                        <option value="">Choose a variant</option>
-                        <option value="size">Size</option>
-                        <option value="color">Color</option>
-                    </select>
-                    <span class="absolute z-30 text-gray-500 -translate-y-1/2 right-4 top-1/2 dark:text-gray-400">
-                        <svg class="stroke-current" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">
-                            <path d="M4.79175 7.396L10.0001 12.6043L15.2084 7.396" stroke="" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path>
-                        </svg>
-                    </span>
-                </div>
-            </div>
-            <div class="w-full px-2.5 xl:w-1/2">
-                <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">
-                    Options
-                </label>
-                <input type="text" class="optionInput dark:bg-dark-900 h-11 w-full rounded-lg border border-gray-300 bg-transparent px-4 py-2.5 text-sm text-gray-800 shadow-theme-xs placeholder:text-gray-400 focus:border-brand-300 focus:outline-hidden focus:ring-3 focus:ring-brand-500/10 dark:border-gray-700 dark:bg-gray-900 dark:text-white/90 dark:placeholder:text-white/30 dark:focus:border-brand-800" data-variant-id="${variantId}">
-                <div class="optionTags flex flex-wrap gap-2 mt-2"></div>
-            </div>
-        `;
-
-        variantContainer.appendChild(newVariant);
-        updateVariantsList();
-    });
-
-    document.addEventListener('keypress', function(e) {
-        if (e.target.classList.contains('optionInput') && e.key === 'Enter') {
-            e.preventDefault();
-            const value = e.target.value.trim();
-            const variantId = e.target.dataset.variantId;
-            const variantType = document.querySelector(`.variantType[data-variant-id="${variantId}"]`).value;
-
-            if (value && variantType) {
-                // Thêm tag vào container
-                const tag = document.createElement('div');
-                tag.className = 'flex items-center gap-1 px-2 py-1 text-sm bg-blue-100 text-blue-600 rounded';
-                tag.innerHTML = `${value} <span class="cursor-pointer text-gray-500" onclick="window.removeOption(this, '${variantId}', '${value}')">x</span>`;
-                e.target.nextElementSibling.appendChild(tag);
-
-                // Cập nhật mảng variants
-                const existingVariant = variants.find(v => v.id === variantId);
-                if (existingVariant) {
-                    existingVariant.options.push(value);
-                } else {
-                    variants.push({
-                        id: variantId,
-                        type: variantType,
-                        options: [value]
-                    });
-                }
-
-                e.target.value = '';
-                updateVariantsList();
-            }
-        }
-    });
-
-    // Cập nhật hàm handleOptionClick
-    function handleOptionClick(button, option) {
-        // Tìm variant chứa option được chọn
-        const selectedVariant = variants.find(variant =>
-            variant.options.includes(option)
-        );
-
-        if (selectedVariant) {
-            // Toggle trạng thái chọn của option
-            const isSelected = selectedOptions.includes(option);
-            if (isSelected) {
-                selectedOptions = selectedOptions.filter(opt => opt !== option);
-            } else {
-                selectedOptions.push(option);
-            }
-
-            // Cập nhật style của button để hiển thị trạng thái chọn
-            button.classList.toggle('bg-brand-500', !isSelected);
-            button.classList.toggle('text-white', !isSelected);
-
-            // Tìm tất cả các combination chứa bất kỳ option đã chọn nào
-            const matchingCombinations = variantCombinations.filter(combo =>
-                selectedOptions.some(opt => combo.includes(opt))
-            );
-
-            // Toggle tất cả các checkbox tương ứng
-            variantCombinations.forEach(combo => {
-                const checkbox = document.querySelector(`input[type="checkbox"][data-combination="${combo.join(' / ')}"]`);
-                if (checkbox) {
-                    checkbox.checked = matchingCombinations.some(match =>
-                        match.join(' / ') === combo.join(' / ')
-                    );
-                }
-            });
-        }
-    }
 </script>
 
+        <button type="submit" class="my-4 text-white bg-blue-700 hover:bg-blue-800 focus:ring-4 focus:outline-none focus:ring-blue-300 font-medium rounded-lg text-sm w-full sm:w-auto px-5 py-2.5 text-center dark:bg-blue-600 dark:hover:bg-blue-700 dark:focus:ring-blue-800">Submit</button>
+    </form>
+</div>
 @endsection
