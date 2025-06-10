@@ -1,5 +1,6 @@
 <?php
 
+use App\Http\Controllers\AdminController;
 use App\Http\Controllers\OrderUploadController;
 use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\LoginController;
@@ -10,6 +11,7 @@ use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SupplierFulfillmentController;
 use App\Http\Controllers\CustomerController;
 use Illuminate\Support\Facades\Route;
+use App\Http\Middleware\AdminMiddleware;
 
 // Trang chủ
 Route::get('/', function () {
@@ -35,7 +37,7 @@ Route::get('/products', [ProductController::class, 'productList'])->name('produc
 Route::get('/product/{slug}', [ProductController::class, 'show'])->name('products.show');
 
 // Nhóm route admin
-Route::prefix('admin')->middleware('auth')->group(function () {
+Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(function () {
     Route::get('/dashboard', [DashboardController::class, 'index'])->name('admin.dashboard');
     Route::view('/products', 'admin.products.product-list')->name('admin.products');
 
@@ -47,11 +49,15 @@ Route::prefix('admin')->middleware('auth')->group(function () {
     Route::get('/categories/edit/{id}', [CategoryController::class, 'edit'])->name('admin.categories.edit');
     Route::put('/categories/update/{id}', [CategoryController::class, 'update'])->name('admin.categories.update');
 
-
-
+    Route::get('/customers', [AdminController::class, 'customerList'])->name('admin.customers.index');
+    Route::get('/customers/{id}', [AdminController::class, 'customerShow'])->name('admin.customers.show');
+    Route::get('/customers/{id}/edit', [AdminController::class, 'customerEdit'])->name('admin.customers.edit');
+    Route::put('/customers/{id}', [AdminController::class, 'customerUpdate'])->name('admin.customers.update');
+    Route::delete('/customers/{id}', [AdminController::class, 'customerDestroy'])->name('admin.customers.destroy');
 
     Route::post('/fulfillment/upload', [SupplierFulfillmentController::class, 'uploadFulfillmentFile'])->name('fulfillment.upload');
     Route::get('/fulfillment', [SupplierFulfillmentController::class, 'index'])->name('fulfillment.index');
+
     Route::get('/orders/import-file-fulfillment', [SupplierFulfillmentController::class, 'uploadFulfillmentFile'])->name('admin.orders.import-file-fulfillment');
     Route::get('/order-fulfillment-list', [SupplierFulfillmentController::class, 'orderFulfillmentList'])->name('admin.order-fulfillment-list');
     Route::get('/customer-uploaded-files-list', [SupplierFulfillmentController::class, 'customerUploadedFilesList'])->name('admin.customer-uploaded-files-list');
@@ -76,18 +82,46 @@ Route::prefix('admin')->middleware('auth')->group(function () {
     Route::get('finance/topup-requests', [FinanceController::class, 'topupRequests'])->name('admin.finance.topup-requests');
     Route::post('finance/approve-topup/{id}', [FinanceController::class, 'approveTopup'])->name('admin.finance.approve-topup');
     Route::post('finance/reject-topup/{id}', [FinanceController::class, 'rejectTopup'])->name('admin.finance.reject-topup');
+    Route::get('finance/refundable-transactions', [FinanceController::class, 'refundableTransactions'])->name('admin.finance.refundable-transactions');
+    Route::post('finance/refund-transaction/{transactionId}', [FinanceController::class, 'refundTransaction'])->name('admin.finance.refund-transaction');
+
+    Route::post('/admin/import-tracking', [SupplierFulfillmentController::class, 'importTrackingNumbers'])->name('admin.import-tracking');
+    Route::post('/fulfillment/files/{id}/update-status', [SupplierFulfillmentController::class, 'updateStatus'])->name('fulfillment.files.update-status');
+    Route::post('/orders/{orderId}/cancel', [SupplierFulfillmentController::class, 'cancelOrder'])->name('admin.orders.cancel');
+
+    // Route cho admin đổi status
+    Route::post('/admin/orders/change-status/{id}', [SupplierFulfillmentController::class, 'changeStatus'])
+        ->middleware(['auth', 'admin'])
+        ->name('admin.orders.change-status');
+
+    Route::get('/api-orders', [SupplierFulfillmentController::class, 'getAdminApiOrders'])
+        ->name('admin.api-orders')
+        ->middleware(['auth', 'admin']);
 });
+
+Route::middleware(['auth', 'admin'])->group(function () {
+    // API Orders routes
+    Route::get('/admin/api-orders', [SupplierFulfillmentController::class, 'getAdminApiOrders'])
+        ->name('admin.api-orders');
+    Route::get('/admin/orders/{order}', [SupplierFulfillmentController::class, 'showOrder'])
+        ->name('admin.orders.show');
+});
+
 Route::prefix('customer')->middleware('auth')->group(function () {
     Route::get('/', [DashboardController::class, 'index'])->name('customer.index');
 
     Route::get('/wallet', [FinanceController::class, 'index'])->name('customer.wallet');
     Route::post('/wallet/topup', [FinanceController::class, 'topup'])->name('customer.finance.topup');
+
     Route::post('/order-upload', [SupplierFulfillmentController::class, 'uploadCustomerFulfillmentFile'])->name('customer.order-upload');
     Route::get('/order-list', [SupplierFulfillmentController::class, 'getCustomerUploadedFiles'])->name('customer.order-list');
     Route::post('/delete-files', [SupplierFulfillmentController::class, 'deleteFiles'])->name('customer.delete-files');
     Route::get('/order-customer', [SupplierFulfillmentController::class, 'getCustomerOrders'])->name('customer.order-customer');
-    Route::get('/orders/{id}', [SupplierFulfillmentController::class, 'getCustomerOrderDetail'])
+    Route::get('/orders/{externalId}', [SupplierFulfillmentController::class, 'getCustomerOrderDetail'])
         ->name('customer.orders.detail');
+    Route::get('/order-create', [SupplierFulfillmentController::class, 'orderCreate'])->name('customer.order-create');
+    Route::get('/file-detail/{id}', [SupplierFulfillmentController::class, 'fileDetail'])->name('customer.file-detail');
+    Route::get('/debug-orders', [SupplierFulfillmentController::class, 'debugCustomerOrders'])->name('customer.debug-orders');
 });
 
 // Nhóm route authentication
@@ -111,3 +145,13 @@ Route::get('/products/{slug}', [ProductController::class, 'productList']);
 Route::post('/products/import', [ProductController::class, 'import'])->name('products.import');
 
 // Admin Topup Routes
+
+Route::get('login', function () {
+    return redirect()->route('signin');
+})->name('login');
+
+// API Token routes
+Route::middleware(['auth'])->group(function () {
+    Route::get('/profile/api-token', [App\Http\Controllers\ApiTokenController::class, 'show'])->name('api-token.show');
+    Route::post('/profile/api-token/regenerate', [App\Http\Controllers\ApiTokenController::class, 'regenerate'])->name('api-token.regenerate');
+});

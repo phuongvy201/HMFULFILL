@@ -251,18 +251,76 @@ class ProductController extends Controller
 
     public function show($slug)
     {
-        $product = Product::with(['images', 'variants.attributes', 'variants.shippingPrices', 'fulfillmentLocations'])
+        $product = Product::with([
+            'images',
+            'variants.attributes',
+            'variants.shippingPrices',
+            'fulfillmentLocations'
+        ])
             ->where('slug', $slug)
             ->firstOrFail();
 
         $groupedAttributes = $product->getGroupedAttributes()->toArray();
         Log::info($groupedAttributes);
         Log::info($product);
-        return view('customer.products.product-detail', compact('product', 'groupedAttributes'));
+
+        // Lấy tỷ giá từ config
+        $currencyRates = [
+            'usd_to_vnd' => config('currency.usd_to_vnd'),
+            'gbp_to_vnd' => config('currency.gbp_to_vnd'),
+            'gbp_to_usd' => config('currency.gbp_to_usd'),
+        ];
+
+        // Lấy giá sản phẩm theo từng loại tiền
+        $priceUSD = $product->getPriceInUSD();
+        $priceVND = $product->getPriceInVND();
+        $priceGBP = $product->getPriceInGBP();
+
+        // Lấy giá cho từng variant (nếu cần dùng ở JS)
+        $variants = $product->variants->map(function ($variant) use ($currencyRates) {
+            // Giả sử variant có trường price (USD), hoặc bạn có thể tính lại theo tỷ giá
+            $priceUSD = $variant->price_usd ? $variant->price_usd : ($variant->price ?? 0);
+            $priceVND = $variant->price_vnd ? $variant->price_vnd : ($priceUSD * $currencyRates['usd_to_vnd']);
+            $priceGBP = $variant->price_gbp ? $variant->price_gbp : ($priceUSD / $currencyRates['gbp_to_usd']);
+
+            // Shipping prices cho từng loại tiền
+            $shipping_prices = $variant->shippingPrices->map(function ($sp) use ($currencyRates) {
+                $priceUSD = $sp->price_usd ? $sp->price_usd : ($sp->price ?? 0);
+                $priceVND = $sp->price_vnd ? $sp->price_vnd : ($priceUSD * $currencyRates['usd_to_vnd']);
+                $priceGBP = $sp->price_gbp ? $sp->price_gbp : ($priceUSD / $currencyRates['gbp_to_usd']);
+                return [
+                    'method'    => $sp->method,
+                    'price_usd' => $priceUSD,
+                    'price_vnd' => $priceVND,
+                    'price_gbp' => $priceGBP,
+                ];
+            });
+
+            return [
+                'id' => $variant->id,
+                'attributes' => $variant->attributes,
+                'price_usd' => $priceUSD,
+                'price_vnd' => $priceVND,
+                'price_gbp' => $priceGBP,
+                'shipping_prices' => $shipping_prices,
+            ];
+        });
+
+        return view('customer.products.product-detail', compact(
+            'product',
+            'groupedAttributes',
+            'currencyRates',
+            'priceUSD',
+            'priceVND',
+            'priceGBP',
+            'variants'
+        ));
     }
     public function import(Request $request)
     {
         try {
+            $currency = $request->input('currency', 'USD'); // Lấy currency từ form
+
             $file = $request->file('excel_file');
             $spreadsheet = IOFactory::load($file->getPathname());
             $worksheet = $spreadsheet->getActiveSheet();
@@ -294,6 +352,7 @@ class ProductController extends Controller
                             'name' => $row[0],
                             'category_id' => $categoryId,
                             'base_price' => (float)$row[2],
+                            'currency' => $currency, // Lấy từ form
                             'template_link' => $row[3] ?? null,
                             'description' => $row[4] ?? null,
                             'status' => 1,
@@ -344,7 +403,8 @@ class ProductController extends Controller
                                 ShippingPrice::create([
                                     'variant_id' => $variant->id,
                                     'method' => $method,
-                                    'price' => (float)$row[$colIndex]
+                                    'price' => (float)$row[$colIndex],
+                                    'currency' => $currency // Lấy từ form
                                 ]);
                             }
                         }

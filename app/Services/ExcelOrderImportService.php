@@ -15,6 +15,7 @@ use PhpOffice\PhpSpreadsheet\IOFactory;
 use App\Models\Wallet;
 use App\Models\Transaction;
 use GuzzleHttp\Client;
+use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
 
 class ExcelOrderImportService
@@ -56,6 +57,7 @@ class ExcelOrderImportService
             ]);
             return false;
         }
+
         // Tiếp tục xử lý nếu không có lỗi
         $ordersByExternalId = [];
 
@@ -88,6 +90,8 @@ class ExcelOrderImportService
                     'comment' => $row['P'] ?? '',
                     'shipping_method' => $row['W'] ?? '',
                     'status' => 'pending',
+                    'created_by' => $importFile->user_id,
+                    'warehouse' => $importFile->warehouse,
                     'import_file_id' => $importFile->id
                 ]);
             }
@@ -101,9 +105,36 @@ class ExcelOrderImportService
                 'title' => $row['R'] ?? '',
                 'quantity' => (int)($row['S'] ?? 0),
                 'description' => $row['T'] ?? '',
+
                 'label_name' => $row['U'] ?? '',
                 'label_type' => $row['V'] ?? '',
             ]);
+
+            // Lấy thông tin sản phẩm từ part_number
+            $variant = ProductVariant::where('sku', $row['Q'])
+                ->orWhere('twofifteen_sku', $row['Q'])
+                ->orWhere('flashship_sku', $row['Q'])
+                ->first();
+
+            if ($variant) {
+                // Lấy giá shipping dựa trên variant
+                $shippingPrices = ShippingPrice::where('variant_id', $variant->id)->get();
+
+                // Giả định bạn muốn lấy giá shipping đầu tiên (hoặc có thể thêm logic để chọn giá phù hợp)
+                if ($shippingPrices->isNotEmpty()) {
+                    $shippingPrice = $shippingPrices->first(); // Lấy giá shipping đầu tiên
+
+                    // Cập nhật giá và product_id vào orderItem
+                    $orderItem->update([
+                        'print_price' => $shippingPrice->price_usd, // Hoặc bạn có thể lưu giá theo currency khác
+                        'product_id' => $variant->product_id // Lưu product_id từ variant
+                    ]);
+                } else {
+                    Log::warning("No shipping prices found for variant ID: {$variant->id}");
+                }
+            } else {
+                Log::warning("Product variant not found for part_number: {$row['Q']}");
+            }
 
             // Reset các mảng cho mỗi sản phẩm
             $positions = [];
@@ -112,28 +143,27 @@ class ExcelOrderImportService
 
             // Xử lý các vị trí in và URL tương ứng (đã dời sang phải 1 cột)
             $positionCols = ['X', 'AA', 'AD', 'AG', 'AJ'];
-            $mockupCols   = ['Y', 'AB', 'AE', 'AH', 'AK'];
-            $designCols   = ['Z', 'AC', 'AF', 'AI', 'AL'];
+            $mockupCols = ['Y', 'AB', 'AE', 'AH', 'AK'];
+            $designCols = ['Z', 'AC', 'AF', 'AI', 'AL'];
 
             for ($i = 0; $i < 5; $i++) {
                 $positionCol = $positionCols[$i];
-                $mockupCol   = $mockupCols[$i];
-                $designCol   = $designCols[$i];
+                $mockupCol = $mockupCols[$i];
+                $designCol = $designCols[$i];
 
                 if (!empty($row[$positionCol])) {
-                    $positions[] = $row[$positionCol];
+                    $positions[] = trim($row[$positionCol]);
                     $mockupUrls[] = !empty($row[$mockupCol]) ?
                         (str_contains($row[$mockupCol], 'drive.google.com') ?
-                            GoogleDriveHelper::convertToDirectDownloadLink($row[$mockupCol]) :
-                            $row[$mockupCol]) : '';
+                            GoogleDriveHelper::convertToDirectDownloadLink(trim($row[$mockupCol])) :
+                            trim($row[$mockupCol])) : '';
                     $designUrls[] = !empty($row[$designCol]) ?
                         (str_contains($row[$designCol], 'drive.google.com') ?
-                            GoogleDriveHelper::convertToDirectDownloadLink($row[$designCol]) :
-                            $row[$designCol]) : '';
+                            GoogleDriveHelper::convertToDirectDownloadLink(trim($row[$designCol])) :
+                            trim($row[$designCol])) : '';
                 }
             }
 
-            // Tạo mockup và design tương ứng
             foreach ($positions as $index => $position) {
                 if (!empty($mockupUrls[$index])) {
                     ExcelOrderMockup::create([
@@ -152,11 +182,12 @@ class ExcelOrderImportService
                 }
             }
         }
+
+        return true; // Thêm return true khi xử lý thành công
     }
 
     public function processCustomer(ImportFile $importFile, array $rows, string $warehouse)
     {
-        // Validate dữ liệu trước
         $errors = $this->validateRows($rows, $importFile);
         if (!empty($errors)) {
             $importFile->update([
@@ -168,55 +199,158 @@ class ExcelOrderImportService
             return false;
         }
         Log::info('Warehouse: ' . $warehouse);
-        // Đầu tiên, tính tổng quantity cho mỗi đơn hàng
-        $orderTotalQuantities = [];
+
+        $rowsByExternalId = [];
         foreach ($rows as $row) {
-            if (empty($row['A'])) continue;
-            $externalId = $row['A'];
-            if (!isset($orderTotalQuantities[$externalId])) {
-                $orderTotalQuantities[$externalId] = 0;
+            if (empty(array_filter($row))) continue;
+            $externalId = trim($row['A'] ?? '');
+            if (!isset($rowsByExternalId[$externalId])) {
+                $rowsByExternalId[$externalId] = [];
             }
-            $orderTotalQuantities[$externalId] += (int)($row['S'] ?? 0);
+            $rowsByExternalId[$externalId][] = $row;
         }
 
-        // Tính tổng số tiền cần trừ
         $totalAmount = 0;
-        foreach ($rows as $row) {
-            if (empty($row['A'])) continue;
+        $orderPriceBreakdowns = [];
+        $itemPrices = []; // Lưu giá trung bình cho mỗi item
+        $itemPriceBreakdowns = []; // Lưu chi tiết giá
 
-            $externalId = $row['A'];
-            $quantity = (int)($row['S'] ?? 0);
-            $variant = ProductVariant::where('sku', $row['Q'])
-                ->orWhere('twofifteen_sku', $row['Q'])
-                ->orWhere('flashship_sku', $row['Q'])
-                ->first();
-
-            if ($variant) {
-                $shippingMethod = !empty($row['W']) ? strtolower($row['W']) : '';
-                $isTikTokLabel = str_contains($shippingMethod, 'tiktok_label');
-
-                // Xác định method dựa trên tổng quantity của đơn hàng
-                $method = $isTikTokLabel ?
-                    ($orderTotalQuantities[$externalId] <= 1 ? ShippingPrice::METHOD_TIKTOK_1ST : ShippingPrice::METHOD_TIKTOK_NEXT) : ($orderTotalQuantities[$externalId] <= 1 ? ShippingPrice::METHOD_SELLER_1ST : ShippingPrice::METHOD_SELLER_NEXT);
-
-                $shippingPrice = $variant->shippingPrices()->where('method', $method)->first();
-                if ($shippingPrice) {
-                    $totalAmount += $shippingPrice->price * $quantity;
+        foreach ($rowsByExternalId as $externalId => $orderRows) {
+            $allItems = [];
+            foreach ($orderRows as $rowIndex => $row) {
+                $partNumber = trim($row['Q'] ?? '');
+                $variant = ProductVariant::where('sku', $partNumber)
+                    ->orWhere('twofifteen_sku', $partNumber)
+                    ->orWhere('flashship_sku', $partNumber)
+                    ->first();
+                if ($variant) {
+                    $shippingMethod = !empty($row['W']) ? strtolower(trim($row['W'] ?? '')) : '';
+                    $quantity = (int)($row['S'] ?? 0);
+                    $allItems[] = [
+                        'variant' => $variant,
+                        'quantity' => $quantity,
+                        'row' => $row,
+                        'row_index' => $rowIndex,
+                        'first_item_price' => $variant->getFirstItemPrice($shippingMethod),
+                        'part_number' => $variant->twofifteen_sku ?? $partNumber, // Sử dụng twofifteen_sku nếu có
+                        'shipping_method' => $shippingMethod
+                    ];
                 }
             }
+
+            $highestPriceItem = null;
+            $highestPrice = 0;
+            foreach ($allItems as $item) {
+                if ($item['first_item_price'] > $highestPrice) {
+                    $highestPrice = $item['first_item_price'];
+                    $highestPriceItem = $item;
+                }
+            }
+
+            $productsByPartNumber = [];
+            foreach ($allItems as $item) {
+                $partNumber = $item['part_number'];
+                if (!isset($productsByPartNumber[$partNumber])) {
+                    $productsByPartNumber[$partNumber] = [];
+                }
+                $productsByPartNumber[$partNumber][] = $item;
+            }
+
+            $orderTotalAmount = 0;
+            $firstItemProcessed = false;
+            foreach ($productsByPartNumber as $partNumber => $items) {
+                foreach ($items as $index => $item) {
+                    $variant = $item['variant'];
+                    $quantity = $item['quantity'];
+                    $rowIndex = $item['row_index'];
+                    $shippingMethod = $item['shipping_method'];
+
+                    $isFirstItem = (!$firstItemProcessed && $highestPriceItem && $highestPriceItem['row_index'] === $rowIndex);
+                    if ($isFirstItem) {
+                        $firstItemProcessed = true;
+                    }
+
+                    $itemTotal = 0;
+                    $averagePrice = 0;
+                    $priceBreakdown = [];
+                    $logType = '';
+
+                    if ($isFirstItem && $quantity > 1) {
+                        $priceInfo1 = $variant->getOrderPriceInfo($shippingMethod, 1);
+                        $priceInfo2 = $variant->getOrderPriceInfo($shippingMethod, 2);
+                        if ($priceInfo1['shipping_price_found'] && $priceInfo2['shipping_price_found']) {
+                            $firstPrice = round($priceInfo1['print_price'], 2);
+                            $secondPrice = round($priceInfo2['print_price'], 2);
+                            $itemTotal = $firstPrice + ($secondPrice * ($quantity - 1));
+                            $itemTotal = round($itemTotal, 2);
+                            $averagePrice = round($itemTotal / $quantity, 2);
+                            $logType = 'first_item_mix';
+                            $priceBreakdown = [
+                                'first_item_price' => $firstPrice,
+                                'additional_item_price' => $secondPrice,
+                                'quantity' => $quantity,
+                                'breakdown' => "1x{$firstPrice} + " . ($quantity - 1) . "x{$secondPrice}"
+                            ];
+                            Log::info('[IMPORT] Tính giá (first_item_mix)', [
+                                'external_id' => $externalId,
+                                'part_number' => $partNumber,
+                                'quantity' => $quantity,
+                                'first_item_price' => $firstPrice,
+                                'second_item_price' => $secondPrice,
+                                'item_total' => $itemTotal,
+                                'average_price' => $averagePrice,
+                                'breakdown' => $priceBreakdown['breakdown']
+                            ]);
+                        }
+                    } else {
+                        $position = $isFirstItem ? 1 : 2;
+                        $priceInfo = $variant->getOrderPriceInfo($shippingMethod, $position);
+                        if ($priceInfo['shipping_price_found']) {
+                            $unitPrice = round($priceInfo['print_price'], 2);
+                            $itemTotal = $unitPrice * $quantity;
+                            $itemTotal = round($itemTotal, 2);
+                            $averagePrice = $unitPrice;
+                            $logType = $isFirstItem ? 'first_item' : 'second_item';
+                            $priceBreakdown = [
+                                'unit_price' => $unitPrice,
+                                'quantity' => $quantity,
+                                'is_first_item' => $isFirstItem,
+                                'breakdown' => $quantity . "x" . $unitPrice
+                            ];
+                            Log::info('[IMPORT] Tính giá (' . $logType . ')', [
+                                'external_id' => $externalId,
+                                'part_number' => $partNumber,
+                                'quantity' => $quantity,
+                                'unit_price' => $unitPrice,
+                                'item_total' => $itemTotal,
+                                'average_price' => $averagePrice,
+                                'breakdown' => $priceBreakdown['breakdown']
+                            ]);
+                        }
+                    }
+
+                    if ($itemTotal > 0) {
+                        $orderTotalAmount += $itemTotal;
+                        $itemPrices[$externalId][$rowIndex] = $averagePrice;
+                        $itemPriceBreakdowns[$externalId][$rowIndex] = $priceBreakdown;
+                    }
+                }
+            }
+            $totalAmount += $orderTotalAmount;
+            $orderPriceBreakdowns[$externalId] = $orderTotalAmount;
         }
 
-        // Kiểm tra và trừ tiền từ ví
+        $totalAmount = round($totalAmount, 2);
+
         $wallet = Wallet::where('user_id', $importFile->user_id)->first();
         if (!$wallet || !$wallet->hasEnoughBalance($totalAmount)) {
             $importFile->update([
                 'status' => 'failed',
-                'error_logs' => ['Insufficient balance in wallet'],
+                'error_logs' => ['Số dư ví không đủ'],
             ]);
             return false;
         }
 
-        // Tạo giao dịch trừ tiền
         $transaction = Transaction::create([
             'user_id' => $importFile->user_id,
             'transaction_code' => 'ORDER-' . time(),
@@ -224,226 +358,210 @@ class ExcelOrderImportService
             'method' => Transaction::METHOD_VND,
             'amount' => $totalAmount,
             'status' => Transaction::STATUS_APPROVED,
-            'note' => 'Deduct for order import: ' . $importFile->id,
+            'note' => 'Trừ tiền cho đơn hàng nhập: ' . $importFile->id,
             'approved_at' => now(),
         ]);
 
-        // Trừ tiền từ ví
         if (!$wallet->withdraw($totalAmount)) {
-            $transaction->reject('Failed to withdraw from wallet');
+            $transaction->reject('Không thể trừ tiền từ ví');
             $importFile->update([
                 'status' => 'failed',
-                'error_logs' => ['Failed to process payment'],
+                'error_logs' => ['Không thể xử lý thanh toán'],
             ]);
             return false;
         }
 
-        // Tiếp tục xử lý đơn hàng như bình thường
         $ordersByExternalId = [];
         $orderTotalPrices = [];
         $orderTotalQuantities = [];
 
-        // Đầu tiên, tính tổng quantity cho mỗi đơn hàng
-        foreach ($rows as $row) {
-            if (empty($row['A'])) continue;
-            $externalId = $row['A'];
-            if (!isset($orderTotalQuantities[$externalId])) {
-                $orderTotalQuantities[$externalId] = 0;
-                $orderTotalPrices[$externalId] = 0;
-            }
-            $orderTotalQuantities[$externalId] += (int)($row['S'] ?? 0);
-        }
+        foreach ($rowsByExternalId as $externalId => $orderRows) {
+            $order = null;
+            $orderTotalQuantity = 0;
+            $orderTotalPrice = 0;
 
-        // Sau đó xử lý từng dòng và tính giá vận chuyển
-        foreach ($rows as $row) {
-            if (empty($row['A']) && empty($row['Q'])) {
-                continue;
-            }
+            foreach ($orderRows as $index => $row) {
+                if (!$order) {
+                    $order = ExcelOrder::create([
+                        'external_id' => $externalId,
+                        'brand' => trim($row['B'] ?? ''),
+                        'channel' => trim($row['C'] ?? ''),
+                        'buyer_email' => trim($row['D'] ?? ''),
+                        'first_name' => trim($row['E'] ?? ''),
+                        'last_name' => trim($row['F'] ?? ''),
+                        'company' => trim($row['G'] ?? ''),
+                        'address1' => trim($row['H'] ?? ''),
+                        'address2' => trim($row['I'] ?? ''),
+                        'city' => trim($row['J'] ?? ''),
+                        'county' => trim($row['K'] ?? ''),
+                        'post_code' => trim($row['L'] ?? ''),
+                        'country' => trim($row['M'] ?? ''),
+                        'phone1' => trim($row['N'] ?? ''),
+                        'phone2' => trim($row['O'] ?? ''),
+                        'comment' => trim($row['P'] ?? ''),
+                        'shipping_method' => trim($row['W'] ?? ''),
+                        'status' => 'pending',
+                        'import_file_id' => $importFile->id,
+                        'created_by' => Auth::user()->id,
+                        'warehouse' => $warehouse
+                    ]);
+                    $ordersByExternalId[$externalId] = $order;
+                }
 
-            $externalId = $row['A'] ?? '';
-            $order = $ordersByExternalId[$externalId] ?? null;
-
-            if (!$order) {
-                $order = ExcelOrder::create([
-                    'external_id' => $externalId,
-                    'brand' => $row['B'] ?? '',
-                    'channel' => $row['C'] ?? '',
-                    'buyer_email' => $row['D'] ?? '',
-                    'first_name' => $row['E'] ?? '',
-                    'last_name' => $row['F'] ?? '',
-                    'company' => $row['G'] ?? '',
-                    'address1' => $row['H'] ?? '',
-                    'address2' => $row['I'] ?? '',
-                    'city' => $row['J'] ?? '',
-                    'county' => $row['K'] ?? '',
-                    'post_code' => $row['L'] ?? '',
-                    'country' => $row['M'] ?? '',
-                    'phone1' => $row['N'] ?? '',
-                    'phone2' => $row['O'] ?? '',
-                    'comment' => $row['P'] ?? '',
-                    'shipping_method' => $row['W'] ?? '',
-                    'status' => 'pending',
-                    'import_file_id' => $importFile->id
-                ]);
-                $ordersByExternalId[$externalId] = $order;
-            }
-
-            // Tạo order item
-            $orderItem = ExcelOrderItem::create([
-                'excel_order_id' => $order->id,
-                'part_number' => $row['Q'] ?? '',
-                'title' => $row['R'] ?? '',
-                'quantity' => (int)($row['S'] ?? 0),
-                'description' => $row['T'] ?? '',
-                'label_name' => $row['U'] ?? '',
-                'label_type' => $row['V'] ?? '',
-            ]);
-
-            // Tìm variant và lấy giá vận chuyển
-            $variant = ProductVariant::where('sku', $row['Q'])
-                ->orWhere('twofifteen_sku', $row['Q'])
-                ->orWhere('flashship_sku', $row['Q'])
-                ->first();
-
-            if ($variant) {
-                // Xác định phương thức vận chuyển
-                $shippingMethod = !empty($row['W']) ? strtolower($row['W']) : '';
-                $isTikTokLabel = str_contains($shippingMethod, 'tiktok_label');
-
-                // Xác định method dựa trên tổng quantity của đơn hàng
-                $method = $isTikTokLabel ?
-                    ($orderTotalQuantities[$externalId] <= 1 ? ShippingPrice::METHOD_TIKTOK_1ST : ShippingPrice::METHOD_TIKTOK_NEXT) : ($orderTotalQuantities[$externalId] <= 1 ? ShippingPrice::METHOD_SELLER_1ST : ShippingPrice::METHOD_SELLER_NEXT);
-
-                // Lấy giá vận chuyển
-                $shippingPrice = $variant->shippingPrices()
-                    ->where('method', $method)
+                $partNumber = trim($row['Q'] ?? '');
+                $variant = ProductVariant::where('sku', $partNumber)
+                    ->orWhere('twofifteen_sku', $partNumber)
+                    ->orWhere('flashship_sku', $partNumber)
                     ->first();
 
-                if ($shippingPrice) {
-                    // Cập nhật giá vận chuyển cho order item
-                    $orderItem->update([
-                        'shipping_price' => $shippingPrice->price,
-                        'shipping_method' => $isTikTokLabel ? 'tiktok' : 'seller'
-                    ]);
+                $productId = null;
+                $finalPartNumber = $partNumber;
+                if ($variant) {
+                    $productId = $variant->product_id;
+                    $sku = $variant->getSkuByWarehouse($warehouse);
+                    Log::info("Chọn SKU cho warehouse {$warehouse}", ['selected_sku' => $sku]);
 
-                    // Cộng dồn giá vào tổng giá của đơn hàng
-                    $orderTotalPrices[$externalId] += $shippingPrice->price * (int)($row['S'] ?? 0);
+                    if (!empty($sku)) {
+                        $finalPartNumber = $sku;
+                    } else {
+                        $errors[] = "Không tìm thấy SKU hợp lệ cho variant (SKU: {$partNumber}, Warehouse: {$warehouse})";
+                        Log::error('Không tìm thấy SKU hợp lệ cho variant', [
+                            'sku' => $partNumber,
+                            'warehouse' => $warehouse,
+                            'variant_id' => $variant->id
+                        ]);
+                        continue;
+                    }
                 }
 
-                // Sử dụng warehouse từ ImportFile để xác định SKU
-                $sku = $variant->getSkuByWarehouse($warehouse);
-                Log::info("Chọn SKU cho warehouse {$warehouse}", ['selected_sku' => $sku]);
+                $orderItem = ExcelOrderItem::create([
+                    'excel_order_id' => $order->id,
+                    'part_number' => $finalPartNumber,
+                    'title' => trim($row['R'] ?? ''),
+                    'quantity' => (int)($row['S'] ?? 0),
+                    'description' => trim($row['T'] ?? ''),
+                    'label_name' => trim($row['U'] ?? ''),
+                    'label_type' => trim($row['V'] ?? ''),
+                    'product_id' => $productId,
+                    'print_price' => $itemPrices[$externalId][$index] ?? 0 // Sử dụng giá trung bình
+                ]);
 
-                // Cập nhật part_number cho order item với SKU tương ứng
-                if (!empty($sku)) {
-                    $orderItem->update(['part_number' => $sku]);
-                } else {
-                    // Ghi log lỗi và bỏ qua dòng nếu không tìm thấy SKU hợp lệ
-                    $errors[] = "Không tìm thấy SKU hợp lệ cho variant (SKU: {$row['Q']}, Warehouse: {$warehouse})";
-                    Log::error('Không tìm thấy SKU hợp lệ cho variant', [
-                        'sku' => $row['Q'],
-                        'warehouse' => $warehouse,
-                        'variant_id' => $variant->id
-                    ]);
-                    continue; // Bỏ qua dòng này để tránh xử lý dữ liệu không hợp lệ
+                $orderTotalQuantity += (int)($row['S'] ?? 0);
+
+                $positions = [];
+                $mockupUrls = [];
+                $designUrls = [];
+
+                $positionCols = ['X', 'AA', 'AD', 'AG', 'AJ'];
+                $mockupCols = ['Y', 'AB', 'AE', 'AH', 'AK'];
+                $designCols = ['Z', 'AC', 'AF', 'AI', 'AL'];
+
+                for ($i = 0; $i < 5; $i++) {
+                    $positionCol = $positionCols[$i];
+                    $mockupCol = $mockupCols[$i];
+                    $designCol = $designCols[$i];
+
+                    if (!empty($row[$positionCol])) {
+                        $positions[] = trim($row[$positionCol]);
+                        $mockupUrls[] = !empty($row[$mockupCol]) ?
+                            (str_contains($row[$mockupCol], 'drive.google.com') ?
+                                GoogleDriveHelper::convertToDirectDownloadLink(trim($row[$mockupCol])) :
+                                trim($row[$mockupCol])) : '';
+                        $designUrls[] = !empty($row[$designCol]) ?
+                            (str_contains($row[$designCol], 'drive.google.com') ?
+                                GoogleDriveHelper::convertToDirectDownloadLink(trim($row[$designCol])) :
+                                trim($row[$designCol])) : '';
+                    }
+                }
+
+                foreach ($positions as $idx => $position) {
+                    if (!empty($mockupUrls[$idx])) {
+                        ExcelOrderMockup::create([
+                            'excel_order_item_id' => $orderItem->id,
+                            'title' => $this->getPositionTitle($position),
+                            'url' => $mockupUrls[$idx]
+                        ]);
+                    }
+
+                    if (!empty($designUrls[$idx])) {
+                        ExcelOrderDesign::create([
+                            'excel_order_item_id' => $orderItem->id,
+                            'title' => $this->getPositionTitle($position),
+                            'url' => $designUrls[$idx]
+                        ]);
+                    }
                 }
             }
 
-            // Reset các mảng cho mỗi sản phẩm
-            $positions = [];
-            $mockupUrls = [];
-            $designUrls = [];
-
-            // Xử lý các vị trí in và URL tương ứng (đã dời sang phải 1 cột)
-            $positionCols = ['X', 'AA', 'AD', 'AG', 'AJ'];
-            $mockupCols   = ['Y', 'AB', 'AE', 'AH', 'AK'];
-            $designCols   = ['Z', 'AC', 'AF', 'AI', 'AL'];
-
-            for ($i = 0; $i < 5; $i++) {
-                $positionCol = $positionCols[$i];
-                $mockupCol   = $mockupCols[$i];
-                $designCol   = $designCols[$i];
-
-                if (!empty($row[$positionCol])) {
-                    $positions[] = $row[$positionCol];
-                    $mockupUrls[] = !empty($row[$mockupCol]) ?
-                        (str_contains($row[$mockupCol], 'drive.google.com') ?
-                            GoogleDriveHelper::convertToDirectDownloadLink($row[$mockupCol]) :
-                            $row[$mockupCol]) : '';
-                    $designUrls[] = !empty($row[$designCol]) ?
-                        (str_contains($row[$designCol], 'drive.google.com') ?
-                            GoogleDriveHelper::convertToDirectDownloadLink($row[$designCol]) :
-                            $row[$designCol]) : '';
-                }
-            }
-
-            // Tạo mockup và design tương ứng
-            foreach ($positions as $index => $position) {
-                if (!empty($mockupUrls[$index])) {
-                    ExcelOrderMockup::create([
-                        'excel_order_item_id' => $orderItem->id,
-                        'title' => $this->getPositionTitle($position),
-                        'url' => $mockupUrls[$index]
-                    ]);
-                }
-
-                if (!empty($designUrls[$index])) {
-                    ExcelOrderDesign::create([
-                        'excel_order_item_id' => $orderItem->id,
-                        'title' => $this->getPositionTitle($position),
-                        'url' => $designUrls[$index]
-                    ]);
-                }
-            }
+            $orderTotalQuantities[$externalId] = $orderTotalQuantity;
+            $orderTotalPrices[$externalId] = $orderPriceBreakdowns[$externalId] ?? 0;
         }
 
-        // Tạo fulfillment cho mỗi đơn hàng
-        foreach ($ordersByExternalId as $externalId => $order) {
-            ExcelOrderFulfillment::create([
-                'excel_order_id' => $order->id,
-                'total_quantity' => $orderTotalQuantities[$externalId],
-                'total_price' => $orderTotalPrices[$externalId],
-                'status' => 'pending',
-                'factory_response' => null,
-                'error_message' => null
-            ]);
-        }
-
-        return true; // Thêm return true khi xử lý thành công
+        return true;
     }
 
     public function validateRows(array $rows, ImportFile $importFile): array
     {
         $errors = [];
         $validPositions = ['Front', 'Back', 'Left sleeve', 'Right sleeve', 'Hem'];
-        $validImageExtensions = ['jpg', 'jpeg', 'png'];
+        $validImageMimeTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+        $externalIds = [];
+
+        // Hàm kiểm tra mimetype từ URL
+        $isValidImageMime = function ($url) use ($validImageMimeTypes) {
+            $headers = @get_headers($url, 1);
+            if (!$headers) return false;
+            $mime = isset($headers['Content-Type']) ? (is_array($headers['Content-Type']) ? $headers['Content-Type'][0] : $headers['Content-Type']) : '';
+            return in_array(strtolower($mime), $validImageMimeTypes);
+        };
+
+        // Hàm kiểm tra hàng có dữ liệu hay không
+        $hasRowData = function ($row) {
+            $requiredColumns = ['A', 'E', 'H', 'J', 'K', 'L', 'M', 'Q', 'S', 'X', 'Y', 'Z'];
+            foreach ($requiredColumns as $col) {
+                if (!empty(trim($row[$col] ?? ''))) {
+                    return true;
+                }
+            }
+            return false;
+        };
 
         foreach ($rows as $index => $row) {
-            $rowErrors = [];
+            // Bỏ qua hàng không có dữ liệu
+            if (!$hasRowData($row)) {
+                continue;
+            }
 
-            // Dòng thực tế trong Excel (cộng 2 vì index bắt đầu từ 0 và dòng tiêu đề là dòng 1)
+            $rowErrors = [];
             $excelRow = $index + 2;
 
             // Kiểm tra các trường bắt buộc
-            if (empty($row['A'])) {
+            $externalId = trim($row['A'] ?? '');
+            if (empty($externalId)) {
                 $rowErrors[] = "Row $excelRow: Missing order code (External_ID).";
+            } else {
+                // Chỉ kiểm tra xem đã tồn tại trong database chưa
+                if (ExcelOrder::where('external_id', $externalId)->exists()) {
+                    $rowErrors[] = "Row $excelRow: External_ID '$externalId' already exists in the database.";
+                }
             }
-            if (empty($row['E'])) {
+
+            if (empty(trim($row['E'] ?? ''))) {
                 $rowErrors[] = "Row $excelRow: Missing recipient name (First Name).";
             }
-            if (empty($row['H'])) {
+            if (empty(trim($row['H'] ?? ''))) {
                 $rowErrors[] = "Row $excelRow: Missing delivery address (Address 1).";
             }
-            if (empty($row['J'])) {
+            if (empty(trim($row['J'] ?? ''))) {
                 $rowErrors[] = "Row $excelRow: Missing city (City).";
             }
-            if (empty($row['K'])) {
+            if (empty(trim($row['K'] ?? ''))) {
                 $rowErrors[] = "Row $excelRow: Missing district/county (County).";
             }
-            if (empty($row['L'])) {
+            if (empty(trim($row['L'] ?? ''))) {
                 $rowErrors[] = "Row $excelRow: Missing postal code (Postcode).";
             }
-            if (empty($row['M'])) {
+            if (empty(trim($row['M'] ?? ''))) {
                 $rowErrors[] = "Row $excelRow: Missing country (Country).";
             }
 
@@ -452,69 +570,82 @@ class ExcelOrderImportService
                 $rowErrors[] = "Row $excelRow: Product quantity is invalid or empty.";
             }
 
-            // Kiểm tra vị trí in
-            $positionCols = ['X', 'AA', 'AD', 'AG', 'AJ'];
-            foreach ($positionCols as $col) {
-                if (!empty($row[$col]) && !in_array($row[$col], $validPositions)) {
-                    $rowErrors[] = "Row $excelRow: Invalid print position at column $col: '{$row[$col]}'. Valid values are: " . implode(', ', $validPositions);
-                }
-            }
-
-            // Kiểm tra hình ảnh mockup và design
-            $mockupCols = ['Y', 'AB', 'AE', 'AH', 'AK'];
-            $designCols = ['Z', 'AC', 'AF', 'AI', 'AL'];
-
-            foreach ($mockupCols as $col) {
-                if (!empty($row[$col])) {
-                    $url = $row[$col];
-                    // Kiểm tra nếu là link Google Drive
-                    if (str_contains($url, 'drive.google.com')) {
-                        if (!str_contains($url, '/file/d/')) {
-                            $rowErrors[] = "Row $excelRow: Google Drive link for mockup at column $col must be a sharing link.";
-                        }
-                    } else {
-                        // Kiểm tra extension của URL thông thường
-                        $extension = strtolower(pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION));
-                        if (!in_array($extension, $validImageExtensions)) {
-                            $rowErrors[] = "Row $excelRow: Format image is not valid for mockup at column $col. Only JPG, JPEG, PNG is accepted.";
-                        }
-                    }
-                }
-            }
-
-            foreach ($designCols as $col) {
-                if (!empty($row[$col])) {
-                    $url = $row[$col];
-                    // Kiểm tra nếu là link Google Drive
-                    if (str_contains($url, 'drive.google.com')) {
-                        if (!str_contains($url, '/file/d/')) {
-                            $rowErrors[] = "Row $excelRow: Google Drive link for design at column $col must be a sharing link.";
-                        }
-                    } else {
-                        // Kiểm tra extension của URL thông thường
-                        $extension = strtolower(pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION));
-                        if (!in_array($extension, $validImageExtensions)) {
-                            $rowErrors[] = "Row $excelRow: Format image is not valid for design at column $col. Only JPG, JPEG, PNG is accepted.";
-                        }
-                    }
+            // Kiểm tra shipping method với Google Drive link
+            $comment = trim($row['P'] ?? '');
+            $hasGoogleDriveLink = str_contains(strtolower($comment), 'drive.google.com');
+            if ($hasGoogleDriveLink) {
+                $shippingMethod = strtolower(trim($row['W'] ?? ''));
+                if ($shippingMethod !== 'tiktok_label') {
+                    $rowErrors[] = "Row $excelRow: Shipping method must be 'tiktok_label' when Google Drive link is present in comment. Current value: '{$row['W']}'.";
                 }
             }
 
             // Kiểm tra SKU
-            if (!empty($row['Q'])) {
-                $sku = $row['Q'];
-                $variant = ProductVariant::where('sku', $sku)
-                    ->orWhere('twofifteen_sku', $sku)
-                    ->orWhere('flashship_sku', $sku)
-                    ->first();
+            $sku = trim($row['Q'] ?? '');
+            if (empty($sku)) {
+                $rowErrors[] = "Row $excelRow: Missing product code (SKU).";
+            } else {
+                $variant = ProductVariant::where('sku', $sku)->first();
                 if (!$variant) {
                     $rowErrors[] = "Row $excelRow: Product code (SKU) does not exist in the system: '$sku'.";
                 }
-            } else {
-                $rowErrors[] = "Row $excelRow: Missing product code (SKU).";
             }
 
-            // Ghi nhận lỗi nếu có
+            // Kiểm tra vị trí in, mockup và design
+            $positionCols = ['X', 'AA', 'AD', 'AG', 'AJ'];
+            $mockupCols = ['Y', 'AB', 'AE', 'AH', 'AK'];
+            $designCols = ['Z', 'AC', 'AF', 'AI', 'AL'];
+            $hasPosition = false;
+            $hasMockup = false;
+            $hasDesign = false;
+
+            for ($i = 0; $i < 5; $i++) {
+                $positionCol = $positionCols[$i];
+                $mockupCol = $mockupCols[$i];
+                $designCol = $designCols[$i];
+
+                // Kiểm tra vị trí in
+                if (!empty($row[$positionCol])) {
+                    $hasPosition = true;
+                    $position = trim($row[$positionCol]);
+                    if (!in_array($position, $validPositions)) {
+                        $rowErrors[] = "Row $excelRow: Invalid print position at column $positionCol: '$position'. Valid values are: " . implode(', ', $validPositions);
+                    }
+                }
+
+                // Kiểm tra mockup và design
+                foreach (['mockup' => $mockupCol, 'design' => $designCol] as $type => $col) {
+                    if (!empty($row[$col])) {
+                        $url = trim($row[$col]);
+                        if ($type === 'mockup') {
+                            $hasMockup = true;
+                        } else {
+                            $hasDesign = true;
+                        }
+
+                        if (str_contains($url, 'drive.google.com')) {
+                            if (!str_contains($url, '/file/d/')) {
+                                $rowErrors[] = "Row $excelRow: Google Drive link for $type at column $col must be a sharing link.";
+                            }
+                        } else {
+                            if (!$isValidImageMime($url)) {
+                                $rowErrors[] = "Row $excelRow: File at column $col is not a valid image (JPG, JPEG, PNG).";
+                            }
+                        }
+                    }
+                }
+            }
+
+            if (!$hasPosition) {
+                $rowErrors[] = "Row $excelRow: At least one print position is required.";
+            }
+            if (!$hasMockup) {
+                $rowErrors[] = "Row $excelRow: At least one mockup URL is required.";
+            }
+            if (!$hasDesign) {
+                $rowErrors[] = "Row $excelRow: At least one design URL is required.";
+            }
+
             if (!empty($rowErrors)) {
                 $errors[$excelRow] = $rowErrors;
             }
@@ -537,6 +668,9 @@ class ExcelOrderImportService
         $validImageExtensions = ['jpg', 'jpeg', 'png'];
 
         foreach ($rows as $index => $row) {
+            // Bỏ qua dòng trống
+            if (empty(array_filter($row))) continue;
+
             $rowErrors = [];
 
             // Dòng thực tế trong Excel (cộng 2 vì index bắt đầu từ 0 và dòng tiêu đề là dòng 1)
@@ -591,10 +725,15 @@ class ExcelOrderImportService
                             $rowErrors[] = "Row $excelRow: Google Drive link for mockup at column $col must be a sharing link.";
                         }
                     } else {
-                        // Kiểm tra extension của URL thông thường
-                        $extension = strtolower(pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION));
-                        if (!in_array($extension, $validImageExtensions)) {
-                            $rowErrors[] = "Row $excelRow: Format image is not valid for mockup at column $col. Only JPG, JPEG, PNG is accepted.";
+                        // Kiểm tra mimetype thay vì extension
+                        $isValidImageMime = function ($url) {
+                            $headers = @get_headers($url, 1);
+                            if (!$headers) return false;
+                            $mime = isset($headers['Content-Type']) ? (is_array($headers['Content-Type']) ? $headers['Content-Type'][0] : $headers['Content-Type']) : '';
+                            return in_array($mime, ['image/jpeg', 'image/png', 'image/jpg']);
+                        };
+                        if (!$isValidImageMime($url)) {
+                            $rowErrors[] = "Row $excelRow: File at $col is not a valid image (JPG, JPEG, PNG).";
                         }
                     }
                 }
@@ -609,13 +748,32 @@ class ExcelOrderImportService
                             $rowErrors[] = "Row $excelRow: Google Drive link for design at column $col must be a sharing link.";
                         }
                     } else {
-                        // Kiểm tra extension của URL thông thường
-                        $extension = strtolower(pathinfo(parse_url($url, PHP_URL_PATH), PATHINFO_EXTENSION));
-                        if (!in_array($extension, $validImageExtensions)) {
-                            $rowErrors[] = "Row $excelRow: Format image is not valid for design at column $col. Only JPG, JPEG, PNG is accepted.";
+                        // Kiểm tra mimetype thay vì extension
+                        $isValidImageMime = function ($url) {
+                            $headers = @get_headers($url, 1);
+                            if (!$headers) return false;
+                            $mime = isset($headers['Content-Type']) ? (is_array($headers['Content-Type']) ? $headers['Content-Type'][0] : $headers['Content-Type']) : '';
+                            return in_array($mime, ['image/jpeg', 'image/png', 'image/jpg']);
+                        };
+                        if (!$isValidImageMime($url)) {
+                            $rowErrors[] = "Row $excelRow: File at $col is not a valid image (JPG, JPEG, PNG).";
                         }
                     }
                 }
+            }
+
+            // Kiểm tra phải có ít nhất một design URL
+            $designCols = ['Z', 'AC', 'AF', 'AI', 'AL'];
+            $hasDesign = false;
+            foreach ($designCols as $col) {
+                if (!empty($row[$col])) {
+                    $hasDesign = true;
+                    break;
+                }
+            }
+
+            if (!$hasDesign) {
+                $rowErrors[] = "Row $excelRow: At least one design URL is required.";
             }
 
             // Ghi nhận lỗi nếu có

@@ -44,7 +44,7 @@
     <!-- Breadcrumb End -->
 
     <div class="flex justify-end space-x-1">
-        <div class="border-t border-gray-100  dark:border-gray-800">
+        <div class="border-t border-gray-100 dark:border-gray-800">
             <div x-data="{isModalOpen: false, isLoading: false}">
                 <button class="px-4 py-3 text-sm font-medium text-white rounded-lg bg-brand-500 shadow-theme-xs hover:bg-brand-600"
                     @click="isModalOpen = true">
@@ -74,6 +74,43 @@
                             <h4 class="font-semibold text-gray-800 mb-7 text-title-sm dark:text-white/90">
                                 Import Order from File Excel
                             </h4>
+                            <p class="text-sm leading-6 text-gray-500 dark:text-gray-400 mb-5">
+                                File must be in .xlsx or .xls format and not exceed 10MB. Please ensure the file contains all required columns such as External ID, First Name, Address 1, City, County, Postcode, Country, Quantity and Part Number. All currency values will be converted to USD for calculation purposes.
+                            </p>
+
+                            <div class="mb-5 space-y-4 sm:space-y-0 sm:flex sm:flex-wrap sm:gap-6 text-sm text-gray-600 dark:text-gray-300">
+                                <div>
+                                    <p class="mb-1">📄 Download template sample file:</p>
+                                    <a href="https://hmfulfill.com/uploads/fulfillment/TemplateImportOrder.xlsx" download class="flex items-center text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-600">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
+                                        </svg>
+                                        Template Import Order.xlsx
+                                    </a>
+                                </div>
+
+                                <div>
+                                    <p class="mb-1">🔍 See valid SKU / Part Number list:</p>
+                                    <a href="{{ route('products.list') }}" class="flex items-center text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-600">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                                        </svg>
+                                        View SKU List
+                                    </a>
+                                </div>
+
+                                <div>
+                                    <p class="mb-1">📘 Download import instruction guide:</p>
+                                    <a href="https://hmfulfill.com/uploads/fulfillment/OrderImportGuide.docx" download class="flex items-center text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-600">
+                                        <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                                            <path stroke-linecap="round" stroke-linejoin="round" d="M9 5H7a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2V7a2 2 0 00-2-2h-2M9 5a2 2 0 002 2h2a2 2 0 002-2M9 5a2 2 0 012-2h2a2 2 0 012 2" />
+                                        </svg>
+                                        Order Import Guide
+                                    </a>
+                                </div>
+                            </div>
+
+
                             <form action="{{ route('customer.order-upload') }}" method="POST" enctype="multipart/form-data" class="space-y-5">
                                 @csrf
                                 <div class="mb-5">
@@ -88,17 +125,20 @@
                                     <label for="warehouse" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Select Warehouse</label>
                                     <select name="warehouse" id="warehouse" required
                                         class="w-full px-3 py-2 border border-gray-300 rounded-lg dark:bg-gray-800 dark:border-gray-700 dark:text-white">
-                                        <option value="US">US</option>
                                         <option value="UK">UK</option>
                                     </select>
                                     @error('warehouse')
                                     <p class="text-red-500 text-sm mt-1">{{ $message }}</p>
                                     @enderror
                                 </div>
-                                <p class="text-sm leading-6 text-gray-500 dark:text-gray-400 mb-5">
-                                    File must be in .xlsx or .xls format and not exceed 10MB. Please ensure the file contains all required columns such as External ID, First Name, Address 1, City, County, Postcode, Country, Quantity and Part Number.
-                                </p>
-                                <div class="flex items-center justify-end w-full gap-3 mt-8">
+
+                                @if(session('error'))
+                                <div class="mb-5 p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">
+                                    {{ session('error') }}
+                                </div>
+                                @endif
+
+                                <div class="flex items-center justify-end w-full gap-3 mt-8 flex-col sm:flex-row">
                                     <button @click="isModalOpen = false" type="button" class="flex w-full justify-center rounded-lg border border-gray-300 bg-white px-4 py-3 text-sm font-medium text-gray-700 shadow-theme-xs hover:bg-gray-50 hover:text-gray-800 dark:border-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-white/[0.03] dark:hover:text-gray-200 sm:w-auto">
                                         Close
                                     </button>
@@ -117,14 +157,9 @@
                         </div>
                     </div>
                 </div>
-
             </div>
-
-            <!-- Delete Button -->
-
         </div>
     </div>
-
 
     <div class="border-t border-gray-100 p-5 dark:border-gray-800 sm:p-6">
         <!-- Table Four -->
@@ -238,11 +273,10 @@
                                     <div x-data="{checked: false}" class="flex items-center gap-3">
 
                                         <div class="flex items-center">
-                                            <a href="/admin/order-fulfillment-detail/{{ $file->id }}" target="_blank" class="text-blue-500 hover:underline-none">
-                                                <span class="text-theme-sm font-medium text-gray-700 dark:text-gray-400 flex items-center group relative" title="{{ $file->file_name }}">
-                                                    {{ \Illuminate\Support\Str::limit($file->file_name, 30) }}
-                                                </span>
+                                            <a href="{{ route('customer.file-detail', $file->id) }}" class="text-theme-sm font-medium text-gray-700 dark:text-gray-400 flex items-center group relative" title="{{ $file->file_name }}">
+                                                {{ \Illuminate\Support\Str::limit($file->file_name, 30) }}
                                             </a>
+
 
                                             <a href="{{ $file->file_path }}" target="_blank" class="text-blue-500 hover:underline-none ml-2">
                                                 <svg title="Download file" class="cursor-pointer hover:fill-success-500 dark:hover:fill-success-500 fill-gray-700 dark:fill-gray-400" width="20" height="20" viewBox="0 0 20 20" fill="none" xmlns="http://www.w3.org/2000/svg">

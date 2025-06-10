@@ -4,12 +4,14 @@ namespace App\Services;
 
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class BrickApiService
 {
     private $apiUrl;
     private $appId;
     private $secretKey;
+
 
     public function __construct()
     {
@@ -125,48 +127,51 @@ class BrickApiService
         }
     }
 
-    public function getOrders(array $params = [])
+    public function getOrders(array $params = []): array
     {
         try {
+            // Xác thực tham số đầu vào và thêm sắp xếp theo thời gian gần nhất
+            $createdAtMax = Carbon::now()->toIso8601String();
+            $createdAtMin = Carbon::now()->subDays(5)->toIso8601String();
+
             $queryParams = array_merge([
                 'AppId' => $this->appId,
-                'page' => 1,
-                'limit' => 1000,
-                'format' => 'JSON'
+                'page' => max(1, (int)($params['page'] ?? 1)),
+                'limit' => min(1000, max(1, (int)($params['limit'] ?? 1000))),
+                'format' => 'JSON',
+                'sort' => 'created_at',
+                'order' => 'desc',
+                'created_at_min' => $createdAtMin,
+                'created_at_max' => $createdAtMax
             ], $params);
 
-            // Tạo query string không bao gồm Signature
+            // Tạo chuỗi truy vấn không bao gồm Signature
             $queryString = http_build_query($queryParams);
+            $queryParams['Signature'] = sha1($queryString . $this->secretKey);
 
-            // Tính signature: sha1(query string + secret key)
-            $signature = sha1($queryString . $this->secretKey);
-
-            // Thêm signature vào query parameters
-            $queryParams['Signature'] = $signature;
-
-            // Log request details
-            Log::info('Brick API Request:', [
+            // Ghi log yêu cầu (log tối thiểu trong môi trường sản xuất)
+            Log::debug('Yêu cầu API Brick:', [
                 'url' => $this->apiUrl . '/orders.php',
-                'query_params' => $queryParams
+                'query_params' => array_diff_key($queryParams, ['Signature' => ''])
             ]);
 
             $response = Http::get($this->apiUrl . '/orders.php?' . http_build_query($queryParams));
 
             if ($response->successful()) {
+                $data = $response->json();
                 return [
                     'success' => true,
-                    'data' => $response->json()
+                    'data' => $data
                 ];
             }
 
             return [
                 'success' => false,
-                'error' => $response->json()['error'] ?? 'Unknown error'
+                'error' => $response->json()['error'] ?? 'Lỗi API không xác định'
             ];
         } catch (\Exception $e) {
-            Log::error('Brick API getOrders error:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
+            Log::error('Lỗi gọi API getOrders:', [
+                'message' => $e->getMessage()
             ]);
 
             return [

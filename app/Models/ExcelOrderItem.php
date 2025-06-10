@@ -15,7 +15,9 @@ class ExcelOrderItem extends Model
         'quantity',
         'description',
         'label_name',
-        'label_type'
+        'label_type',
+        'print_price',
+        'product_id'
     ];
 
     protected $casts = [
@@ -36,5 +38,10 @@ class ExcelOrderItem extends Model
     public function designs(): HasMany
     {
         return $this->hasMany(ExcelOrderDesign::class);
+    }
+
+    public function product(): BelongsTo
+    {
+        return $this->belongsTo(Product::class, 'product_id');
     }
 }

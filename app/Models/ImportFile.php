@@ -20,6 +20,11 @@ class ImportFile extends Model
         'error_logs' => 'array'
     ];
 
+    const STATUS_PENDING = 'pending';
+    const STATUS_PROCESSED = 'processed';
+    const STATUS_FAILED = 'failed';
+    const STATUS_PENDING_CONFIRMATION = 'pending_confirmation';
+
     // Định nghĩa quan hệ với ExcelOrder
     public function excelOrders()
     {
@@ -28,5 +33,14 @@ class ImportFile extends Model
     public function user(): BelongsTo
     {
         return $this->belongsTo(User::class);
+    }
+
+    // Phương thức để thiết lập trạng thái
+    public function setStatusAttribute($value)
+    {
+        if (!in_array($value, [self::STATUS_PENDING, self::STATUS_PROCESSED, self::STATUS_FAILED, self::STATUS_PENDING_CONFIRMATION])) {
+            throw new \InvalidArgumentException("Invalid status value");
+        }
+        $this->attributes['status'] = $value;
     }
 }

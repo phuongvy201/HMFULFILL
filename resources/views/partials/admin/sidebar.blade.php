@@ -6,9 +6,9 @@
     <div
         :class="sidebarToggle ? 'justify-center' : 'justify-between'"
         class="flex items-center gap-2 ">
-        <a href="index.html">
+        <a href="{{ route('admin.dashboard') }}">
             <span class="logo" :class="sidebarToggle ? 'hidden' : ''">
-                <img class="dark:hidden " src="{{ asset('assets/images/logo HM-02.png') }}" alt="Logo" />
+                <img class="dark:hidden w-10" src="{{ asset('assets/images/logo HM-02.png') }}" alt="Logo" />
                 <img
                     class="hidden dark:block"
                     src="{{ asset('assets/images/logo HM-02.png') }}"
@@ -88,34 +88,7 @@
                     </li>
                     <!-- Menu Item Dashboard -->
 
-                    <!-- Menu Item Calendar -->
-                    <li>
-                        <a
-                            href="calendar.html"
-                            @click="selectedAdmin = (selectedAdmin === 'Calendar' ? '':'Calendar')"
-                            class="menu-item group"
-                            :class=" (selectedAdmin === 'Calendar') && (page === 'calendar') ? 'menu-item-active' : 'menu-item-inactive'">
-                            <svg
-                                :class="(selectedAdmin === 'Calendar') && (page === 'calendar') ? 'menu-item-icon-active'  :'menu-item-icon-inactive'"
-                                width="24"
-                                height="24"
-                                viewBox="0 0 24 24"
-                                fill="none"
-                                xmlns="http://www.w3.org/2000/svg">
-                                <path
-                                    fill-rule="evenodd"
-                                    clip-rule="evenodd"
-                                    d="M8 2C8.41421 2 8.75 2.33579 8.75 2.75V3.75H15.25V2.75C15.25 2.33579 15.5858 2 16 2C16.4142 2 16.75 2.33579 16.75 2.75V3.75H18.5C19.7426 3.75 20.75 4.75736 20.75 6V9V19C20.75 20.2426 19.7426 21.25 18.5 21.25H5.5C4.25736 21.25 3.25 20.2426 3.25 19V9V6C3.25 4.75736 4.25736 3.75 5.5 3.75H7.25V2.75C7.25 2.33579 7.58579 2 8 2ZM8 5.25H5.5C5.08579 5.25 4.75 5.58579 4.75 6V8.25H19.25V6C19.25 5.58579 18.9142 5.25 18.5 5.25H16H8ZM19.25 9.75H4.75V19C4.75 19.4142 5.08579 19.75 5.5 19.75H18.5C18.9142 19.75 19.25 19.4142 19.25 19V9.75Z"
-                                    fill="" />
-                            </svg>
 
-                            <span
-                                class="menu-item-text"
-                                :class="sidebarToggle ? 'lg:hidden' : ''">
-                                Calendar
-                            </span>
-                        </a>
-                    </li>
                     <!-- Menu Item Calendar -->
 
                     <!-- Menu Item Finance -->
@@ -308,34 +281,37 @@
                         </div>
                         <!-- Dropdown Menu End -->
                     </li>
-                    <!-- Menu Item Pages -->
+                    <!-- Menu Item Customers -->
                     <li>
                         <a
-                            href="/admin/orders"
-                            @click.prevent="selectedAdmin = (selectedAdmin === 'Orders' ? '' : 'Orders')"
+                            href="{{ route('admin.customers.index') }}"
+                            @click.prevent="selectedAdmin = (selectedAdmin === 'Customers' ? '' : 'Customers')"
                             class="menu-item group"
-                            :class="(selectedAdmin === 'Orders') || (page === 'orderList') ? 'menu-item-active' : 'menu-item-inactive'">
+                            :class="(selectedAdmin === 'Customers') ? 'menu-item-active' : 'menu-item-inactive'">
                             <svg
-                                :class="(selectedAdmin === 'Orders') || (page === 'orderList') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                                :class="(selectedAdmin === 'Customers') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                                 width="24"
                                 height="24"
                                 viewBox="0 0 24 24"
                                 fill="none"
                                 xmlns="http://www.w3.org/2000/svg">
                                 <path
-                                    d="M7 2C5.34315 2 4 3.34315 4 5V6H3C2.44772 6 2 6.44772 2 7V8C2 8.55228 2.44772 9 3 9H4V20C4 21.6569 5.34315 23 7 23H17C18.6569 23 20 21.6569 20 20V9H21C21.5523 9 22 8.55228 22 8V7C22 6.44772 21.5523 6 21 6H20V5C20 3.34315 18.6569 2 17 2H7ZM7 4H17C17.5523 4 18 4.44772 18 5V6H6V5C6 4.44772 6.44772 4 7 4ZM4 11H20V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V11ZM6 12H18V18H6V12Z"
+                                    d="M16 7C16 9.20914 14.2091 11 12 11C9.79086 11 8 9.20914 8 7C8 4.79086 9.79086 3 12 3C14.2091 3 16 4.79086 16 7Z"
+                                    fill="currentColor" />
+                                <path
+                                    d="M12 14C8.13401 14 5 17.134 5 21H19C19 17.134 15.866 14 12 14Z"
                                     fill="currentColor" />
                             </svg>
 
                             <span
                                 class="menu-item-text"
                                 :class="sidebarToggle ? 'lg:hidden' : ''">
-                                Orders
+                                Customers
                             </span>
 
                             <svg
                                 class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
-                                :class="[(selectedAdmin === 'Orders') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
+                                :class="[(selectedAdmin === 'Customers') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
                                 width="20"
                                 height="20"
                                 viewBox="0 0 20 20"
@@ -353,23 +329,136 @@
                         <!-- Dropdown Menu Start -->
                         <div
                             class="overflow-hidden transform translate"
-                            :class="(selectedAdmin === 'Orders') ? 'block' :'hidden'">
+                            :class="(selectedAdmin === 'Customers') ? 'block' :'hidden'">
                             <ul
                                 :class="sidebarToggle ? 'lg:hidden' : 'flex'"
                                 class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
                                 <li>
                                     <a
-                                        href="{{ route('admin.order-fulfillment-list') }}"
+                                        href="{{ route('admin.customers.index') }}"
                                         class="menu-dropdown-item group"
-                                        :class="page === 'orderList' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
-                                        Import Fulfillment Orders
+                                        :class="page === 'customerList' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Customer List
                                     </a>
                                 </li>
                             </ul>
-                            <ul
-                                :class="sidebarToggle ? 'lg:hidden' : 'flex'"
-                                class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
+                        </div>
+                        <!-- Dropdown Menu End -->
+                    </li>
+                    <!-- System Orders Group -->
+                    <li>
+                        <a
+                            href="#"
+                            @click.prevent="selectedAdmin = (selectedAdmin === 'SystemOrders' ? '' : 'SystemOrders')"
+                            class="menu-item group"
+                            :class="(selectedAdmin === 'SystemOrders') ? 'menu-item-active' : 'menu-item-inactive'">
+                            <svg
+                                :class="(selectedAdmin === 'SystemOrders') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M7 2C5.34315 2 4 3.34315 4 5V6H3C2.44772 6 2 6.44772 2 7V8C2 8.55228 2.44772 9 3 9H4V20C4 21.6569 5.34315 23 7 23H17C18.6569 23 20 21.6569 20 20V9H21C21.5523 9 22 8.55228 22 8V7C22 6.44772 21.5523 6 21 6H20V5C20 3.34315 18.6569 2 17 2H7ZM7 4H17C17.5523 4 18 4.44772 18 5V6H6V5C6 4.44772 6.44772 4 7 4ZM4 11H20V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V11ZM6 12H18V18H6V12Z"
+                                    fill="currentColor" />
+                            </svg>
+                            <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">
+                                System Orders
+                            </span>
+                            <svg
+                                class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
+                                :class="[(selectedAdmin === 'SystemOrders') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
+                                width="20"
+                                height="20"
+                                viewBox="0 0 20 20"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M4.79175 7.39584L10.0001 12.6042L15.2084 7.39585"
+                                    stroke=""
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                        </a>
+                        <!-- Dropdown Menu Start -->
+                        <div
+                            class="overflow-hidden transform translate"
+                            :class="(selectedAdmin === 'SystemOrders') ? 'block' :'hidden'">
+                            <ul :class="sidebarToggle ? 'lg:hidden' : 'flex'" class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
                                 <li>
+                                    <a
+                                        href="{{ route('admin.order-fulfillment-list') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'orderList' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Admin Import Files
+                                    </a>
+                                </li>
+                                <li>
+                                    <a
+                                        href="{{ route('admin.submitted-orders') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'orderCreate' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Sent to Supplier
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <!-- Dropdown Menu End -->
+                    </li>
+
+                    <!-- Customer Orders Group -->
+                    <li>
+                        <a
+                            href="#"
+                            @click.prevent="selectedAdmin = (selectedAdmin === 'CustomerOrders' ? '' : 'CustomerOrders')"
+                            class="menu-item group"
+                            :class="(selectedAdmin === 'CustomerOrders') ? 'menu-item-active' : 'menu-item-inactive'">
+                            <svg
+                                :class="(selectedAdmin === 'CustomerOrders') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M7 2C5.34315 2 4 3.34315 4 5V6H3C2.44772 6 2 6.44772 2 7V8C2 8.55228 2.44772 9 3 9H4V20C4 21.6569 5.34315 23 7 23H17C18.6569 23 20 21.6569 20 20V9H21C21.5523 9 22 8.55228 22 8V7C22 6.44772 21.5523 6 21 6H20V5C20 3.34315 18.6569 2 17 2H7ZM7 4H17C17.5523 4 18 4.44772 18 5V6H6V5C6 4.44772 6.44772 4 7 4ZM4 11H20V20C20 20.5523 19.5523 21 19 21H5C4.44772 21 4 20.5523 4 20V11ZM6 12H18V18H6V12Z"
+                                    fill="currentColor" />
+                            </svg>
+                            <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">
+                                Customer Orders
+                            </span>
+                            <svg
+                                class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
+                                :class="[(selectedAdmin === 'CustomerOrders') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
+                                width="20"
+                                height="20"
+                                viewBox="0 0 20 20"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M4.79175 7.39584L10.0001 12.6042L15.2084 7.39585"
+                                    stroke=""
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                        </a>
+                        <!-- Dropdown Menu Start -->
+                        <div
+                            class="overflow-hidden transform translate"
+                            :class="(selectedAdmin === 'CustomerOrders') ? 'block' :'hidden'">
+                            <ul :class="sidebarToggle ? 'lg:hidden' : 'flex'" class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
+                                <li>
+                                    <a
+                                        href="{{ route('admin.customer-uploaded-files-list') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'orderList' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Customer Import Files
+                                    </a>
+                                </li>
+                                <!-- <li>
                                     <a
                                         href="{{ route('admin.submitted-orders') }}"
                                         class="menu-dropdown-item group"
@@ -377,16 +466,20 @@
                                         Fulfilled to Supplier
                                     </a>
                                 </li>
-                            </ul>
-                            <ul
-                                :class="sidebarToggle ? 'lg:hidden' : 'flex'"
-                                class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
                                 <li>
                                     <a
                                         href="{{ route('admin.customer-uploaded-files-list') }}"
                                         class="menu-dropdown-item group"
                                         :class="page === 'orderReceived' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
                                         Orders Received
+                                    </a>
+                                </li> -->
+                                <li>
+                                    <a
+                                        href="{{ route('admin.api-orders') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'apiOrders' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        API Orders
                                     </a>
                                 </li>
                             </ul>
@@ -403,7 +496,7 @@
                                 <path d="M16 17L21 12L16 7" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                                 <path d="M21 12H9" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
                             </svg>
-                            <span :class="sidebarToggle ? 'lg:hidden' : ''">Logout</span>
+                            <span :class="sidebarToggle ? 'lg:hidden' : ''">Sign Out</span>
                         </a>
                         <form id="logout-form" action="{{ route('logout') }}" method="POST" style="display: none;">
                             @csrf

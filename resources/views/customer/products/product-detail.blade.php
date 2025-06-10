@@ -56,14 +56,17 @@
                     <span class="bg-gray-200 px-2 py-1 rounded">SKU: <span id="selected-sku">-</span></span>
                 </p>
                 <p style="color: #f7961d" class="text-2xl mt-2 roboto-bold">
-                    Price: $<span id="total-price">{{ $product->base_price }}</span>
+                    Price:
+                    <span>GBP £<span id="total-price-gbp">{{ $product->base_price }}</span></span> |
+                    <span>USD $<span id="total-price-usd">{{ $product->base_price * 1.27 }}</span></span> |
+                    <span>VND ₫<span id="total-price-vnd">{{ $product->base_price * 30894.31 }}</span></span>
                 </p>
                 <p class="text-sm text-gray-500">Fulfillment Location:
                     @foreach($product->fulfillmentLocations as $fulfillmentLocation)
                     <span id="fulfillment-location">{{ $fulfillmentLocation->country_code }}</span>
                     @endforeach
                 </p>
-                
+
 
                 <!-- Tùy chọn -->
 
@@ -87,7 +90,7 @@
                 </div>
                 @endforeach
 
-            
+
 
 
                 <!-- Vận chuyển -->
@@ -122,7 +125,7 @@
             <button style="border-bottom: 2px solid #f7961d" class="px-4 py-2">
                 Product Information
             </button>
-           
+
         </div>
 
         <!-- Content -->
@@ -131,10 +134,10 @@
                 PRODUCT DESCRIPTION
             </h2>
             <p class="mt-2 text-gray-600">
-               {{ $product->description }}
+                {{ $product->description }}
             </p>
 
-         
+
 
             <!-- Download Button -->
             <div class="mt-6">
@@ -173,7 +176,11 @@
 
     // Khởi tạo dữ liệu variants từ PHP
     var variants = @json($product->variants);
-    var basePrice = {{ $product->base_price }};
+    var basePrice = {
+        gbp: {{ $product->base_price }}, // Base price in GBP
+        usd: {{ $product->base_price * 1.27 }}, // Convert to USD (approximate rate from data)
+        vnd: {{ $product->base_price * 30894.31 }} // Convert to VND (approximate rate from data)
+    };
 
     function findMatchingVariant() {
         var selectedValues = {};
@@ -206,7 +213,7 @@
             skuElement.textContent = matchingVariant.sku;
             return matchingVariant;
         } else {
-            skuElement.textContent = 'Không có sản phẩm phù hợp';
+            skuElement.textContent = 'No matching variant found';
             return null;
         }
     }
@@ -216,13 +223,18 @@
         if (!currentVariant) {
             alert('Please select all product options');
             document.getElementById('shipping-method').value = '';
+            document.getElementById('total-price-gbp').textContent = basePrice.gbp.toFixed(2);
+            document.getElementById('total-price-usd').textContent = basePrice.usd.toFixed(2);
+            document.getElementById('total-price-vnd').textContent = basePrice.vnd.toFixed(0);
             return;
         }
 
         var shippingMethod = document.getElementById('shipping-method').value;
         
         if (!shippingMethod) {
-            document.getElementById('total-price').textContent = basePrice.toFixed(2);
+            document.getElementById('total-price-gbp').textContent = basePrice.gbp.toFixed(2);
+            document.getElementById('total-price-usd').textContent = basePrice.usd.toFixed(2);
+            document.getElementById('total-price-vnd').textContent = basePrice.vnd.toFixed(0);
             return;
         }
 
@@ -231,10 +243,15 @@
         });
 
         if (shippingPrice) {
-            var shipping = parseFloat(shippingPrice.price);
-            var total =shipping;
+            var total = {
+                gbp:  parseFloat(shippingPrice.price_gbp),
+                usd:  parseFloat(shippingPrice.price_usd),
+                vnd:    parseFloat(shippingPrice.price_vnd)
+            };
             
-            document.getElementById('total-price').textContent = total.toFixed(2);
+            document.getElementById('total-price-gbp').textContent = total.gbp.toFixed(2);
+            document.getElementById('total-price-usd').textContent = total.usd.toFixed(2);
+            document.getElementById('total-price-vnd').textContent = total.vnd.toFixed(0);
         }
     }
 
@@ -244,14 +261,18 @@
             findMatchingVariant(); // Cập nhật SKU
             // Reset shipping
             document.getElementById('shipping-method').value = '';
-            document.getElementById('shipping-price').textContent = '0.00';
-            document.getElementById('total-price').textContent = basePrice.toFixed(2);
+            document.getElementById('total-price-gbp').textContent = basePrice.gbp.toFixed(2);
+            document.getElementById('total-price-usd').textContent = basePrice.usd.toFixed(2);
+            document.getElementById('total-price-vnd').textContent = basePrice.vnd.toFixed(0);
         });
     });
 
     // Khởi tạo ban đầu
     document.addEventListener('DOMContentLoaded', function() {
         findMatchingVariant();
+        document.getElementById('total-price-gbp').textContent = basePrice.gbp.toFixed(2);
+        document.getElementById('total-price-usd').textContent = basePrice.usd.toFixed(2);
+        document.getElementById('total-price-vnd').textContent = basePrice.vnd.toFixed(0);
     });
 </script>
 @endsection

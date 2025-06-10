@@ -58,7 +58,7 @@
                             $wallet = $user->wallet;
                             $totalBalance = $wallet ? $wallet->balance : 0;
                             @endphp
-                            <p class="text-gray-700 dark:text-gray-300"><strong>Total Balance:</strong> {{ number_format($totalBalance, 0, ',', '.') }} VND</p>
+                            <p class="text-gray-700 dark:text-gray-300"><strong>Total Balance:</strong> {{ number_format($totalBalance, 2, ',', '.') }} USD</p>
                         </div>
                     </div>
                 </div>
@@ -105,7 +105,7 @@
                                 <th class="px-6 py-3 whitespace-nowrap">
                                     <div class="flex items-center">
                                         <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">
-                                            Amount (VND)
+                                            Amount (USD)
                                         </p>
                                     </div>
                                 </th>
@@ -174,7 +174,7 @@
                                 <td class="px-6 py-3 whitespace-nowrap">
                                     <div class="flex items-center">
                                         <span class="text-theme-sm mb-0.5 block font-medium text-gray-700 dark:text-gray-400">
-                                            {{ number_format($transaction->amount, 0, ',', '.') }}
+                                            {{ number_format($transaction->amount, 2, ',', '.') }} USD
                                         </span>
                                     </div>
                                 </td>
@@ -187,6 +187,8 @@
                                             <span class="bg-green-100 text-green-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-green-900 dark:text-green-300">Approved</span>
                                             @elseif($transaction->status == 'rejected' || $transaction->status == 'cancelled')
                                             <span class="bg-red-100 text-red-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-red-900 dark:text-red-300">Rejected</span>
+                                            @elseif($transaction->status == 'refunded')
+                                            <span class="bg-purple-100 text-purple-800 text-xs font-medium px-2.5 py-0.5 rounded dark:bg-purple-900 dark:text-purple-300">Refunded</span>
                                             @endif
                                         </span>
                                     </div>

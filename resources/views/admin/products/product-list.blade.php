@@ -326,6 +326,16 @@
                         <li>X+: Tên và giá trị thuộc tính</li>
                     </ul>
                 </div>
+                <div class="mb-4">
+                    <label class="block mb-2 text-sm font-medium text-gray-900 dark:text-white">
+                        Loại tiền tệ
+                    </label>
+                    <select name="currency" class="form-control" required>
+                        <option value="USD">USD ($)</option>
+                        <option value="VND">VND (₫)</option>
+                        <option value="GBP">GBP (£)</option>
+                    </select>
+                </div>
                 <div class="flex justify-end gap-4">
                     <button
                         type="button"

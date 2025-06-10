@@ -6,8 +6,11 @@
     <div class="row">
         <div class="col-md-12">
             <div class="card">
-                <div class="card-header">
+                <div class="card-header d-flex justify-content-between align-items-center">
                     <h3 class="card-title">Tổng quan số dư người dùng</h3>
+                    <a href="{{ route('admin.finance.refundable-transactions') }}" class="btn btn-warning">
+                        <i class="fas fa-undo"></i> Quản lý Refund
+                    </a>
                 </div>
                 <div class="card-body">
                     <!-- Search Form -->

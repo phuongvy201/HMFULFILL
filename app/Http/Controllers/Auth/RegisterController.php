@@ -42,6 +42,7 @@ class RegisterController extends Controller
                 'phone' => $request->phone,
                 'role' => 'customer',
                 'email_verified_at' => now(), // Đánh dấu email là đã xác thực ngay lập tức
+                'api_token' => Str::random(80), // Tạo API token ngẫu nhiên
             ]);
 
             // Chuyển hướng đến trang đăng nhập

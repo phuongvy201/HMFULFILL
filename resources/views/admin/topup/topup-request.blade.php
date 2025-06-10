@@ -63,7 +63,7 @@
                                 <p class="font-medium text-gray-800 text-theme-sm dark:text-white/90">{{ $request->transaction_code }}</p>
                             </td>
                             <td class="px-6 py-3.5">
-                                <p class="text-theme-sm text-success-600">{{ number_format($request->amount, 2) }} VND</p>
+                                <p class="text-theme-sm text-success-600">{{ number_format($request->amount, 2) }} USD</p>
                             </td>
                             <td class="px-6 py-3.5">
                                 <p class="text-gray-500 text-theme-sm dark:text-gray-400">{{ $request->method }}</p>
@@ -120,7 +120,16 @@
         <script>
             // Xử lý sự kiện click cho Approve
             document.querySelectorAll('.approve-link').forEach(link => {
-                link.addEventListener('click', function() {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+
+                    // Tránh double click
+                    if (this.classList.contains('processing')) {
+                        return;
+                    }
+
+                    this.classList.add('processing');
+
                     Swal.fire({
                         title: 'Confirm approval',
                         text: 'Are you sure you want to approve this topup request?',
@@ -132,7 +141,20 @@
                         cancelButtonText: 'Cancel'
                     }).then((result) => {
                         if (result.isConfirmed) {
+                            // Hiển thị loading
+                            Swal.fire({
+                                title: 'Processing...',
+                                text: 'Please wait while we process your request.',
+                                allowOutsideClick: false,
+                                didOpen: () => {
+                                    Swal.showLoading();
+                                }
+                            });
+
                             window.location.href = this.getAttribute('data-url');
+                        } else {
+                            // Remove processing class nếu cancel
+                            this.classList.remove('processing');
                         }
                     });
                 });
@@ -140,7 +162,16 @@
 
             // Xử lý sự kiện click cho Reject
             document.querySelectorAll('.reject-link').forEach(link => {
-                link.addEventListener('click', function() {
+                link.addEventListener('click', function(e) {
+                    e.preventDefault();
+
+                    // Tránh double click
+                    if (this.classList.contains('processing')) {
+                        return;
+                    }
+
+                    this.classList.add('processing');
+
                     Swal.fire({
                         title: 'Confirm rejection',
                         text: 'Are you sure you want to reject this topup request?',
@@ -152,7 +183,20 @@
                         cancelButtonText: 'Cancel'
                     }).then((result) => {
                         if (result.isConfirmed) {
+                            // Hiển thị loading
+                            Swal.fire({
+                                title: 'Processing...',
+                                text: 'Please wait while we process your request.',
+                                allowOutsideClick: false,
+                                didOpen: () => {
+                                    Swal.showLoading();
+                                }
+                            });
+
                             window.location.href = this.getAttribute('data-url');
+                        } else {
+                            // Remove processing class nếu cancel
+                            this.classList.remove('processing');
                         }
                     });
                 });
@@ -160,4 +204,12 @@
         </script>
     </div>
 </div>
+
+<style>
+    .processing {
+        opacity: 0.6;
+        pointer-events: none;
+        cursor: not-allowed;
+    }
+</style>
 @endsection

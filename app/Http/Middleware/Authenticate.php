@@ -20,7 +20,7 @@ class Authenticate
     public function handle(Request $request, Closure $next, $guard = null): Response
     {
         if (Auth::guard($guard)->guest()) {
-            return redirect()->guest('login');
+            return redirect()->guest('signin');
         }
 
         return $next($request);

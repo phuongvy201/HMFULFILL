@@ -3,6 +3,7 @@
 namespace App\Http;
 
 use Illuminate\Foundation\Http\Kernel as HttpKernel;
+use Illuminate\Console\Scheduling\Schedule;
 
 class Kernel extends HttpKernel
 {
@@ -53,6 +54,13 @@ class Kernel extends HttpKernel
         'auth' => \App\Http\Middleware\Authenticate::class,
         'auth.basic' => \Illuminate\Auth\Middleware\AuthenticateWithBasicAuth::class,
         'bindings' => \Illuminate\Routing\Middleware\SubstituteBindings::class,
+        'auth.api_token' => \App\Http\Middleware\AuthenticateApiToken::class,
+        'auth.api.token' => \App\Http\Middleware\AuthenticateApiToken::class,
         // Thêm các middleware khác nếu cần
     ];
+
+    protected function schedule(Schedule $schedule)
+    {
+        $schedule->command('tracking:sync-from-factory')->dailyAt('02:00');
+    }
 }

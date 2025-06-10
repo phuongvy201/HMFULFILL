@@ -109,4 +109,57 @@ class Wallet extends Model
     {
         return $this->hasMany(Transaction::class);
     }
+
+    /**
+     * Process refund for a transaction
+     */
+    public function processRefund(Transaction $transaction): bool
+    {
+        if (!$transaction->canBeRefunded()) {
+            return false;
+        }
+
+        if ($transaction->type === Transaction::TYPE_TOPUP) {
+            // Refund topup: trừ tiền
+            return $this->withdraw($transaction->amount);
+        } elseif ($transaction->type === Transaction::TYPE_DEDUCT) {
+            // Refund deduct: cộng tiền
+            return $this->deposit($transaction->amount);
+        }
+
+        return false;
+    }
+
+    /**
+     * Get refunded amount (total amount that has been refunded)
+     */
+    public function getRefundedAmount(): float
+    {
+        $refundedAmount = Transaction::where('user_id', $this->user_id)
+            ->where('type', Transaction::TYPE_REFUND)
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->sum('amount');
+
+        return (float) $refundedAmount;
+    }
+
+    /**
+     * Get net balance (balance considering refunds)
+     */
+    public function getNetBalance(): float
+    {
+        $totalTopup = Transaction::where('user_id', $this->user_id)
+            ->where('type', Transaction::TYPE_TOPUP)
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereNull('refunded_at')
+            ->sum('amount');
+
+        $totalDeduct = Transaction::where('user_id', $this->user_id)
+            ->where('type', Transaction::TYPE_DEDUCT)
+            ->where('status', Transaction::STATUS_APPROVED)
+            ->whereNull('refunded_at')
+            ->sum('amount');
+
+        return (float) ($totalTopup - $totalDeduct);
+    }
 }

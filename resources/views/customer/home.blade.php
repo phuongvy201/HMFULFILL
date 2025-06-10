@@ -260,7 +260,7 @@
             @foreach ($categories as $category)
             <a href="/products/{{ $category->slug }}"
                 type="button"
-               
+
                 class="home-category-button font-medium rounded-full text-sm px-5 md:py-2.5 me-2 mb-2 mx-2">
                 {{ $category->name }}
             </a>
@@ -284,7 +284,7 @@
                                 alt="product image" />
                         </a>
                         <div class="px-5 pb-6">
-                                <a href="/product/{{ $product->slug }}">
+                            <a href="/product/{{ $product->slug }}">
                                 <h5
                                     class="product-sans-regular tracking-tight text-gray-900 dark:text-white">
                                     {{ $product->name }}
@@ -294,7 +294,15 @@
                                 <span
                                     style="color: #005366"
                                     class="product-sans-regular font-bold text-gray-900 dark:text-white">
-                                    <small class="font-thin">From: </small>{{ $product->base_price }} $
+                                    <small class="font-thin">From: </small> @php
+                                    $currencySymbols = [
+                                    'USD' => '$',
+                                    'VND' => '₫',
+                                    'GBP' => '£',
+                                    ];
+                                    $symbol = $currencySymbols[$product->currency ?? 'USD'] ?? '';
+                                    @endphp
+                                    {{ $symbol }}{{ number_format($product->base_price, $product->currency == 'VND' ? 0 : 2) }}
                                 </span>
                             </div>
                         </div>
@@ -307,7 +315,7 @@
         <div class="w-full text-center">
             <a
                 href="/products"
-            
+
                 class="link-see-all py-2 px-5 text-base product-sans-regular text-center rounded-lg">
                 See All
             </a>

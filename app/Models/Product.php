@@ -16,6 +16,7 @@ class Product extends Model
         'status',
         'description',
         'base_price',
+        'currency',
         'category_id',
         'template_link'
     ];
@@ -79,11 +80,85 @@ class Product extends Model
     }
 
     /**
+     * Định nghĩa các loại tiền tệ được hỗ trợ
+     */
+    const CURRENCY_USD = 'USD';
+    const CURRENCY_GBP = 'GBP';
+    const CURRENCY_VND = 'VND';
+
+    public static $validCurrencies = [
+        self::CURRENCY_USD => '$',
+        self::CURRENCY_GBP => '£',
+        self::CURRENCY_VND => 'đ'
+    ];
+
+    /**
      * Accessor để format giá sản phẩm
      */
     public function getFormattedPriceAttribute()
     {
-        return number_format($this->base_price, 2) . ' đ';
+        $symbol = self::$validCurrencies[$this->currency] ?? '';
+
+        switch ($this->currency) {
+            case self::CURRENCY_USD:
+            case self::CURRENCY_GBP:
+                return $symbol . number_format($this->base_price, 2);
+            case self::CURRENCY_VND:
+                return number_format($this->base_price, 0) . $symbol;
+            default:
+                return number_format($this->base_price, 2);
+        }
+    }
+
+    /**
+     * Method để chuyển đổi giá sang VND
+     */
+    public function getPriceInVND()
+    {
+        switch ($this->currency) {
+            case self::CURRENCY_USD:
+                return $this->base_price * config('currency.usd_to_vnd', 24500);
+            case self::CURRENCY_GBP:
+                return $this->base_price * config('currency.gbp_to_vnd', 31000);
+            case self::CURRENCY_VND:
+                return $this->base_price;
+            default:
+                throw new \InvalidArgumentException("Currency not supported: {$this->currency}");
+        }
+    }
+
+    /**
+     * Method để chuyển đổi giá sang USD
+     */
+    public function getPriceInUSD()
+    {
+        switch ($this->currency) {
+            case self::CURRENCY_GBP:
+                return $this->base_price * config('currency.gbp_to_usd', 1.27);
+            case self::CURRENCY_VND:
+                return $this->base_price / config('currency.usd_to_vnd', 24500);
+            case self::CURRENCY_USD:
+                return $this->base_price;
+            default:
+                throw new \InvalidArgumentException("Currency not supported: {$this->currency}");
+        }
+    }
+
+    /**
+     * Method để chuyển đổi giá sang GBP
+     */
+    public function getPriceInGBP()
+    {
+        switch ($this->currency) {
+            case self::CURRENCY_USD:
+                return $this->base_price / config('currency.gbp_to_usd', 1.27);
+            case self::CURRENCY_VND:
+                return $this->base_price / config('currency.usd_to_vnd', 24500) * config('currency.gbp_to_usd', 1.27);
+            case self::CURRENCY_GBP:
+                return $this->base_price;
+            default:
+                throw new \InvalidArgumentException("Currency not supported: {$this->currency}");
+        }
     }
 
     /**
@@ -108,5 +183,39 @@ class Product extends Model
             ->map(function ($items) {
                 return $items->pluck('value')->unique()->values();
             });
+    }
+
+    public function getAllProductsWithGBPVariants()
+    {
+        // Lấy tất cả sản phẩm có currency là GBP, kèm theo variant và sku
+        $products = Product::with(['variants', 'variants.attributes'])
+            ->where('currency', Product::CURRENCY_GBP)
+            ->get();
+
+        $result = [];
+        foreach ($products as $product) {
+            $variants = [];
+            foreach ($product->variants as $variant) {
+                $variants[] = [
+                    'id' => $variant->id,
+                    'sku' => $variant->sku,
+                    'twofifteen_sku' => $variant->twofifteen_sku,
+                    'flashship_sku' => $variant->flashship_sku,
+                    'attributes' => $variant->attributes->map(function ($attr) {
+                        return [
+                            'name' => $attr->name,
+                            'value' => $attr->value
+                        ];
+                    })
+                ];
+            }
+            $result[] = [
+                'product_id' => $product->id,
+                'product_name' => $product->name,
+                'currency' => $product->currency,
+                'variants' => $variants
+            ];
+        }
+        return $result;
     }
 }

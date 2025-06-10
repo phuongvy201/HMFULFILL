@@ -16,22 +16,50 @@ use App\Mail\TopupApproved;
 use App\Mail\TopupRejected;
 use App\Models\User;
 use Aws\S3\S3Client;
+use Illuminate\Support\Facades\Cache;
+use Illuminate\Support\Facades\DB;
 
 class FinanceController extends Controller
 {
     public function index()
     {
         $user = Auth::user();
-        // Lấy tỉ giá USD/VND từ ExchangeRate-API
-        $apiKey = '613a32f493e22a04a52a41a8';
-        $url = "https://v6.exchangerate-api.com/v6/{$apiKey}/pair/USD/VND";
 
-        $rate = null;
-        $response = Http::get($url);
-        if ($response->successful()) {
-            $data = $response->json();
-            $rate = $data['conversion_rate'] ?? null;
-        }
+        // Lấy tỷ giá từ cache hoặc gọi API nếu cache hết hạn
+        $rate = Cache::remember('usd_vnd_rate', now()->addWeek(), function () {
+            try {
+                $apiKey = 'c2fe3e4ddf9e80e8261f52b9';
+                $url = "https://v6.exchangerate-api.com/v6/{$apiKey}/pair/USD/VND";
+
+                $response = Http::get($url);
+
+                if ($response->successful()) {
+                    $data = $response->json();
+                    $rate = $data['conversion_rate'] ?? null;
+
+                    Log::info('Exchange rate fetched successfully and cached for 1 week', [
+                        'rate' => $rate,
+                        'response' => $data,
+                        'cache_expiry' => now()->addWeek()->format('Y-m-d H:i:s')
+                    ]);
+
+                    return $rate;
+                } else {
+                    Log::error('Failed to fetch exchange rate, using fallback rate', [
+                        'status' => $response->status(),
+                        'body' => $response->body()
+                    ]);
+
+                    return 26300; // Fallback rate
+                }
+            } catch (\Exception $e) {
+                Log::error('Error fetching exchange rate, using fallback rate', [
+                    'error' => $e->getMessage()
+                ]);
+
+                return 26300; // Fallback rate
+            }
+        });
 
         // Lấy thông tin wallet của user
         $wallet = Wallet::where('user_id', $user->id)->first();
@@ -45,7 +73,7 @@ class FinanceController extends Controller
         // Lấy lịch sử giao dịch của user
         $transactions = Transaction::where('user_id', $user->id)
             ->orderBy('created_at', 'desc')
-            ->paginate(10); // Sử dụng phân trang với 10 giao dịch mỗi trang
+            ->paginate(10);
 
         return view('customer.finance.wallet', [
             'usdToVndRate' => $rate,
@@ -67,14 +95,14 @@ class FinanceController extends Controller
                 'method' => 'required|string|in:Bank Vietnam,Payoneer,PingPong,LianLian,Worldfirst,Paypal',
                 'proof_image' => 'nullable|image|mimes:jpeg,png,jpg|max:2048'
             ], [
-                'transaction_code.unique' => 'Mã giao dịch đã tồn tại.',
-                'amount.required' => 'Vui lòng nhập số tiền.',
-                'proof_image.image' => 'File tải lên phải là hình ảnh.',
-                'proof_image.mimes' => 'Hình ảnh phải là định dạng JPEG, PNG hoặc JPG.',
-                'proof_image.max' => 'Kích thước hình ảnh không được vượt quá 2MB.'
+                'transaction_code.unique' => 'Transaction code already exists.',
+                'amount.required' => 'Please enter the amount.',
+                'proof_image.image' => 'File uploaded must be an image.',
+                'proof_image.mimes' => 'Image must be in JPEG, PNG or JPG format.',
+                'proof_image.max' => 'Image size cannot exceed 2MB.'
             ]);
 
-            Log::info('Yêu cầu topup được xác thực', [
+            Log::info('Topup request validated', [
                 'user_id' => Auth::id(),
                 'data' => $validated
             ]);
@@ -131,19 +159,25 @@ class FinanceController extends Controller
                     'note' => $imageUrl
                 ]);
 
-                // Gửi email thông báo
-                Mail::to(config('mail.admin.address'))->queue(new NewTopupRequest($transaction));
+                // Gửi email ngay lập tức thay vì queue
+                try {
+                    Mail::to(config('mail.admin.address'))->send(new NewTopupRequest($transaction));
+                    Log::info('Email sent successfully');
+                } catch (\Exception $e) {
+                    Log::warning('Failed to send email notification', ['error' => $e->getMessage()]);
+                    // Không throw exception để không làm fail transaction
+                }
 
-                Log::info('Giao dịch được tạo và thông báo đã gửi', [
+                Log::info('Transaction created and notification sent', [
                     'transaction_id' => $transaction->id,
                     'transaction_code' => $transaction->transaction_code
                 ]);
 
                 return response()->json([
-                    'message' => 'Yêu cầu topup thành công. Vui lòng đợi xác nhận.'
+                    'message' => 'Topup request successful. Please wait for confirmation.'
                 ]);
             } catch (\Exception $e) {
-                Log::error('Tạo giao dịch thất bại', [
+                Log::error('Create transaction failed', [
                     'error' => $e->getMessage(),
                     'data' => [
                         'user_id' => Auth::id(),
@@ -156,13 +190,13 @@ class FinanceController extends Controller
                 // Xóa hình ảnh khỏi thư mục public nếu tạo giao dịch thất bại
                 if ($imageUrl && file_exists(public_path($filePath))) {
                     unlink(public_path($filePath));
-                    Log::info('Xóa hình ảnh khỏi thư mục public sau khi tạo giao dịch thất bại', [
+                    Log::info('Delete image from public folder after create transaction failed', [
                         'path' => $filePath
                     ]);
                 }
 
                 return response()->json([
-                    'message' => 'Lỗi khi tạo giao dịch. Vui lòng thử lại.'
+                    'message' => 'Have error when create transaction. Please try again.'
                 ], 500);
             }
         } catch (ValidationException $e) {
@@ -170,13 +204,13 @@ class FinanceController extends Controller
                 'message' => $e->validator->errors()->first()
             ], 422);
         } catch (\Exception $e) {
-            Log::error('Yêu cầu topup thất bại', [
+            Log::error('Topup request failed', [
                 'error' => $e->getMessage(),
                 'request' => $request->all()
             ]);
 
             return response()->json([
-                'message' => 'Có lỗi xảy ra khi gửi yêu cầu topup.'
+                'message' => 'Have error when topup.'
             ], 500);
         }
     }
@@ -207,48 +241,60 @@ class FinanceController extends Controller
         try {
             $transaction = Transaction::findOrFail($id);
 
-            // Kiểm tra nếu transaction đã được xử lý trước đó
-            if ($transaction->status != Transaction::STATUS_PENDING) {
+            // Kiểm tra trạng thái trước khi xử lý
+            if ($transaction->status !== Transaction::STATUS_PENDING) {
+                Log::warning('Attempted to approve non-pending transaction', [
+                    'transaction_id' => $id,
+                    'current_status' => $transaction->status,
+                    'admin_id' => Auth::id()
+                ]);
+
                 return redirect()->back()
                     ->with('error', 'Transaction has already been processed.');
             }
 
-            // Cập nhật trạng thái transaction thành approved
+            DB::beginTransaction();
+
+            // Cập nhật trạng thái transaction
             $transaction->update([
                 'status' => Transaction::STATUS_APPROVED,
                 'approved_at' => now(),
                 'approved_by' => Auth::id()
             ]);
 
-            // Cập nhật balance cho user thông qua Wallet
-            $user = $transaction->user;
-            $wallet = $user->wallet; // Giả sử có quan hệ wallet được định nghĩa trong model User
+            // Cập nhật wallet
+            $wallet = Wallet::where('user_id', $transaction->user_id)->first();
             if (!$wallet) {
-                // Nếu chưa có wallet, tạo mới
                 $wallet = new Wallet([
-                    'user_id' => $user->id,
+                    'user_id' => $transaction->user_id,
                     'balance' => 0
                 ]);
                 $wallet->save();
             }
-            $wallet->deposit($transaction->amount); // Sử dụng phương thức deposit từ Wallet model
+            $wallet->deposit($transaction->amount);
 
-            Log::info('Topup transaction approved', [
+            DB::commit();
+
+            // Gửi email thông báo
+            try {
+                Mail::to($transaction->user->email)->send(new TopupApproved($transaction));
+            } catch (\Exception $e) {
+                Log::warning('Failed to send approval email', ['error' => $e->getMessage()]);
+            }
+
+            Log::info('Transaction approved successfully', [
                 'transaction_id' => $transaction->id,
-                'user_id' => $user->id,
-                'amount' => $transaction->amount,
-                'approved_by' => Auth::id()
+                'admin_id' => Auth::id()
             ]);
-
-            // Gửi email thông báo cho user
-            Mail::to($user->email)->queue(new TopupApproved($transaction));
 
             return redirect()->back()
                 ->with('success', 'Topup request approved successfully.');
         } catch (\Exception $e) {
+            DB::rollback();
             Log::error('Error approving topup transaction', [
                 'error' => $e->getMessage(),
-                'transaction_id' => $id
+                'transaction_id' => $id,
+                'admin_id' => Auth::id()
             ]);
 
             return redirect()->back()
@@ -281,8 +327,12 @@ class FinanceController extends Controller
                 'rejected_by' => Auth::id()
             ]);
 
-            // Gửi email thông báo cho user
-            Mail::to($transaction->user->email)->queue(new TopupRejected($transaction));
+            // Gửi email thông báo cho user ngay lập tức
+            try {
+                Mail::to($transaction->user->email)->send(new TopupRejected($transaction));
+            } catch (\Exception $e) {
+                Log::warning('Failed to send rejection email', ['error' => $e->getMessage()]);
+            }
 
             return redirect()->back()
                 ->with('success', 'Topup request rejected successfully.');
@@ -329,11 +379,11 @@ class FinanceController extends Controller
                 'type' => 'required|in:topup,deduct',
                 'note' => 'nullable|string|max:500'
             ], [
-                'amount.required' => 'Vui lòng nhập số tiền.',
-                'amount.numeric' => 'Số tiền phải là số.',
-                'amount.min' => 'Số tiền phải lớn hơn 0.',
-                'type.required' => 'Vui lòng chọn loại giao dịch.',
-                'note.max' => 'Ghi chú không được vượt quá 500 ký tự.'
+                'amount.required' => 'Please enter the amount.',
+                'amount.numeric' => 'The amount must be a number.',
+                'amount.min' => 'The amount must be greater than 0.',
+                'type.required' => 'Please select the transaction type.',
+                'note.max' => 'Note cannot exceed 500 characters.'
             ]);
 
             $user = User::findOrFail($userId);
@@ -347,7 +397,7 @@ class FinanceController extends Controller
                 'method' => 'Admin Adjustment',
                 'amount' => $request->amount,
                 'status' => Transaction::STATUS_APPROVED,
-                'note' => $request->note ?? 'Điều chỉnh số dư bởi Admin',
+                'note' => $request->note ?? 'Adjusted by Admin',
                 'approved_at' => now(),
                 'approved_by' => Auth::id()
             ]);
@@ -362,13 +412,13 @@ class FinanceController extends Controller
                     $wallet->save();
                 }
                 $wallet->deposit($request->amount);
-                $message = 'Nạp tiền vào tài khoản thành công.';
+                $message = 'Successfully deposit money to account.';
             } else {
                 if (!$wallet || !$wallet->hasEnoughBalance($request->amount)) {
-                    return redirect()->back()->with('error', 'Số dư không đủ để thực hiện giao dịch này.');
+                    return redirect()->back()->with('error', 'Insufficient balance to perform this transaction.');
                 }
                 $wallet->withdraw($request->amount);
-                $message = 'Trừ tiền khỏi tài khoản thành công.';
+                $message = 'Successfully deduct money from account.';
             }
 
             Log::info('Admin adjusted user balance', [
@@ -387,7 +437,7 @@ class FinanceController extends Controller
                 'error' => $e->getMessage(),
                 'user_id' => $userId
             ]);
-            return redirect()->back()->with('error', 'Đã xảy ra lỗi khi điều chỉnh số dư. Vui lòng thử lại.');
+            return redirect()->back()->with('error', 'Have error when adjusting balance. Please try again.');
         }
     }
 
@@ -429,5 +479,48 @@ class FinanceController extends Controller
             'users' => $users,
             'search' => $search
         ]);
+    }
+
+    /**
+     * Refund a transaction
+     */
+    public function refundTransaction(Request $request, $id)
+    {
+        try {
+            $request->validate([
+                'refund_note' => 'nullable|string|max:500'
+            ]);
+
+            $transaction = Transaction::findOrFail($id);
+
+            if (!$transaction->canBeRefunded()) {
+                return redirect()->back()
+                    ->with('error', 'Giao dịch này không thể được hoàn tiền.');
+            }
+
+            $refundTransaction = $transaction->refund(
+                Auth::id(),
+                $request->refund_note
+            );
+
+            Log::info('Transaction refunded successfully', [
+                'original_transaction_id' => $transaction->id,
+                'refund_transaction_id' => $refundTransaction->id,
+                'admin_id' => Auth::id(),
+                'amount' => $transaction->amount
+            ]);
+
+            return redirect()->back()
+                ->with('success', 'Giao dịch đã được hoàn tiền thành công.');
+        } catch (\Exception $e) {
+            Log::error('Error refunding transaction', [
+                'error' => $e->getMessage(),
+                'transaction_id' => $id,
+                'admin_id' => Auth::id()
+            ]);
+
+            return redirect()->back()
+                ->with('error', 'Có lỗi xảy ra khi hoàn tiền: ' . $e->getMessage());
+        }
     }
 }

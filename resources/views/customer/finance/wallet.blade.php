@@ -42,7 +42,7 @@
         </div>
     </div>
     <!-- Breadcrumb End -->
-    <div class="flex flex-col items-center px-4 py-5 xl:px-6 xl:py-6">
+    <div class="flex flex-col  px-4 py-5 xl:px-6 xl:py-6">
         <div class="flex flex-col w-full gap-5 sm:justify-between xl:flex-row xl:items-center">
             <div class="flex flex-wrap items-center gap-x-1 gap-y-2 rounded-lg bg-gray-100 p-0.5 dark:bg-gray-900">
                 <p>Overview of transactions and transaction history and can add more money to your wallet here
@@ -56,9 +56,9 @@
                     </button>
 
                     <!-- Modal -->
-                    <div x-show="isModalOpen" class="fixed inset-0 flex mt-20 items-center justify-center p-5 overflow-y-auto modal z-40" style="display: none;">
+                    <div stt x-show="isModalOpen" class="fixed inset-0 flex mt-20 items-center justify-center p-5 overflow-y-auto modal z-40" style="display: none;">
                         <div class="modal-close-btn fixed inset-0 h-full w-full bg-gray-400/50 backdrop-blur-[32px]"></div>
-                        <div @click.outside="isModalOpen = false" class="relative w-full max-w-[800px] rounded-3xl bg-white p-6 dark:bg-gray-900 lg:p-10">
+                        <div style="margin-top: 300px" @click.outside="isModalOpen = false" class="relative w-full max-w-[800px] rounded-3xl bg-white p-6 dark:bg-gray-900 lg:p-10">
                             <!-- Close Button -->
                             <button @click="isModalOpen = false" class="absolute right-3 top-3 z-999 flex h-9.5 w-9.5 items-center justify-center rounded-full bg-gray-100 text-gray-400 transition-colors hover:bg-gray-200 hover:text-gray-700 dark:bg-gray-800 dark:text-gray-400 dark:hover:bg-gray-700 dark:hover:text-white sm:right-6 sm:top-6 sm:h-11 sm:w-11">
                                 <svg class="fill-current" width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
@@ -100,8 +100,6 @@
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm text-gray-700">
                                             Min top up: $1.00 ↔ {{ number_format($usdToVndRate, 2, '.', ',') }}đ
-                                            <span class="text-blue-500">(Rate: $1.00 ↔ {{ number_format($usdToVndRate, 2, '.', ',') }}đ)</span>
-                                            Or enter the money
                                         </span>
                                     </div>
                                 </div>
@@ -138,7 +136,7 @@
                                                 <div class="space-y-4">
                                                     <div>
                                                         <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Amount (USD)</label>
-                                                        <input name="amount" type="number" x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
+                                                        <input name="amount" type="number" step="0.01" x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
                                                         <p class="text-sm text-gray-500">* Minimum top up amount is $10.00</p>
                                                     </div>
                                                     @error('amount')
@@ -146,14 +144,55 @@
                                                         {{ $message }}
                                                     </div>
                                                     @enderror
-                                                    <div id="transaction-code-input">
-                                                        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Transfer Description</label>
+                                                    <div id="transaction-code-input" class="space-y-2">
+                                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                                                            Transfer Description
+                                                        </label>
+
                                                         <div class="relative">
-                                                            <button @click="copyToClipboard(transactionCode, $event)" type="button" class="absolute top-1/2 right-0 inline-flex -translate-y-1/2 items-center gap-1 border-l py-3 pr-3 pl-3.5 text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400">
-                                                                <svg class="fill-current" width="20" height="20" viewBox="0 0 20 20"></svg>
-                                                                <div>Copy</div>
-                                                            </button>
-                                                            <input name="transaction_code" type="text" x-model="form.transaction_code" readonly class="h-11 w-full rounded-lg border bg-transparent py-3 pr-[90px] pl-4 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90">
+                                                            <!-- Input field with copy button -->
+                                                            <div class="relative flex items-center">
+                                                                <input
+                                                                    name="transaction_code"
+                                                                    type="text"
+                                                                    x-model="form.transaction_code"
+                                                                    readonly
+                                                                    class="h-12 w-full rounded-lg border border-gray-200 bg-gray-50 py-3 pl-4 pr-[110px] text-sm text-gray-800 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white/90">
+
+                                                                <button
+                                                                    @click="copyToClipboard(transactionCode, $event)"
+                                                                    type="button"
+                                                                    class="absolute right-2 flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white">
+                                                                    <svg
+                                                                        class="h-4 w-4"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24">
+                                                                        <path
+                                                                            stroke-linecap="round"
+                                                                            stroke-linejoin="round"
+                                                                            stroke-width="2"
+                                                                            d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                                                    </svg>
+                                                                    <span>Copy</span>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Info message -->
+                                                            <div class="mt-2 flex items-start gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                                                <svg
+                                                                    class="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500"
+                                                                    fill="currentColor"
+                                                                    viewBox="0 0 20 20">
+                                                                    <path
+                                                                        fill-rule="evenodd"
+                                                                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                                                        clip-rule="evenodd" />
+                                                                </svg>
+                                                                <p class="leading-relaxed">
+                                                                    Please copy this transaction code and include it in your transfer to help us verify and track the payment.
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div>
@@ -202,7 +241,7 @@
                                                 <div class="space-y-4">
                                                     <div>
                                                         <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Amount (USD)</label>
-                                                        <input name="amount" type="number" x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
+                                                        <input name="amount" type="number" step="0.01"  x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
                                                         <p class="text-sm text-gray-500">* Minimum top up amount is $1.00</p>
                                                     </div>
                                                     @error('amount')
@@ -210,14 +249,55 @@
                                                         {{ $message }}
                                                     </div>
                                                     @enderror
-                                                    <div id="transaction-code-input">
-                                                        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Transfer Description</label>
+                                                    <div id="transaction-code-input" class="space-y-2">
+                                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                                                            Transfer Description
+                                                        </label>
+
                                                         <div class="relative">
-                                                            <button @click="copyToClipboard(transactionCode, $event)" type="button" class="absolute top-1/2 right-0 inline-flex -translate-y-1/2 items-center gap-1 border-l py-3 pr-3 pl-3.5 text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400">
-                                                                <svg class="fill-current" width="20" height="20" viewBox="0 0 20 20"></svg>
-                                                                <div>Copy</div>
-                                                            </button>
-                                                            <input name="transaction_code" type="text" x-model="form.transaction_code" readonly class="h-11 w-full rounded-lg border bg-transparent py-3 pr-[90px] pl-4 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90">
+                                                            <!-- Input field with copy button -->
+                                                            <div class="relative flex items-center">
+                                                                <input
+                                                                    name="transaction_code"
+                                                                    type="text"
+                                                                    x-model="form.transaction_code"
+                                                                    readonly
+                                                                    class="h-12 w-full rounded-lg border border-gray-200 bg-gray-50 py-3 pl-4 pr-[110px] text-sm text-gray-800 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white/90">
+
+                                                                <button
+                                                                    @click="copyToClipboard(transactionCode, $event)"
+                                                                    type="button"
+                                                                    class="absolute right-2 flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white">
+                                                                    <svg
+                                                                        class="h-4 w-4"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24">
+                                                                        <path
+                                                                            stroke-linecap="round"
+                                                                            stroke-linejoin="round"
+                                                                            stroke-width="2"
+                                                                            d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                                                    </svg>
+                                                                    <span>Copy</span>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Info message -->
+                                                            <div class="mt-2 flex items-start gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                                                <svg
+                                                                    class="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500"
+                                                                    fill="currentColor"
+                                                                    viewBox="0 0 20 20">
+                                                                    <path
+                                                                        fill-rule="evenodd"
+                                                                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                                                        clip-rule="evenodd" />
+                                                                </svg>
+                                                                <p class="leading-relaxed">
+                                                                    Please copy this transaction code and include it in your transfer to help us verify and track the payment.
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div>
@@ -245,8 +325,8 @@
                                                 <span class="font-medium text-gray-900 dark:text-white">PingPong</span>
                                             </div>
                                             <div class="border-r p-3 flex items-center justify-between">
-                                                <span class="font-medium text-gray-900 dark:text-white">admin@bluprinter.com</span>
-                                                <button @click="copyToClipboard('admin@bluprinter.com')"
+                                                <span class="font-medium text-gray-900 dark:text-white">admin@tron-studio.com</span>
+                                                <button @click="copyToClipboard('admin@tron-studio.com')"
                                                     class="text-blue-500 hover:text-blue-600 transition-colors"
                                                     title="Copy to clipboard">
                                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -266,7 +346,7 @@
                                                 <div class="space-y-4">
                                                     <div>
                                                         <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Amount (USD)</label>
-                                                        <input name="amount" type="number" x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
+                                                        <input name="amount" type="number" step="0.01"  x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
                                                         <p class="text-sm text-gray-500">* Minimum top up amount is $1.00</p>
                                                     </div>
                                                     @error('amount')
@@ -274,14 +354,55 @@
                                                         {{ $message }}
                                                     </div>
                                                     @enderror
-                                                    <div id="transaction-code-input">
-                                                        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Transfer Description</label>
+                                                    <div id="transaction-code-input" class="space-y-2">
+                                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                                                            Transfer Description
+                                                        </label>
+
                                                         <div class="relative">
-                                                            <button @click="copyToClipboard(transactionCode, $event)" type="button" class="absolute top-1/2 right-0 inline-flex -translate-y-1/2 items-center gap-1 border-l py-3 pr-3 pl-3.5 text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400">
-                                                                <svg class="fill-current" width="20" height="20" viewBox="0 0 20 20"></svg>
-                                                                <div>Copy</div>
-                                                            </button>
-                                                            <input name="transaction_code" type="text" x-model="form.transaction_code" readonly class="h-11 w-full rounded-lg border bg-transparent py-3 pr-[90px] pl-4 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90">
+                                                            <!-- Input field with copy button -->
+                                                            <div class="relative flex items-center">
+                                                                <input
+                                                                    name="transaction_code"
+                                                                    type="text"
+                                                                    x-model="form.transaction_code"
+                                                                    readonly
+                                                                    class="h-12 w-full rounded-lg border border-gray-200 bg-gray-50 py-3 pl-4 pr-[110px] text-sm text-gray-800 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white/90">
+
+                                                                <button
+                                                                    @click="copyToClipboard(transactionCode, $event)"
+                                                                    type="button"
+                                                                    class="absolute right-2 flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white">
+                                                                    <svg
+                                                                        class="h-4 w-4"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24">
+                                                                        <path
+                                                                            stroke-linecap="round"
+                                                                            stroke-linejoin="round"
+                                                                            stroke-width="2"
+                                                                            d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                                                    </svg>
+                                                                    <span>Copy</span>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Info message -->
+                                                            <div class="mt-2 flex items-start gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                                                <svg
+                                                                    class="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500"
+                                                                    fill="currentColor"
+                                                                    viewBox="0 0 20 20">
+                                                                    <path
+                                                                        fill-rule="evenodd"
+                                                                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                                                        clip-rule="evenodd" />
+                                                                </svg>
+                                                                <p class="leading-relaxed">
+                                                                    Please copy this transaction code and include it in your transfer to help us verify and track the payment.
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div>
@@ -327,7 +448,7 @@
                                     <div class="flex flex-col gap-8">
                                         <div class="w-full">
                                             <div class="bg-yellow-100 border border-yellow-400 text-yellow-700 px-4 py-3 rounded-lg" role="alert">
-                                                <span class="block sm:inline">Phương thức thanh toán LianLian Pay đang được phát triển. Vui lòng chọn phương thức khác.</span>
+                                                <span class="block sm:inline">LianLian Pay is being developed. Please choose another payment method.</span>
                                             </div>
                                         </div>
                                     </div>
@@ -362,7 +483,7 @@
                                                 <div class="space-y-4">
                                                     <div>
                                                         <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Amount (USD)</label>
-                                                        <input name="amount" type="number" x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
+                                                        <input name="amount" type="number" step="0.01" x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
                                                         <p class="text-sm text-gray-500">* Minimum top up amount is $1.00</p>
                                                     </div>
                                                     @error('amount')
@@ -370,14 +491,55 @@
                                                         {{ $message }}
                                                     </div>
                                                     @enderror
-                                                    <div id="transaction-code-input">
-                                                        <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Transfer Description</label>
+                                                    <div id="transaction-code-input" class="space-y-2">
+                                                        <label class="block text-sm font-medium text-gray-700 dark:text-gray-400">
+                                                            Transfer Description
+                                                        </label>
+
                                                         <div class="relative">
-                                                            <button @click="copyToClipboard(transactionCode, $event)" type="button" class="absolute top-1/2 right-0 inline-flex -translate-y-1/2 items-center gap-1 border-l py-3 pr-3 pl-3.5 text-sm font-medium text-gray-700 hover:text-blue-600 dark:text-gray-400">
-                                                                <svg class="fill-current" width="20" height="20" viewBox="0 0 20 20"></svg>
-                                                                <div>Copy</div>
-                                                            </button>
-                                                            <input name="transaction_code" type="text" x-model="form.transaction_code" readonly class="h-11 w-full rounded-lg border bg-transparent py-3 pr-[90px] pl-4 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90">
+                                                            <!-- Input field with copy button -->
+                                                            <div class="relative flex items-center">
+                                                                <input
+                                                                    name="transaction_code"
+                                                                    type="text"
+                                                                    x-model="form.transaction_code"
+                                                                    readonly
+                                                                    class="h-12 w-full rounded-lg border border-gray-200 bg-gray-50 py-3 pl-4 pr-[110px] text-sm text-gray-800 focus:border-blue-500 focus:ring-blue-500 dark:border-gray-700 dark:bg-gray-800 dark:text-white/90">
+
+                                                                <button
+                                                                    @click="copyToClipboard(transactionCode, $event)"
+                                                                    type="button"
+                                                                    class="absolute right-2 flex items-center gap-2 rounded-md border border-gray-200 bg-white px-3 py-1.5 text-sm font-medium text-gray-600 transition-colors hover:bg-gray-50 hover:text-blue-600 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600 dark:hover:text-white">
+                                                                    <svg
+                                                                        class="h-4 w-4"
+                                                                        fill="none"
+                                                                        stroke="currentColor"
+                                                                        viewBox="0 0 24 24">
+                                                                        <path
+                                                                            stroke-linecap="round"
+                                                                            stroke-linejoin="round"
+                                                                            stroke-width="2"
+                                                                            d="M8 5H6a2 2 0 00-2 2v12a2 2 0 002 2h10a2 2 0 002-2v-1M8 5a2 2 0 002 2h2a2 2 0 002-2M8 5a2 2 0 012-2h2a2 2 0 012 2m0 0h2a2 2 0 012 2v3m2 4H10m0 0l3-3m-3 3l3 3" />
+                                                                    </svg>
+                                                                    <span>Copy</span>
+                                                                </button>
+                                                            </div>
+
+                                                            <!-- Info message -->
+                                                            <div class="mt-2 flex items-start gap-2 text-sm text-gray-500 dark:text-gray-400">
+                                                                <svg
+                                                                    class="mt-0.5 h-4 w-4 flex-shrink-0 text-blue-500"
+                                                                    fill="currentColor"
+                                                                    viewBox="0 0 20 20">
+                                                                    <path
+                                                                        fill-rule="evenodd"
+                                                                        d="M18 10a8 8 0 11-16 0 8 8 0 0116 0zm-7-4a1 1 0 11-2 0 1 1 0 012 0zM9 9a1 1 0 000 2v3a1 1 0 001 1h1a1 1 0 100-2v-3a1 1 0 00-1-1H9z"
+                                                                        clip-rule="evenodd" />
+                                                                </svg>
+                                                                <p class="leading-relaxed">
+                                                                    Please copy this transaction code and include it in your transfer to help us verify and track the payment.
+                                                                </p>
+                                                            </div>
                                                         </div>
                                                     </div>
                                                     <div>
@@ -535,9 +697,15 @@
                                     </p>
                                 </td>
                                 <td class="px-6 py-3.5">
+                                    @if($transaction->isRefund())
+                                    <p class="text-theme-sm text-warning-500">
+                                         + {{ number_format($transaction->amount, 2) }} USD
+                                    </p>
+                                    @else
                                     <p class="text-theme-sm {{ $transaction->type == 'topup' ? 'text-success-600' : 'text-error-500' }}">
                                         {{ $transaction->type == 'topup' ? '+' : '-' }} {{ number_format($transaction->amount, 2) }} USD
                                     </p>
+                                    @endif
                                 </td>
                                 <td class="px-6 py-3.5">
                                     <p class="text-theme-sm {{ $transaction->status == 'approved' ? 'text-success-600' : ($transaction->status == 'rejected' ? 'text-error-500' : 'text-warning-500') }}">

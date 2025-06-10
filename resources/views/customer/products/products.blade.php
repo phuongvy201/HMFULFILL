@@ -158,6 +158,7 @@
                     <div style="border: 1px solid rgb(222, 222, 222)" class="p-4 rounded-lg shadow-md overflow-hidden relative">
                         <a class="overflow-hidden" href="/product/{{ $product->slug }}">
                             <img
+                                style="object-fit: cover;"
                                 src="{{ asset($product->main_image->image_url) }}"
                                 alt="{{ $product->name }}"
                                 class="w-full h-48 object-cover transition-transform duration-300 transform hover:scale-105" />
@@ -167,7 +168,20 @@
                                 class="product-item mt-2 font-bold text-sm">
                                 {{ $product->name }}
                             </h3>
-                            <p>From: <span class="text-orange-500">${{ $product->base_price }}</span> </p>
+                            <p>
+                                From:
+                                <span class="text-orange-500">
+                                    @php
+                                    $currencySymbols = [
+                                    'USD' => '$',
+                                    'VND' => '₫',
+                                    'GBP' => '£',
+                                    ];
+                                    $symbol = $currencySymbols[$product->currency ?? 'USD'] ?? '';
+                                    @endphp
+                                    {{ $symbol }}{{ number_format($product->base_price, $product->currency == 'VND' ? 0 : 2) }}
+                                </span>
+                            </p>
                         </a>
 
                         <span class="mt-2 text-gray-500 text-xs">
