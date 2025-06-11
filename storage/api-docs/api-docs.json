@@ -1,0 +1,1918 @@
+{
+    "openapi": "3.0.0",
+    "info": {
+        "title": "UK Fulfillment API",
+        "description": "API cho việc quản lý đơn hàng và fulfillment",
+        "version": "1.0.0"
+    },
+    "paths": {
+        "/api/orders": {
+            "post": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Tạo đơn hàng mới",
+                "description": "API để tạo một đơn hàng mới với thông tin khách hàng, sản phẩm và thiết kế. Yêu cầu token xác thực Bearer.",
+                "operationId": "d99ae1017c2ffcabec91dc26b3e26743",
+                "requestBody": {
+                    "description": "Dữ liệu đơn hàng cần gửi trong định dạng JSON",
+                    "required": true,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "required": [
+                                    "order_number",
+                                    "customer_name",
+                                    "customer_email",
+                                    "address",
+                                    "city",
+                                    "postcode",
+                                    "country",
+                                    "products"
+                                ],
+                                "properties": {
+                                    "order_number": {
+                                        "description": "Mã đơn hàng duy nhất từ hệ thống bên ngoài",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "ORDER123456"
+                                    },
+                                    "store_name": {
+                                        "description": "Tên cửa hàng (tùy chọn)",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "My Store",
+                                        "nullable": true
+                                    },
+                                    "channel": {
+                                        "description": "Kênh bán hàng (tùy chọn, ví dụ: web, api, tiktok)",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "api",
+                                        "nullable": true
+                                    },
+                                    "customer_name": {
+                                        "description": "Tên đầy đủ của khách hàng",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "Nguyen Van A"
+                                    },
+                                    "customer_email": {
+                                        "description": "Email của khách hàng",
+                                        "type": "string",
+                                        "format": "email",
+                                        "maxLength": 255,
+                                        "example": "a@gmail.com"
+                                    },
+                                    "customer_phone": {
+                                        "description": "Số điện thoại của khách hàng (tùy chọn)",
+                                        "type": "string",
+                                        "maxLength": 20,
+                                        "example": "0123456789",
+                                        "nullable": true
+                                    },
+                                    "address": {
+                                        "description": "Địa chỉ giao hàng chính",
+                                        "type": "string",
+                                        "maxLength": 500,
+                                        "example": "123 Đường ABC"
+                                    },
+                                    "address_2": {
+                                        "description": "Địa chỉ bổ sung (tùy chọn)",
+                                        "type": "string",
+                                        "maxLength": 500,
+                                        "example": "Tầng 4, Tòa nhà XYZ",
+                                        "nullable": true
+                                    },
+                                    "house_number": {
+                                        "description": "Số nhà (tùy chọn)",
+                                        "type": "string",
+                                        "maxLength": 50,
+                                        "example": "12A",
+                                        "nullable": true
+                                    },
+                                    "mailbox_number": {
+                                        "description": "Số hộp thư (tùy chọn)",
+                                        "type": "string",
+                                        "maxLength": 50,
+                                        "example": "MB123",
+                                        "nullable": true
+                                    },
+                                    "city": {
+                                        "description": "Thành phố",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "Hà Nội"
+                                    },
+                                    "state": {
+                                        "description": "Tiểu bang hoặc khu vực (tùy chọn)",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "",
+                                        "nullable": true
+                                    },
+                                    "postcode": {
+                                        "description": "Mã bưu điện",
+                                        "type": "string",
+                                        "maxLength": 20,
+                                        "example": "100000"
+                                    },
+                                    "country": {
+                                        "description": "Mã quốc gia (2 ký tự, theo chuẩn ISO 3166-1 alpha-2)",
+                                        "type": "string",
+                                        "maxLength": 2,
+                                        "example": "VN"
+                                    },
+                                    "shipping_method": {
+                                        "description": "Phương thức vận chuyển (tùy chọn, ví dụ: standard, tiktok_label)",
+                                        "type": "string",
+                                        "maxLength": 100,
+                                        "example": "tiktok_label",
+                                        "nullable": true
+                                    },
+                                    "order_note": {
+                                        "description": "Ghi chú cho đơn hàng (tùy chọn)",
+                                        "type": "string",
+                                        "maxLength": 1000,
+                                        "example": "Giao hàng vào buổi sáng",
+                                        "nullable": true
+                                    },
+                                    "products": {
+                                        "description": "Danh sách sản phẩm trong đơn hàng",
+                                        "type": "array",
+                                        "items": {
+                                            "required": [
+                                                "quantity",
+                                                "part_number",
+                                                "designs"
+                                            ],
+                                            "properties": {
+                                                "campaign_title": {
+                                                    "description": "Tiêu đề chiến dịch (tùy chọn)",
+                                                    "type": "string",
+                                                    "maxLength": 255,
+                                                    "example": "Summer T-Shirt Campaign",
+                                                    "nullable": true
+                                                },
+                                                "quantity": {
+                                                    "description": "Số lượng sản phẩm",
+                                                    "type": "integer",
+                                                    "minimum": 1,
+                                                    "example": 2
+                                                },
+                                                "part_number": {
+                                                    "description": "Mã sản phẩm (SKU, twofifteen_sku hoặc flashship_sku)",
+                                                    "type": "string",
+                                                    "maxLength": 255,
+                                                    "example": "SKU123"
+                                                },
+                                                "designs": {
+                                                    "description": "Danh sách thiết kế cho sản phẩm",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "required": [
+                                                            "file_url",
+                                                            "print_space"
+                                                        ],
+                                                        "properties": {
+                                                            "file_url": {
+                                                                "description": "URL của file thiết kế",
+                                                                "type": "string",
+                                                                "format": "uri",
+                                                                "example": "https://domain.com/design1.png"
+                                                            },
+                                                            "print_space": {
+                                                                "description": "Vị trí in (ví dụ: Front, Back)",
+                                                                "type": "string",
+                                                                "example": "Front"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "minItems": 1
+                                                },
+                                                "mockups": {
+                                                    "description": "Danh sách mockup cho sản phẩm (tùy chọn)",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "required": [
+                                                            "file_url",
+                                                            "print_space"
+                                                        ],
+                                                        "properties": {
+                                                            "file_url": {
+                                                                "description": "URL của file mockup",
+                                                                "type": "string",
+                                                                "format": "uri",
+                                                                "example": "https://domain.com/mockup1.png"
+                                                            },
+                                                            "print_space": {
+                                                                "description": "Vị trí in của mockup",
+                                                                "type": "string",
+                                                                "example": "Front"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "minItems": 1
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "201": {
+                        "description": "Đơn hàng được tạo thành công",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Order created successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "order_number": {
+                                                    "type": "string",
+                                                    "example": "ORDER123456"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "on hold"
+                                                },
+                                                "store_name": {
+                                                    "type": "string",
+                                                    "example": "My Store",
+                                                    "nullable": true
+                                                },
+                                                "channel": {
+                                                    "type": "string",
+                                                    "example": "api",
+                                                    "nullable": true
+                                                },
+                                                "customer_email": {
+                                                    "type": "string",
+                                                    "example": "a@gmail.com"
+                                                },
+                                                "shipping_address": {
+                                                    "properties": {
+                                                        "customer_name": {
+                                                            "type": "string",
+                                                            "example": "Nguyen Van A"
+                                                        },
+                                                        "company": {
+                                                            "type": "string",
+                                                            "example": "My Store",
+                                                            "nullable": true
+                                                        },
+                                                        "address_1": {
+                                                            "type": "string",
+                                                            "example": "123 Đường ABC"
+                                                        },
+                                                        "address_2": {
+                                                            "type": "string",
+                                                            "example": "Tầng 4, Tòa nhà XYZ",
+                                                            "nullable": true
+                                                        },
+                                                        "city": {
+                                                            "type": "string",
+                                                            "example": "Hà Nội"
+                                                        },
+                                                        "county": {
+                                                            "type": "string",
+                                                            "example": "",
+                                                            "nullable": true
+                                                        },
+                                                        "postcode": {
+                                                            "type": "string",
+                                                            "example": "100000"
+                                                        },
+                                                        "country": {
+                                                            "type": "string",
+                                                            "example": "VN"
+                                                        },
+                                                        "phone": {
+                                                            "type": "string",
+                                                            "example": "0123456789",
+                                                            "nullable": true
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "products": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "part_number": {
+                                                                "type": "string",
+                                                                "example": "SKU123"
+                                                            },
+                                                            "title": {
+                                                                "type": "string",
+                                                                "example": "Summer T-Shirt Campaign"
+                                                            },
+                                                            "quantity": {
+                                                                "type": "integer",
+                                                                "example": 2
+                                                            },
+                                                            "print_price": {
+                                                                "type": "string",
+                                                                "example": "10.00"
+                                                            },
+                                                            "total_price": {
+                                                                "type": "string",
+                                                                "example": "20.00"
+                                                            },
+                                                            "designs": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "file_url": {
+                                                                            "type": "string",
+                                                                            "example": "https://domain.com/design1.png"
+                                                                        },
+                                                                        "print_space": {
+                                                                            "type": "string",
+                                                                            "example": "Front"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "mockups": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "file_url": {
+                                                                            "type": "string",
+                                                                            "example": "https://domain.com/mockup1.png"
+                                                                        },
+                                                                        "print_space": {
+                                                                            "type": "string",
+                                                                            "example": "Front"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "nullable": true
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "label_url": {
+                                                    "type": "string",
+                                                    "example": "http://example.com/label.pdf",
+                                                    "nullable": true
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2025-06-11T11:21:00+07:00"
+                                                },
+                                                "total_price": {
+                                                    "type": "string",
+                                                    "example": "20.00"
+                                                },
+                                                "transaction": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "integer",
+                                                            "example": 1
+                                                        },
+                                                        "amount": {
+                                                            "type": "string",
+                                                            "example": "20.00"
+                                                        },
+                                                        "status": {
+                                                            "type": "string",
+                                                            "example": "approved"
+                                                        },
+                                                        "created_at": {
+                                                            "type": "string",
+                                                            "format": "date-time",
+                                                            "example": "2025-06-11T11:21:00+07:00"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Lỗi dữ liệu đầu vào hoặc số dư ví không đủ",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Validation failed"
+                                        },
+                                        "errors": {
+                                            "description": "Chi tiết lỗi validation (nếu có)",
+                                            "type": "object",
+                                            "nullable": true,
+                                            "additionalProperties": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string",
+                                                    "example": "The order number has already been taken"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Lỗi xác thực token",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Invalid API token"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Lỗi hệ thống",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "An error occurred while creating the order"
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Database connection failed",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/orders/{orderId}/cancel": {
+            "post": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Hủy đơn hàng",
+                "description": "API để hủy một đơn hàng hiện có dựa trên ID đơn hàng. Yêu cầu token xác thực Bearer và đơn hàng phải ở trạng thái 'on hold' hoặc 'pending'.",
+                "operationId": "002d6e0fb9859904765beb0eb5666791",
+                "parameters": [
+                    {
+                        "name": "orderId",
+                        "in": "path",
+                        "description": "ID của đơn hàng cần hủy",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Đơn hàng đã được hủy và hoàn tiền thành công",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Order cancelled and refunded successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "order_id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "order_number": {
+                                                    "type": "string",
+                                                    "example": "ORDER123456"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "cancelled"
+                                                },
+                                                "refund_transaction": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "integer",
+                                                            "example": 2
+                                                        },
+                                                        "amount": {
+                                                            "type": "string",
+                                                            "example": "20.00"
+                                                        },
+                                                        "status": {
+                                                            "type": "string",
+                                                            "example": "approved"
+                                                        },
+                                                        "created_at": {
+                                                            "type": "string",
+                                                            "format": "date-time",
+                                                            "example": "2025-06-11T11:35:00+07:00"
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Lỗi do đơn hàng không hợp lệ hoặc trạng thái không cho phép hủy",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Cannot cancel order in current status"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Lỗi xác thực token",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Invalid API token"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Không tìm thấy đơn hàng",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Order not found"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Lỗi hệ thống",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Failed to cancel order"
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Transaction not found",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/orders/{orderId}": {
+            "get": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Lấy chi tiết đơn hàng",
+                "description": "API để lấy thông tin chi tiết của một đơn hàng dựa trên ID. Yêu cầu token xác thực Bearer và đơn hàng phải thuộc về người dùng.",
+                "operationId": "a52c4b4f6a80f213462c94d6f9e1b20f",
+                "parameters": [
+                    {
+                        "name": "orderId",
+                        "in": "path",
+                        "description": "ID của đơn hàng cần lấy chi tiết",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lấy chi tiết đơn hàng thành công",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "order_number": {
+                                                    "type": "string",
+                                                    "example": "ORDER123456"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "on hold"
+                                                },
+                                                "store_name": {
+                                                    "type": "string",
+                                                    "example": "My Store",
+                                                    "nullable": true
+                                                },
+                                                "channel": {
+                                                    "type": "string",
+                                                    "example": "api",
+                                                    "nullable": true
+                                                },
+                                                "customer_email": {
+                                                    "type": "string",
+                                                    "example": "a@gmail.com"
+                                                },
+                                                "shipping_address": {
+                                                    "properties": {
+                                                        "customer_name": {
+                                                            "type": "string",
+                                                            "example": "Nguyen Van A"
+                                                        },
+                                                        "company": {
+                                                            "type": "string",
+                                                            "example": "My Store",
+                                                            "nullable": true
+                                                        },
+                                                        "address_1": {
+                                                            "type": "string",
+                                                            "example": "123 Đường ABC"
+                                                        },
+                                                        "address_2": {
+                                                            "type": "string",
+                                                            "example": "Tầng 4, Tòa nhà XYZ",
+                                                            "nullable": true
+                                                        },
+                                                        "city": {
+                                                            "type": "string",
+                                                            "example": "Hà Nội"
+                                                        },
+                                                        "county": {
+                                                            "type": "string",
+                                                            "example": "",
+                                                            "nullable": true
+                                                        },
+                                                        "postcode": {
+                                                            "type": "string",
+                                                            "example": "100000"
+                                                        },
+                                                        "country": {
+                                                            "type": "string",
+                                                            "example": "VN"
+                                                        },
+                                                        "phone": {
+                                                            "type": "string",
+                                                            "example": "0123456789",
+                                                            "nullable": true
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "products": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "part_number": {
+                                                                "type": "string",
+                                                                "example": "SKU123"
+                                                            },
+                                                            "title": {
+                                                                "type": "string",
+                                                                "example": "Summer T-Shirt Campaign"
+                                                            },
+                                                            "quantity": {
+                                                                "type": "integer",
+                                                                "example": 2
+                                                            },
+                                                            "print_price": {
+                                                                "type": "string",
+                                                                "example": "10.00"
+                                                            },
+                                                            "total_price": {
+                                                                "type": "string",
+                                                                "example": "20.00"
+                                                            },
+                                                            "designs": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "title": {
+                                                                            "type": "string",
+                                                                            "example": "Front"
+                                                                        },
+                                                                        "url": {
+                                                                            "type": "string",
+                                                                            "example": "https://domain.com/design1.png"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "mockups": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "title": {
+                                                                            "type": "string",
+                                                                            "example": "Front"
+                                                                        },
+                                                                        "url": {
+                                                                            "type": "string",
+                                                                            "example": "https://domain.com/mockup1.png"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "nullable": true
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "label_url": {
+                                                    "type": "string",
+                                                    "example": "http://example.com/label.pdf",
+                                                    "nullable": true
+                                                },
+                                                "created_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2025-06-11T11:38:00+07:00"
+                                                },
+                                                "total_price": {
+                                                    "type": "string",
+                                                    "example": "20.00"
+                                                },
+                                                "tracking_number": {
+                                                    "type": "string",
+                                                    "example": "TRK123456",
+                                                    "nullable": true
+                                                },
+                                                "internal_order_id": {
+                                                    "type": "string",
+                                                    "example": "INT123456",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Lỗi xác thực token",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Invalid API token"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Không tìm thấy đơn hàng",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Order not found"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Lỗi hệ thống",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "An error occurred while getting order details"
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Database connection failed",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            },
+            "put": {
+                "tags": [
+                    "Orders"
+                ],
+                "summary": "Cập nhật đơn hàng",
+                "description": "API để cập nhật thông tin đơn hàng hiện có dựa trên ID. Yêu cầu token xác thực Bearer và đơn hàng phải ở trạng thái 'on hold' hoặc 'pending'.",
+                "operationId": "8eb4a32df9959a76c2d82d8dc3bd8a28",
+                "parameters": [
+                    {
+                        "name": "orderId",
+                        "in": "path",
+                        "description": "ID của đơn hàng cần cập nhật",
+                        "required": true,
+                        "schema": {
+                            "type": "integer",
+                            "example": 1
+                        }
+                    }
+                ],
+                "requestBody": {
+                    "description": "Dữ liệu đơn hàng cần cập nhật trong định dạng JSON. Tất cả các trường đều tùy chọn.",
+                    "required": false,
+                    "content": {
+                        "application/json": {
+                            "schema": {
+                                "properties": {
+                                    "order_number": {
+                                        "description": "Mã đơn hàng mới",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "ORDER123457",
+                                        "nullable": true
+                                    },
+                                    "store_name": {
+                                        "description": "Tên cửa hàng",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "New Store",
+                                        "nullable": true
+                                    },
+                                    "channel": {
+                                        "description": "Kênh bán hàng",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "web",
+                                        "nullable": true
+                                    },
+                                    "customer_name": {
+                                        "description": "Tên khách hàng",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "Nguyen Van B",
+                                        "nullable": true
+                                    },
+                                    "customer_email": {
+                                        "description": "Email khách hàng",
+                                        "type": "string",
+                                        "format": "email",
+                                        "maxLength": 255,
+                                        "example": "b@gmail.com",
+                                        "nullable": true
+                                    },
+                                    "customer_phone": {
+                                        "description": "Số điện thoại khách hàng",
+                                        "type": "string",
+                                        "maxLength": 20,
+                                        "example": "0987654321",
+                                        "nullable": true
+                                    },
+                                    "address": {
+                                        "description": "Địa chỉ giao hàng chính",
+                                        "type": "string",
+                                        "maxLength": 500,
+                                        "example": "456 Đường XYZ",
+                                        "nullable": true
+                                    },
+                                    "address_2": {
+                                        "description": "Địa chỉ bổ sung",
+                                        "type": "string",
+                                        "maxLength": 500,
+                                        "example": "Tầng 5",
+                                        "nullable": true
+                                    },
+                                    "house_number": {
+                                        "description": "Số nhà",
+                                        "type": "string",
+                                        "maxLength": 50,
+                                        "example": "15B",
+                                        "nullable": true
+                                    },
+                                    "mailbox_number": {
+                                        "description": "Số hộp thư",
+                                        "type": "string",
+                                        "maxLength": 50,
+                                        "example": "MB456",
+                                        "nullable": true
+                                    },
+                                    "city": {
+                                        "description": "Thành phố",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "Hồ Chí Minh",
+                                        "nullable": true
+                                    },
+                                    "state": {
+                                        "description": "Tiểu bang hoặc khu vực",
+                                        "type": "string",
+                                        "maxLength": 255,
+                                        "example": "",
+                                        "nullable": true
+                                    },
+                                    "postcode": {
+                                        "description": "Mã bưu điện",
+                                        "type": "string",
+                                        "maxLength": 20,
+                                        "example": "700000",
+                                        "nullable": true
+                                    },
+                                    "country": {
+                                        "description": "Mã quốc gia (ISO 3166-1 alpha-2)",
+                                        "type": "string",
+                                        "maxLength": 2,
+                                        "example": "VN",
+                                        "nullable": true
+                                    },
+                                    "shipping_method": {
+                                        "description": "Phương thức vận chuyển",
+                                        "type": "string",
+                                        "maxLength": 100,
+                                        "example": "tiktok_label",
+                                        "nullable": true
+                                    },
+                                    "order_note": {
+                                        "description": "Ghi chú đơn hàng",
+                                        "type": "string",
+                                        "maxLength": 1000,
+                                        "example": "Giao hàng buổi chiều",
+                                        "nullable": true
+                                    },
+                                    "products": {
+                                        "description": "Danh sách sản phẩm mới (thay thế sản phẩm cũ nếu cung cấp)",
+                                        "type": "array",
+                                        "items": {
+                                            "required": [
+                                                "quantity",
+                                                "part_number",
+                                                "designs"
+                                            ],
+                                            "properties": {
+                                                "campaign_title": {
+                                                    "description": "Tiêu đề chiến dịch",
+                                                    "type": "string",
+                                                    "maxLength": 255,
+                                                    "example": "Winter Campaign",
+                                                    "nullable": true
+                                                },
+                                                "quantity": {
+                                                    "description": "Số lượng",
+                                                    "type": "integer",
+                                                    "minimum": 1,
+                                                    "example": 3
+                                                },
+                                                "part_number": {
+                                                    "description": "Mã sản phẩm (SKU)",
+                                                    "type": "string",
+                                                    "maxLength": 255,
+                                                    "example": "SKU456"
+                                                },
+                                                "designs": {
+                                                    "description": "Danh sách thiết kế",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "required": [
+                                                            "file_url",
+                                                            "print_space"
+                                                        ],
+                                                        "properties": {
+                                                            "file_url": {
+                                                                "description": "URL file thiết kế",
+                                                                "type": "string",
+                                                                "format": "uri",
+                                                                "example": "https://domain.com/design2.png"
+                                                            },
+                                                            "print_space": {
+                                                                "description": "Vị trí in",
+                                                                "type": "string",
+                                                                "example": "Back"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "minItems": 1
+                                                },
+                                                "mockups": {
+                                                    "description": "Danh sách mockup",
+                                                    "type": "array",
+                                                    "items": {
+                                                        "required": [
+                                                            "file_url",
+                                                            "print_space"
+                                                        ],
+                                                        "properties": {
+                                                            "file_url": {
+                                                                "description": "URL file mockup",
+                                                                "type": "string",
+                                                                "format": "uri",
+                                                                "example": "https://domain.com/mockup2.png"
+                                                            },
+                                                            "print_space": {
+                                                                "description": "Vị trí in",
+                                                                "type": "string",
+                                                                "example": "Back"
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    },
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        },
+                                        "nullable": true
+                                    }
+                                },
+                                "type": "object"
+                            }
+                        }
+                    }
+                },
+                "responses": {
+                    "200": {
+                        "description": "Cập nhật đơn hàng thành công",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Order updated successfully"
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "id": {
+                                                    "type": "integer",
+                                                    "example": 1
+                                                },
+                                                "order_number": {
+                                                    "type": "string",
+                                                    "example": "ORDER123457"
+                                                },
+                                                "status": {
+                                                    "type": "string",
+                                                    "example": "on hold"
+                                                },
+                                                "store_name": {
+                                                    "type": "string",
+                                                    "example": "New Store",
+                                                    "nullable": true
+                                                },
+                                                "channel": {
+                                                    "type": "string",
+                                                    "example": "web",
+                                                    "nullable": true
+                                                },
+                                                "customer_email": {
+                                                    "type": "string",
+                                                    "example": "b@gmail.com"
+                                                },
+                                                "shipping_address": {
+                                                    "properties": {
+                                                        "customer_name": {
+                                                            "type": "string",
+                                                            "example": "Nguyen Van B"
+                                                        },
+                                                        "company": {
+                                                            "type": "string",
+                                                            "example": "New Store",
+                                                            "nullable": true
+                                                        },
+                                                        "address_1": {
+                                                            "type": "string",
+                                                            "example": "456 Đường XYZ"
+                                                        },
+                                                        "address_2": {
+                                                            "type": "string",
+                                                            "example": "Tầng 5",
+                                                            "nullable": true
+                                                        },
+                                                        "city": {
+                                                            "type": "string",
+                                                            "example": "Hồ Chí Minh"
+                                                        },
+                                                        "county": {
+                                                            "type": "string",
+                                                            "example": "",
+                                                            "nullable": true
+                                                        },
+                                                        "postcode": {
+                                                            "type": "string",
+                                                            "example": "700000"
+                                                        },
+                                                        "country": {
+                                                            "type": "string",
+                                                            "example": "VN"
+                                                        },
+                                                        "phone": {
+                                                            "type": "string",
+                                                            "example": "0987654321",
+                                                            "nullable": true
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                },
+                                                "products": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "part_number": {
+                                                                "type": "string",
+                                                                "example": "SKU456"
+                                                            },
+                                                            "title": {
+                                                                "type": "string",
+                                                                "example": "Winter Campaign"
+                                                            },
+                                                            "quantity": {
+                                                                "type": "integer",
+                                                                "example": 3
+                                                            },
+                                                            "print_price": {
+                                                                "type": "string",
+                                                                "example": "15.00"
+                                                            },
+                                                            "total_price": {
+                                                                "type": "string",
+                                                                "example": "45.00"
+                                                            },
+                                                            "designs": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "file_url": {
+                                                                            "type": "string",
+                                                                            "example": "https://domain.com/design2.png"
+                                                                        },
+                                                                        "print_space": {
+                                                                            "type": "string",
+                                                                            "example": "Back"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            },
+                                                            "mockups": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "file_url": {
+                                                                            "type": "string",
+                                                                            "example": "https://domain.com/mockup2.png"
+                                                                        },
+                                                                        "print_space": {
+                                                                            "type": "string",
+                                                                            "example": "Back"
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                },
+                                                                "nullable": true
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "label_url": {
+                                                    "type": "string",
+                                                    "example": "http://example.com/label.pdf",
+                                                    "nullable": true
+                                                },
+                                                "updated_at": {
+                                                    "type": "string",
+                                                    "format": "date-time",
+                                                    "example": "2025-06-11T11:41:00+07:00"
+                                                },
+                                                "old_total_price": {
+                                                    "type": "string",
+                                                    "example": "20.00"
+                                                },
+                                                "new_total_price": {
+                                                    "type": "string",
+                                                    "example": "45.00"
+                                                },
+                                                "price_difference": {
+                                                    "type": "string",
+                                                    "example": "25.00"
+                                                },
+                                                "payment_transaction": {
+                                                    "properties": {
+                                                        "id": {
+                                                            "type": "integer",
+                                                            "example": 3
+                                                        },
+                                                        "type": {
+                                                            "type": "string",
+                                                            "example": "deduct"
+                                                        },
+                                                        "amount": {
+                                                            "type": "string",
+                                                            "example": "25.00"
+                                                        },
+                                                        "status": {
+                                                            "type": "string",
+                                                            "example": "approved"
+                                                        },
+                                                        "created_at": {
+                                                            "type": "string",
+                                                            "format": "date-time",
+                                                            "example": "2025-06-11T11:41:00+07:00"
+                                                        }
+                                                    },
+                                                    "type": "object",
+                                                    "nullable": true
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "400": {
+                        "description": "Lỗi dữ liệu đầu vào, số dư ví không đủ, hoặc mã đơn hàng trùng lặp",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Validation failed"
+                                        },
+                                        "errors": {
+                                            "type": "object",
+                                            "nullable": true,
+                                            "additionalProperties": {
+                                                "type": "array",
+                                                "items": {
+                                                    "type": "string",
+                                                    "example": "The order number has already been taken"
+                                                }
+                                            }
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Lỗi xác thực token",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Invalid API token"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "404": {
+                        "description": "Không tìm thấy đơn hàng",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Order not found"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Lỗi hệ thống",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "An error occurred while updating the order"
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Database connection failed",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        },
+        "/api/products": {
+            "get": {
+                "tags": [
+                    "Products"
+                ],
+                "summary": "Lấy danh sách sản phẩm UK",
+                "description": "API để lấy danh sách sản phẩm UK, bao gồm thông tin variant và thuộc tính. Hỗ trợ phân trang và tìm kiếm theo tên hoặc mô tả sản phẩm. Yêu cầu token xác thực Bearer.",
+                "operationId": "e6b376def9f9eba730949cfd7e8cd7c5",
+                "parameters": [
+                    {
+                        "name": "per_page",
+                        "in": "query",
+                        "description": "Số lượng sản phẩm mỗi trang",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 10,
+                            "example": 10
+                        }
+                    },
+                    {
+                        "name": "page",
+                        "in": "query",
+                        "description": "Số trang hiện tại",
+                        "required": false,
+                        "schema": {
+                            "type": "integer",
+                            "default": 1,
+                            "example": 1
+                        }
+                    },
+                    {
+                        "name": "search",
+                        "in": "query",
+                        "description": "Tìm kiếm sản phẩm theo tên hoặc mô tả",
+                        "required": false,
+                        "schema": {
+                            "type": "string",
+                            "example": "T-Shirt"
+                        }
+                    }
+                ],
+                "responses": {
+                    "200": {
+                        "description": "Lấy danh sách sản phẩm thành công",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": true
+                                        },
+                                        "data": {
+                                            "properties": {
+                                                "products": {
+                                                    "type": "array",
+                                                    "items": {
+                                                        "properties": {
+                                                            "product_id": {
+                                                                "type": "integer",
+                                                                "example": 1
+                                                            },
+                                                            "product_name": {
+                                                                "type": "string",
+                                                                "example": "Premium T-Shirt"
+                                                            },
+                                                            "product_description": {
+                                                                "type": "string",
+                                                                "example": "High-quality cotton t-shirt",
+                                                                "nullable": true
+                                                            },
+                                                            "template_link": {
+                                                                "type": "string",
+                                                                "example": "https://domain.com/template/tshirt.psd",
+                                                                "nullable": true
+                                                            },
+                                                            "currency": {
+                                                                "type": "string",
+                                                                "example": "GBP"
+                                                            },
+                                                            "variants": {
+                                                                "type": "array",
+                                                                "items": {
+                                                                    "properties": {
+                                                                        "id": {
+                                                                            "type": "integer",
+                                                                            "example": 1
+                                                                        },
+                                                                        "sku": {
+                                                                            "type": "string",
+                                                                            "example": "TSHIRT-GBP-001"
+                                                                        },
+                                                                        "attributes": {
+                                                                            "type": "array",
+                                                                            "items": {
+                                                                                "properties": {
+                                                                                    "option": {
+                                                                                        "type": "string",
+                                                                                        "example": "Color"
+                                                                                    },
+                                                                                    "option_value": {
+                                                                                        "type": "string",
+                                                                                        "example": "Blue"
+                                                                                    }
+                                                                                },
+                                                                                "type": "object"
+                                                                            }
+                                                                        }
+                                                                    },
+                                                                    "type": "object"
+                                                                }
+                                                            }
+                                                        },
+                                                        "type": "object"
+                                                    }
+                                                },
+                                                "pagination": {
+                                                    "properties": {
+                                                        "current_page": {
+                                                            "type": "integer",
+                                                            "example": 1
+                                                        },
+                                                        "per_page": {
+                                                            "type": "integer",
+                                                            "example": 10
+                                                        },
+                                                        "total": {
+                                                            "type": "integer",
+                                                            "example": 50
+                                                        },
+                                                        "last_page": {
+                                                            "type": "integer",
+                                                            "example": 5
+                                                        }
+                                                    },
+                                                    "type": "object"
+                                                }
+                                            },
+                                            "type": "object"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "401": {
+                        "description": "Lỗi xác thực token",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "Invalid API token"
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    },
+                    "500": {
+                        "description": "Lỗi hệ thống",
+                        "content": {
+                            "application/json": {
+                                "schema": {
+                                    "properties": {
+                                        "success": {
+                                            "type": "boolean",
+                                            "example": false
+                                        },
+                                        "message": {
+                                            "type": "string",
+                                            "example": "An error occurred while retrieving products"
+                                        },
+                                        "error": {
+                                            "type": "string",
+                                            "example": "Database connection failed",
+                                            "nullable": true
+                                        }
+                                    },
+                                    "type": "object"
+                                }
+                            }
+                        }
+                    }
+                },
+                "security": [
+                    {
+                        "bearerAuth": []
+                    }
+                ]
+            }
+        }
+    },
+    "components": {
+        "schemas": {
+            "Error": {
+                "properties": {
+                    "success": {
+                        "type": "boolean",
+                        "example": false
+                    },
+                    "message": {
+                        "type": "string",
+                        "example": "An error occurred"
+                    },
+                    "errors": {
+                        "properties": {
+                            "field": {
+                                "type": "array",
+                                "items": {
+                                    "type": "string",
+                                    "example": "Error message"
+                                }
+                            }
+                        },
+                        "type": "object"
+                    }
+                },
+                "type": "object"
+            },
+            "Order": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 1
+                    },
+                    "order_number": {
+                        "type": "string",
+                        "example": "ORD123456"
+                    },
+                    "status": {
+                        "type": "string",
+                        "example": "on hold"
+                    },
+                    "store_name": {
+                        "type": "string",
+                        "example": "My Store"
+                    },
+                    "channel": {
+                        "type": "string",
+                        "example": "api"
+                    },
+                    "customer_email": {
+                        "type": "string",
+                        "example": "john@example.com"
+                    },
+                    "shipping_address": {
+                        "properties": {
+                            "customer_name": {
+                                "type": "string",
+                                "example": "John Doe"
+                            },
+                            "company": {
+                                "type": "string",
+                                "example": "My Store"
+                            },
+                            "address_1": {
+                                "type": "string",
+                                "example": "123 Main Street"
+                            },
+                            "address_2": {
+                                "type": "string",
+                                "example": "Apt 4B"
+                            },
+                            "city": {
+                                "type": "string",
+                                "example": "London"
+                            },
+                            "county": {
+                                "type": "string",
+                                "example": "England"
+                            },
+                            "postcode": {
+                                "type": "string",
+                                "example": "SW1A 1AA"
+                            },
+                            "country": {
+                                "type": "string",
+                                "example": "GB"
+                            },
+                            "phone": {
+                                "type": "string",
+                                "example": "+84123456789"
+                            }
+                        },
+                        "type": "object"
+                    },
+                    "products": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/OrderProduct"
+                        }
+                    },
+                    "label_url": {
+                        "type": "string",
+                        "example": "http://example.com/label.pdf"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-03-20T10:00:00Z"
+                    },
+                    "total_price": {
+                        "type": "string",
+                        "example": "20.00"
+                    },
+                    "transaction": {
+                        "$ref": "#/components/schemas/Transaction"
+                    }
+                },
+                "type": "object"
+            },
+            "OrderProduct": {
+                "properties": {
+                    "part_number": {
+                        "type": "string",
+                        "example": "TSHIRT-001"
+                    },
+                    "title": {
+                        "type": "string",
+                        "example": "Summer Collection"
+                    },
+                    "quantity": {
+                        "type": "integer",
+                        "example": 2
+                    },
+                    "print_price": {
+                        "type": "string",
+                        "example": "10.00"
+                    },
+                    "total_price": {
+                        "type": "string",
+                        "example": "20.00"
+                    },
+                    "designs": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Design"
+                        }
+                    },
+                    "mockups": {
+                        "type": "array",
+                        "items": {
+                            "$ref": "#/components/schemas/Mockup"
+                        }
+                    }
+                },
+                "type": "object"
+            },
+            "Design": {
+                "properties": {
+                    "file_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "example": "https://example.com/design1.png"
+                    },
+                    "print_space": {
+                        "type": "string",
+                        "example": "front"
+                    }
+                },
+                "type": "object"
+            },
+            "Mockup": {
+                "properties": {
+                    "file_url": {
+                        "type": "string",
+                        "format": "uri",
+                        "example": "https://example.com/mockup1.png"
+                    },
+                    "print_space": {
+                        "type": "string",
+                        "example": "front"
+                    }
+                },
+                "type": "object"
+            },
+            "Transaction": {
+                "properties": {
+                    "id": {
+                        "type": "integer",
+                        "example": 456
+                    },
+                    "amount": {
+                        "type": "string",
+                        "example": "20.00"
+                    },
+                    "status": {
+                        "type": "string",
+                        "example": "approved"
+                    },
+                    "created_at": {
+                        "type": "string",
+                        "format": "date-time",
+                        "example": "2024-03-20T10:00:00Z"
+                    }
+                },
+                "type": "object"
+            }
+        },
+        "securitySchemes": {
+            "bearerAuth": {
+                "type": "http",
+                "bearerFormat": "JWT",
+                "scheme": "bearer"
+            }
+        }
+    },
+    "tags": [
+        {
+            "name": "Orders",
+            "description": "Orders"
+        },
+        {
+            "name": "Products",
+            "description": "Products"
+        }
+    ]
+}

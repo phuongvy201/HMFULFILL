@@ -13,7 +13,7 @@ class AutoUpdateOrderStatus extends Command
     public function handle()
     {
         $orders = ExcelOrder::where('status', 'on hold')
-            ->where('created_at', '<=', now()->subHour())
+            ->where('created_at', '<=', now()->subMinutes(1))
             ->get();
 
         foreach ($orders as $order) {

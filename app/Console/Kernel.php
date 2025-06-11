@@ -22,7 +22,7 @@ class Kernel extends ConsoleKernel
      */
     protected function schedule(Schedule $schedule): void
     {
-        $schedule->command('orders:update-status')->hourly();
+        $schedule->command('orders:update-status')->everyMinute();
         $schedule->command('orders:update-tracking-numbers')->dailyAt('01:00');
     }
 }

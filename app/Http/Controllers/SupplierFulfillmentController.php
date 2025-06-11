@@ -1,5 +1,6 @@
 <?php
 
+
 namespace App\Http\Controllers;
 
 use App\Models\ImportFile;
@@ -22,12 +23,21 @@ use App\Models\User;
 use App\Models\ExcelOrderItem;
 use App\Models\ExcelOrderDesign;
 use App\Models\ExcelOrderMockup;
+use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingPrice;
 use App\Rules\ValidPartNumber;
 use App\Rules\ValidPrintSpace;
 use App\Models\Wallet;
 use App\Models\Transaction;
+
+/**
+ * @OA\Info(
+ *     title="UK Fulfillment API",
+ *     version="1.0.0",
+ *     description="API cho việc quản lý đơn hàng và fulfillment"
+ * )
+ */
 
 class SupplierFulfillmentController extends Controller
 {
@@ -1075,6 +1085,324 @@ class SupplierFulfillmentController extends Controller
             ], 500);
         }
     }
+    /**
+     * @OA\Post(
+     *     path="/api/orders",
+     *     summary="Tạo đơn hàng mới",
+     *     description="API để tạo một đơn hàng mới với thông tin khách hàng, sản phẩm và thiết kế. Yêu cầu token xác thực Bearer.",
+     *     tags={"Orders"},
+     *     security={{"bearerAuth": {}}},
+     *     @OA\RequestBody(
+     *         required=true,
+     *         description="Dữ liệu đơn hàng cần gửi trong định dạng JSON",
+     *         @OA\JsonContent(
+     *             required={"order_number", "customer_name", "customer_email", "address", "city", "postcode", "country", "products"},
+     *             @OA\Property(
+     *                 property="order_number",
+     *                 type="string",
+     *                 description="Mã đơn hàng duy nhất từ hệ thống bên ngoài",
+     *                 example="ORDER123456",
+     *                 maxLength=255
+     *             ),
+     *             @OA\Property(
+     *                 property="store_name",
+     *                 type="string",
+     *                 description="Tên cửa hàng (tùy chọn)",
+     *                 example="My Store",
+     *                 maxLength=255,
+     *                 nullable=true
+     *             ),
+     *             @OA\Property(
+     *                 property="channel",
+     *                 type="string",
+     *                 description="Kênh bán hàng (tùy chọn, ví dụ: web, api, tiktok)",
+     *                 example="api",
+     *                 maxLength=255,
+     *                 nullable=true
+     *             ),
+     *             @OA\Property(
+     *                 property="customer_name",
+     *                 type="string",
+     *                 description="Tên đầy đủ của khách hàng",
+     *                 example="Nguyen Van A",
+     *                 maxLength=255
+     *             ),
+     *             @OA\Property(
+     *                 property="customer_email",
+     *                 type="string",
+     *                 format="email",
+     *                 description="Email của khách hàng",
+     *                 example="a@gmail.com",
+     *                 maxLength=255
+     *             ),
+     *             @OA\Property(
+     *                 property="customer_phone",
+     *                 type="string",
+     *                 description="Số điện thoại của khách hàng (tùy chọn)",
+     *                 example="0123456789",
+     *                 maxLength=20,
+     *                 nullable=true
+     *             ),
+     *             @OA\Property(
+     *                 property="address",
+     *                 type="string",
+     *                 description="Địa chỉ giao hàng chính",
+     *                 example="123 Đường ABC",
+     *                 maxLength=500
+     *             ),
+     *             @OA\Property(
+     *                 property="address_2",
+     *                 type="string",
+     *                 description="Địa chỉ bổ sung (tùy chọn)",
+     *                 example="Tầng 4, Tòa nhà XYZ",
+     *                 maxLength=500,
+     *                 nullable=true
+     *             ),
+     *             @OA\Property(
+     *                 property="house_number",
+     *                 type="string",
+     *                 description="Số nhà (tùy chọn)",
+     *                 example="12A",
+     *                 maxLength=50,
+     *                 nullable=true
+     *             ),
+     *             @OA\Property(
+     *                 property="mailbox_number",
+     *                 type="string",
+     *                 description="Số hộp thư (tùy chọn)",
+     *                 example="MB123",
+     *                 maxLength=50,
+     *                 nullable=true
+     *             ),
+     *             @OA\Property(
+     *                 property="city",
+     *                 type="string",
+     *                 description="Thành phố",
+     *                 example="Hà Nội",
+     *                 maxLength=255
+     *             ),
+     *             @OA\Property(
+     *                 property="state",
+     *                 type="string",
+     *                 description="Tiểu bang hoặc khu vực (tùy chọn)",
+     *                 example="",
+     *                 maxLength=255,
+     *                 nullable=true
+     *             ),
+     *             @OA\Property(
+     *                 property="postcode",
+     *                 type="string",
+     *                 description="Mã bưu điện",
+     *                 example="100000",
+     *                 maxLength=20
+     *             ),
+     *             @OA\Property(
+     *                 property="country",
+     *                 type="string",
+     *                 description="Mã quốc gia (2 ký tự, theo chuẩn ISO 3166-1 alpha-2)",
+     *                 example="VN",
+     *                 maxLength=2
+     *             ),
+     *             @OA\Property(
+     *                 property="shipping_method",
+     *                 type="string",
+     *                 description="Phương thức vận chuyển (tùy chọn, ví dụ: standard, tiktok_label)",
+     *                 example="tiktok_label",
+     *                 maxLength=100,
+     *                 nullable=true
+     *             ),
+     *             @OA\Property(
+     *                 property="order_note",
+     *                 type="string",
+     *                 description="Ghi chú cho đơn hàng (tùy chọn)",
+     *                 example="Giao hàng vào buổi sáng",
+     *                 maxLength=1000,
+     *                 nullable=true
+     *             ),
+     *             @OA\Property(
+     *                 property="products",
+     *                 type="array",
+     *                 description="Danh sách sản phẩm trong đơn hàng",
+     *                 minItems=1,
+     *                 @OA\Items(
+     *                     required={"quantity", "part_number", "designs"},
+     *                     @OA\Property(
+     *                         property="campaign_title",
+     *                         type="string",
+     *                         description="Tiêu đề chiến dịch (tùy chọn)",
+     *                         example="Summer T-Shirt Campaign",
+     *                         maxLength=255,
+     *                         nullable=true
+     *                     ),
+     *                     @OA\Property(
+     *                         property="quantity",
+     *                         type="integer",
+     *                         description="Số lượng sản phẩm",
+     *                         example=2,
+     *                         minimum=1
+     *                     ),
+     *                     @OA\Property(
+     *                         property="part_number",
+     *                         type="string",
+     *                         description="Mã sản phẩm (SKU, twofifteen_sku hoặc flashship_sku)",
+     *                         example="SKU123",
+     *                         maxLength=255
+     *                     ),
+     *                     @OA\Property(
+     *                         property="designs",
+     *                         type="array",
+     *                         description="Danh sách thiết kế cho sản phẩm",
+     *                         minItems=1,
+     *                         @OA\Items(
+     *                             required={"file_url", "print_space"},
+     *                             @OA\Property(
+     *                                 property="file_url",
+     *                                 type="string",
+     *                                 format="uri",
+     *                                 description="URL của file thiết kế",
+     *                                 example="https://domain.com/design1.png"
+     *                             ),
+     *                             @OA\Property(
+     *                                 property="print_space",
+     *                                 type="string",
+     *                                 description="Vị trí in (ví dụ: Front, Back)",
+     *                                 example="Front"
+     *                             )
+     *                         )
+     *                     ),
+     *                     @OA\Property(
+     *                         property="mockups",
+     *                         type="array",
+     *                         description="Danh sách mockup cho sản phẩm (tùy chọn)",
+     *                         nullable=true,
+     *                         @OA\Items(
+     *                             required={"file_url", "print_space"},
+     *                             @OA\Property(
+     *                                 property="file_url",
+     *                                 type="string",
+     *                                 format="uri",
+     *                                 description="URL của file mockup",
+     *                                 example="https://domain.com/mockup1.png"
+     *                             ),
+     *                             @OA\Property(
+     *                                 property="print_space",
+     *                                 type="string",
+     *                                 description="Vị trí in của mockup",
+     *                                 example="Front"
+     *                             )
+     *                         )
+     *                     )
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=201,
+     *         description="Đơn hàng được tạo thành công",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Order created successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="order_number", type="string", example="ORDER123456"),
+     *                 @OA\Property(property="status", type="string", example="on hold"),
+     *                 @OA\Property(property="store_name", type="string", example="My Store", nullable=true),
+     *                 @OA\Property(property="channel", type="string", example="api", nullable=true),
+     *                 @OA\Property(property="customer_email", type="string", example="a@gmail.com"),
+     *                 @OA\Property(
+     *                     property="shipping_address",
+     *                     type="object",
+     *                     @OA\Property(property="customer_name", type="string", example="Nguyen Van A"),
+     *                     @OA\Property(property="company", type="string", example="My Store", nullable=true),
+     *                     @OA\Property(property="address_1", type="string", example="123 Đường ABC"),
+     *                     @OA\Property(property="address_2", type="string", example="Tầng 4, Tòa nhà XYZ", nullable=true),
+     *                     @OA\Property(property="city", type="string", example="Hà Nội"),
+     *                     @OA\Property(property="county", type="string", example="", nullable=true),
+     *                     @OA\Property(property="postcode", type="string", example="100000"),
+     *                     @OA\Property(property="country", type="string", example="VN"),
+     *                     @OA\Property(property="phone", type="string", example="0123456789", nullable=true)
+     *                 ),
+     *                 @OA\Property(
+     *                     property="products",
+     *                     type="array",
+     *                     @OA\Items(
+     *                         @OA\Property(property="part_number", type="string", example="SKU123"),
+     *                         @OA\Property(property="title", type="string", example="Summer T-Shirt Campaign"),
+     *                         @OA\Property(property="quantity", type="integer", example=2),
+     *                         @OA\Property(property="print_price", type="string", example="10.00"),
+     *                         @OA\Property(property="total_price", type="string", example="20.00"),
+     *                         @OA\Property(
+     *                             property="designs",
+     *                             type="array",
+     *                             @OA\Items(
+     *                                 @OA\Property(property="file_url", type="string", example="https://domain.com/design1.png"),
+     *                                 @OA\Property(property="print_space", type="string", example="Front")
+     *                             )
+     *                         ),
+     *                         @OA\Property(
+     *                             property="mockups",
+     *                             type="array",
+     *                             nullable=true,
+     *                             @OA\Items(
+     *                                 @OA\Property(property="file_url", type="string", example="https://domain.com/mockup1.png"),
+     *                                 @OA\Property(property="print_space", type="string", example="Front")
+     *                             )
+     *                         )
+     *                     )
+     *                 ),
+     *                 @OA\Property(property="label_url", type="string", example="http://example.com/label.pdf", nullable=true),
+     *                 @OA\Property(property="created_at", type="string", format="date-time", example="2025-06-11T11:21:00+07:00"),
+     *                 @OA\Property(property="total_price", type="string", example="20.00"),
+     *                 @OA\Property(
+     *                     property="transaction",
+     *                     type="object",
+     *                     @OA\Property(property="id", type="integer", example=1),
+     *                     @OA\Property(property="amount", type="string", example="20.00"),
+     *                     @OA\Property(property="status", type="string", example="approved"),
+     *                     @OA\Property(property="created_at", type="string", format="date-time", example="2025-06-11T11:21:00+07:00")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Lỗi dữ liệu đầu vào hoặc số dư ví không đủ",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Validation failed"),
+     *             @OA\Property(
+     *                 property="errors",
+     *                 type="object",
+     *                 description="Chi tiết lỗi validation (nếu có)",
+     *                 nullable=true,
+     *                 @OA\AdditionalProperties(
+     *                     type="array",
+     *                     @OA\Items(type="string", example="The order number has already been taken")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Lỗi xác thực token",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Invalid API token")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Lỗi hệ thống",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="An error occurred while creating the order"),
+     *             @OA\Property(property="error", type="string", example="Database connection failed", nullable=true)
+     *         )
+     *     )
+     * )
+     */
     public function createOrder(Request $request)
     {
         try {
@@ -1483,6 +1811,78 @@ class SupplierFulfillmentController extends Controller
     /**
      * Cancel an order if it's in 'on hold' status
      */
+    /**
+     * @OA\Post(
+     *     path="/api/orders/{orderId}/cancel",
+     *     summary="Hủy đơn hàng",
+     *     description="API để hủy một đơn hàng hiện có dựa trên ID đơn hàng. Yêu cầu token xác thực Bearer và đơn hàng phải ở trạng thái 'on hold' hoặc 'pending'.",
+     *     tags={"Orders"},
+     *     security={{"bearerAuth": {}}},
+     *     @OA\Parameter(
+     *         name="orderId",
+     *         in="path",
+     *         description="ID của đơn hàng cần hủy",
+     *         required=true,
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Đơn hàng đã được hủy và hoàn tiền thành công",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Order cancelled and refunded successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="order_id", type="integer", example=1),
+     *                 @OA\Property(property="order_number", type="string", example="ORDER123456"),
+     *                 @OA\Property(property="status", type="string", example="cancelled"),
+     *                 @OA\Property(
+     *                     property="refund_transaction",
+     *                     type="object",
+     *                     @OA\Property(property="id", type="integer", example=2),
+     *                     @OA\Property(property="amount", type="string", example="20.00"),
+     *                     @OA\Property(property="status", type="string", example="approved"),
+     *                     @OA\Property(property="created_at", type="string", format="date-time", example="2025-06-11T11:35:00+07:00")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Lỗi do đơn hàng không hợp lệ hoặc trạng thái không cho phép hủy",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Cannot cancel order in current status")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Lỗi xác thực token",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Invalid API token")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Không tìm thấy đơn hàng",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Order not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Lỗi hệ thống",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Failed to cancel order"),
+     *             @OA\Property(property="error", type="string", example="Transaction not found", nullable=true)
+     *         )
+     *     )
+     * )
+     */
     public function cancelOrder(Request $request, $orderId)
     {
         try {
@@ -1590,6 +1990,110 @@ class SupplierFulfillmentController extends Controller
 
     /**
      * Get order details
+     */
+    /**
+     * @OA\Get(
+     *     path="/api/orders/{orderId}",
+     *     summary="Lấy chi tiết đơn hàng",
+     *     description="API để lấy thông tin chi tiết của một đơn hàng dựa trên ID. Yêu cầu token xác thực Bearer và đơn hàng phải thuộc về người dùng.",
+     *     tags={"Orders"},
+     *     security={{"bearerAuth": {}}},
+     *     @OA\Parameter(
+     *         name="orderId",
+     *         in="path",
+     *         description="ID của đơn hàng cần lấy chi tiết",
+     *         required=true,
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lấy chi tiết đơn hàng thành công",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="order_number", type="string", example="ORDER123456"),
+     *                 @OA\Property(property="status", type="string", example="on hold"),
+     *                 @OA\Property(property="store_name", type="string", example="My Store", nullable=true),
+     *                 @OA\Property(property="channel", type="string", example="api", nullable=true),
+     *                 @OA\Property(property="customer_email", type="string", example="a@gmail.com"),
+     *                 @OA\Property(
+     *                     property="shipping_address",
+     *                     type="object",
+     *                     @OA\Property(property="customer_name", type="string", example="Nguyen Van A"),
+     *                     @OA\Property(property="company", type="string", example="My Store", nullable=true),
+     *                     @OA\Property(property="address_1", type="string", example="123 Đường ABC"),
+     *                     @OA\Property(property="address_2", type="string", example="Tầng 4, Tòa nhà XYZ", nullable=true),
+     *                     @OA\Property(property="city", type="string", example="Hà Nội"),
+     *                     @OA\Property(property="county", type="string", example="", nullable=true),
+     *                     @OA\Property(property="postcode", type="string", example="100000"),
+     *                     @OA\Property(property="country", type="string", example="VN"),
+     *                     @OA\Property(property="phone", type="string", example="0123456789", nullable=true)
+     *                 ),
+     *                 @OA\Property(
+     *                     property="products",
+     *                     type="array",
+     *                     @OA\Items(
+     *                         @OA\Property(property="part_number", type="string", example="SKU123"),
+     *                         @OA\Property(property="title", type="string", example="Summer T-Shirt Campaign"),
+     *                         @OA\Property(property="quantity", type="integer", example=2),
+     *                         @OA\Property(property="print_price", type="string", example="10.00"),
+     *                         @OA\Property(property="total_price", type="string", example="20.00"),
+     *                         @OA\Property(
+     *                             property="designs",
+     *                             type="array",
+     *                             @OA\Items(
+     *                                 @OA\Property(property="title", type="string", example="Front"),
+     *                                 @OA\Property(property="url", type="string", example="https://domain.com/design1.png")
+     *                             )
+     *                         ),
+     *                         @OA\Property(
+     *                             property="mockups",
+     *                             type="array",
+     *                             nullable=true,
+     *                             @OA\Items(
+     *                                 @OA\Property(property="title", type="string", example="Front"),
+     *                                 @OA\Property(property="url", type="string", example="https://domain.com/mockup1.png")
+     *                             )
+     *                         )
+     *                     )
+     *                 ),
+     *                 @OA\Property(property="label_url", type="string", example="http://example.com/label.pdf", nullable=true),
+     *                 @OA\Property(property="created_at", type="string", format="date-time", example="2025-06-11T11:38:00+07:00"),
+     *                 @OA\Property(property="total_price", type="string", example="20.00"),
+     *                 @OA\Property(property="tracking_number", type="string", example="TRK123456", nullable=true),
+     *                 @OA\Property(property="internal_order_id", type="string", example="INT123456", nullable=true)
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Lỗi xác thực token",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Invalid API token")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Không tìm thấy đơn hàng",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Order not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Lỗi hệ thống",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="An error occurred while getting order details"),
+     *             @OA\Property(property="error", type="string", example="Database connection failed", nullable=true)
+     *         )
+     *     )
+     * )
      */
     public function getOrderDetailsApi(Request $request, $orderId)
     {
@@ -1950,6 +2454,194 @@ class SupplierFulfillmentController extends Controller
 
     /**
      * Cập nhật đơn hàng qua API với authentication token
+     */
+    /**
+     * @OA\Put(
+     *     path="/api/orders/{orderId}",
+     *     summary="Cập nhật đơn hàng",
+     *     description="API để cập nhật thông tin đơn hàng hiện có dựa trên ID. Yêu cầu token xác thực Bearer và đơn hàng phải ở trạng thái 'on hold' hoặc 'pending'.",
+     *     tags={"Orders"},
+     *     security={{"bearerAuth": {}}},
+     *     @OA\Parameter(
+     *         name="orderId",
+     *         in="path",
+     *         description="ID của đơn hàng cần cập nhật",
+     *         required=true,
+     *         @OA\Schema(type="integer", example=1)
+     *     ),
+     *     @OA\RequestBody(
+     *         required=false,
+     *         description="Dữ liệu đơn hàng cần cập nhật trong định dạng JSON. Tất cả các trường đều tùy chọn.",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="order_number", type="string", description="Mã đơn hàng mới", example="ORDER123457", maxLength=255, nullable=true),
+     *             @OA\Property(property="store_name", type="string", description="Tên cửa hàng", example="New Store", maxLength=255, nullable=true),
+     *             @OA\Property(property="channel", type="string", description="Kênh bán hàng", example="web", maxLength=255, nullable=true),
+     *             @OA\Property(property="customer_name", type="string", description="Tên khách hàng", example="Nguyen Van B", maxLength=255, nullable=true),
+     *             @OA\Property(property="customer_email", type="string", format="email", description="Email khách hàng", example="b@gmail.com", maxLength=255, nullable=true),
+     *             @OA\Property(property="customer_phone", type="string", description="Số điện thoại khách hàng", example="0987654321", maxLength=20, nullable=true),
+     *             @OA\Property(property="address", type="string", description="Địa chỉ giao hàng chính", example="456 Đường XYZ", maxLength=500, nullable=true),
+     *             @OA\Property(property="address_2", type="string", description="Địa chỉ bổ sung", example="Tầng 5", maxLength=500, nullable=true),
+     *             @OA\Property(property="house_number", type="string", description="Số nhà", example="15B", maxLength=50, nullable=true),
+     *             @OA\Property(property="mailbox_number", type="string", description="Số hộp thư", example="MB456", maxLength=50, nullable=true),
+     *             @OA\Property(property="city", type="string", description="Thành phố", example="Hồ Chí Minh", maxLength=255, nullable=true),
+     *             @OA\Property(property="state", type="string", description="Tiểu bang hoặc khu vực", example="", maxLength=255, nullable=true),
+     *             @OA\Property(property="postcode", type="string", description="Mã bưu điện", example="700000", maxLength=20, nullable=true),
+     *             @OA\Property(property="country", type="string", description="Mã quốc gia (ISO 3166-1 alpha-2)", example="VN", maxLength=2, nullable=true),
+     *             @OA\Property(property="shipping_method", type="string", description="Phương thức vận chuyển", example="tiktok_label", maxLength=100, nullable=true),
+     *             @OA\Property(property="order_note", type="string", description="Ghi chú đơn hàng", example="Giao hàng buổi chiều", maxLength=1000, nullable=true),
+     *             @OA\Property(
+     *                 property="products",
+     *                 type="array",
+     *                 description="Danh sách sản phẩm mới (thay thế sản phẩm cũ nếu cung cấp)",
+     *                 nullable=true,
+     *                 @OA\Items(
+     *                     required={"quantity", "part_number", "designs"},
+     *                     @OA\Property(property="campaign_title", type="string", description="Tiêu đề chiến dịch", example="Winter Campaign", maxLength=255, nullable=true),
+     *                     @OA\Property(property="quantity", type="integer", description="Số lượng", example=3, minimum=1),
+     *                     @OA\Property(property="part_number", type="string", description="Mã sản phẩm (SKU)", example="SKU456", maxLength=255),
+     *                     @OA\Property(
+     *                         property="designs",
+     *                         type="array",
+     *                         description="Danh sách thiết kế",
+     *                         minItems=1,
+     *                         @OA\Items(
+     *                             required={"file_url", "print_space"},
+     *                             @OA\Property(property="file_url", type="string", format="uri", description="URL file thiết kế", example="https://domain.com/design2.png"),
+     *                             @OA\Property(property="print_space", type="string", description="Vị trí in", example="Back")
+     *                         )
+     *                     ),
+     *                     @OA\Property(
+     *                         property="mockups",
+     *                         type="array",
+     *                         description="Danh sách mockup",
+     *                         nullable=true,
+     *                         @OA\Items(
+     *                             required={"file_url", "print_space"},
+     *                             @OA\Property(property="file_url", type="string", format="uri", description="URL file mockup", example="https://domain.com/mockup2.png"),
+     *                             @OA\Property(property="print_space", type="string", description="Vị trí in", example="Back")
+     *                         )
+     *                     )
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Cập nhật đơn hàng thành công",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(property="message", type="string", example="Order updated successfully"),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(property="id", type="integer", example=1),
+     *                 @OA\Property(property="order_number", type="string", example="ORDER123457"),
+     *                 @OA\Property(property="status", type="string", example="on hold"),
+     *                 @OA\Property(property="store_name", type="string", example="New Store", nullable=true),
+     *                 @OA\Property(property="channel", type="string", example="web", nullable=true),
+     *                 @OA\Property(property="customer_email", type="string", example="b@gmail.com"),
+     *                 @OA\Property(
+     *                     property="shipping_address",
+     *                     type="object",
+     *                     @OA\Property(property="customer_name", type="string", example="Nguyen Van B"),
+     *                     @OA\Property(property="company", type="string", example="New Store", nullable=true),
+     *                     @OA\Property(property="address_1", type="string", example="456 Đường XYZ"),
+     *                     @OA\Property(property="address_2", type="string", example="Tầng 5", nullable=true),
+     *                     @OA\Property(property="city", type="string", example="Hồ Chí Minh"),
+     *                     @OA\Property(property="county", type="string", example="", nullable=true),
+     *                     @OA\Property(property="postcode", type="string", example="700000"),
+     *                     @OA\Property(property="country", type="string", example="VN"),
+     *                     @OA\Property(property="phone", type="string", example="0987654321", nullable=true)
+     *                 ),
+     *                 @OA\Property(
+     *                     property="products",
+     *                     type="array",
+     *                     @OA\Items(
+     *                         @OA\Property(property="part_number", type="string", example="SKU456"),
+     *                         @OA\Property(property="title", type="string", example="Winter Campaign"),
+     *                         @OA\Property(property="quantity", type="integer", example=3),
+     *                         @OA\Property(property="print_price", type="string", example="15.00"),
+     *                         @OA\Property(property="total_price", type="string", example="45.00"),
+     *                         @OA\Property(
+     *                             property="designs",
+     *                             type="array",
+     *                             @OA\Items(
+     *                                 @OA\Property(property="file_url", type="string", example="https://domain.com/design2.png"),
+     *                                 @OA\Property(property="print_space", type="string", example="Back")
+     *                             )
+     *                         ),
+     *                         @OA\Property(
+     *                             property="mockups",
+     *                             type="array",
+     *                             nullable=true,
+     *                             @OA\Items(
+     *                                 @OA\Property(property="file_url", type="string", example="https://domain.com/mockup2.png"),
+     *                                 @OA\Property(property="print_space", type="string", example="Back")
+     *                             )
+     *                         )
+     *                     )
+     *                 ),
+     *                 @OA\Property(property="label_url", type="string", example="http://example.com/label.pdf", nullable=true),
+     *                 @OA\Property(property="updated_at", type="string", format="date-time", example="2025-06-11T11:41:00+07:00"),
+     *                 @OA\Property(property="old_total_price", type="string", example="20.00"),
+     *                 @OA\Property(property="new_total_price", type="string", example="45.00"),
+     *                 @OA\Property(property="price_difference", type="string", example="25.00"),
+     *                 @OA\Property(
+     *                     property="payment_transaction",
+     *                     type="object",
+     *                     nullable=true,
+     *                     @OA\Property(property="id", type="integer", example=3),
+     *                     @OA\Property(property="type", type="string", example="deduct"),
+     *                     @OA\Property(property="amount", type="string", example="25.00"),
+     *                     @OA\Property(property="status", type="string", example="approved"),
+     *                     @OA\Property(property="created_at", type="string", format="date-time", example="2025-06-11T11:41:00+07:00")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=400,
+     *         description="Lỗi dữ liệu đầu vào, số dư ví không đủ, hoặc mã đơn hàng trùng lặp",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Validation failed"),
+     *             @OA\Property(
+     *                 property="errors",
+     *                 type="object",
+     *                 nullable=true,
+     *                 @OA\AdditionalProperties(
+     *                     type="array",
+     *                     @OA\Items(type="string", example="The order number has already been taken")
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Lỗi xác thực token",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Invalid API token")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=404,
+     *         description="Không tìm thấy đơn hàng",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Order not found")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Lỗi hệ thống",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="An error occurred while updating the order"),
+     *             @OA\Property(property="error", type="string", example="Database connection failed", nullable=true)
+     *         )
+     *     )
+     * )
      */
     public function updateOrder(Request $request, $orderId)
     {
@@ -2410,56 +3102,200 @@ class SupplierFulfillmentController extends Controller
     }
 
     /**
-     * API lấy danh sách sản phẩm có currency GBP, kèm variant, sku, attributes
+     * @OA\Get(
+     *     path="/api/products",
+     *     summary="Lấy danh sách sản phẩm UK",
+     *     description="API để lấy danh sách sản phẩm UK, bao gồm thông tin variant và thuộc tính. Hỗ trợ phân trang và tìm kiếm theo tên hoặc mô tả sản phẩm. Yêu cầu token xác thực Bearer.",
+     *     tags={"Products"},
+     *     security={{"bearerAuth": {}}},
+     *     @OA\Parameter(
+     *         name="per_page",
+     *         in="query",
+     *         description="Số lượng sản phẩm mỗi trang",
+     *         required=false,
+     *         @OA\Schema(type="integer", example=10, default=10)
+     *     ),
+     *     @OA\Parameter(
+     *         name="page",
+     *         in="query",
+     *         description="Số trang hiện tại",
+     *         required=false,
+     *         @OA\Schema(type="integer", example=1, default=1)
+     *     ),
+     *     @OA\Parameter(
+     *         name="search",
+     *         in="query",
+     *         description="Tìm kiếm sản phẩm theo tên hoặc mô tả",
+     *         required=false,
+     *         @OA\Schema(type="string", example="T-Shirt")
+     *     ),
+     *     @OA\Response(
+     *         response=200,
+     *         description="Lấy danh sách sản phẩm thành công",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=true),
+     *             @OA\Property(
+     *                 property="data",
+     *                 type="object",
+     *                 @OA\Property(
+     *                     property="products",
+     *                     type="array",
+     *                     @OA\Items(
+     *                         @OA\Property(property="product_id", type="integer", example=1),
+     *                         @OA\Property(property="product_name", type="string", example="Premium T-Shirt"),
+     *                         @OA\Property(property="product_description", type="string", example="High-quality cotton t-shirt", nullable=true),
+     *                         @OA\Property(property="template_link", type="string", example="https://domain.com/template/tshirt.psd", nullable=true),
+     *                         @OA\Property(property="currency", type="string", example="GBP"),
+     *                         @OA\Property(
+     *                             property="variants",
+     *                             type="array",
+     *                             @OA\Items(
+     *                                 @OA\Property(property="id", type="integer", example=1),
+     *                                 @OA\Property(property="sku", type="string", example="TSHIRT-GBP-001"),
+     *                                 @OA\Property(
+     *                                     property="attributes",
+     *                                     type="array",
+     *                                     @OA\Items(
+     *                                         @OA\Property(property="option", type="string", example="Color"),
+     *                                         @OA\Property(property="option_value", type="string", example="Blue")
+     *                                     )
+     *                                 )
+     *                             )
+     *                         )
+     *                     )
+     *                 ),
+     *                 @OA\Property(
+     *                     property="pagination",
+     *                     type="object",
+     *                     @OA\Property(property="current_page", type="integer", example=1),
+     *                     @OA\Property(property="per_page", type="integer", example=10),
+     *                     @OA\Property(property="total", type="integer", example=50),
+     *                     @OA\Property(property="last_page", type="integer", example=5)
+     *                 )
+     *             )
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=401,
+     *         description="Lỗi xác thực token",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="Invalid API token")
+     *         )
+     *     ),
+     *     @OA\Response(
+     *         response=500,
+     *         description="Lỗi hệ thống",
+     *         @OA\JsonContent(
+     *             @OA\Property(property="success", type="boolean", example=false),
+     *             @OA\Property(property="message", type="string", example="An error occurred while retrieving products"),
+     *             @OA\Property(property="error", type="string", example="Database connection failed", nullable=true)
+     *         )
+     *     )
+     * )
      */
     public function getProductsWithGBP(Request $request)
     {
-        // Xác thực token
+        try {
+            // 1. Xác thực API token
+            $user = $this->authenticateUser($request);
+            if (!$user) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Invalid API token'
+                ], 401);
+            }
+
+            // 2. Lấy tham số query
+            $perPage = $request->query('per_page', 10);
+            $search = $request->query('search');
+
+            // 3. Xây dựng truy vấn
+            $query = Product::select(['id', 'name', 'description', 'template_link', 'currency'])
+                ->with(['variants:id,product_id,sku', 'variants.attributes:name,value'])
+                ->where('currency', Product::CURRENCY_GBP);
+
+            if ($search) {
+                $query->where(function ($q) use ($search) {
+                    $q->where('name', 'like', '%' . $search . '%')
+                        ->orWhere('description', 'like', '%' . $search . '%');
+                });
+            }
+
+            // 4. Phân trang
+            $products = $query->paginate($perPage);
+
+            // 5. Format dữ liệu
+            $result = $products->map(function ($product) {
+                return [
+                    'product_id' => $product->id,
+                    'product_name' => $product->name,
+                    'product_description' => $product->description,
+                    'template_link' => $product->template_link,
+                    'currency' => $product->currency,
+                    'variants' => $product->variants->map(function ($variant) {
+                        return [
+                            'id' => $variant->id,
+                            'sku' => $variant->sku,
+                            'attributes' => $variant->attributes->map(function ($attr) {
+                                return [
+                                    'option' => $attr->name,
+                                    'option_value' => $attr->value
+                                ];
+                            })->all()
+                        ];
+                    })->all()
+                ];
+            })->all();
+
+            // 6. Ghi log thành công
+            Log::info('Products with GBP retrieved successfully via API:', [
+                'user_id' => $user->id,
+                'product_count' => $products->total(),
+                'search' => $search,
+                'per_page' => $perPage,
+                'page' => $products->currentPage()
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'data' => [
+                    'products' => $result,
+                    'pagination' => [
+                        'current_page' => $products->currentPage(),
+                        'per_page' => $products->perPage(),
+                        'total' => $products->total(),
+                        'last_page' => $products->lastPage()
+                    ]
+                ]
+            ], 200);
+        } catch (\Exception $e) {
+            Log::error('Error retrieving products with GBP via API:', [
+                'user_token' => $request->bearerToken(),
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while retrieving products',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Xác thực người dùng dựa trên Bearer token.
+     *
+     * @param Request $request
+     * @return User|null
+     */
+    private function authenticateUser(Request $request)
+    {
         $token = $request->bearerToken();
         if (!$token) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Authorization token is required'
-            ], 401);
+            return null;
         }
-        $user = \App\Models\User::where('api_token', $token)->first();
-        if (!$user) {
-            return response()->json([
-                'success' => false,
-                'message' => 'Invalid API token'
-            ], 401);
-        }
-
-        // Lấy danh sách sản phẩm GBP
-        $products = \App\Models\Product::with(['variants.attributes'])
-            ->where('currency', \App\Models\Product::CURRENCY_GBP)
-            ->get();
-
-        $result = $products->map(function ($product) {
-            return [
-                'product_id' => $product->id,
-                'product_name' => $product->name,
-                'product_description' => $product->description,
-                'template_link' => $product->template_link,
-                'currency' => $product->currency,
-                'variants' => $product->variants->map(function ($variant) {
-                    return [
-                        'id' => $variant->id,
-                        'sku' => $variant->sku,
-                        'attributes' => $variant->attributes->map(function ($attr) {
-                            return [
-                                'option' => $attr->name,
-                                'option_value' => $attr->value
-                            ];
-                        })
-                    ];
-                })
-            ];
-        });
-
-        return response()->json([
-            'success' => true,
-            'data' => $result
-        ], 201);
+        return User::where('api_token', $token)->first();
     }
 }

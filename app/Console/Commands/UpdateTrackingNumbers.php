@@ -32,7 +32,7 @@ class UpdateTrackingNumbers extends Command
                     });
             })
             ->join('orders_mapping', 'excel_orders.external_id', '=', 'orders_mapping.external_id')
-            ->where('orders_mapping.factory', 'Twofifteen') // Chỉ lấy ánh xạ của Twofifteen
+            ->where('orders_mapping.factory', 'twofifteen') // Chỉ lấy ánh xạ của Twofifteen
             ->select('excel_orders.id', 'excel_orders.external_id', 'orders_mapping.internal_id')
             ->pluck('internal_id', 'excel_orders.id');
 

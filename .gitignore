@@ -6,7 +6,7 @@
 /public/storage
 /storage/*.key
 /storage/pail
-# Th? m?c public c?n ignore thêm
+
 /public/proofs/
 /public/proof_images/
 
