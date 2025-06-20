@@ -367,10 +367,6 @@ class SupplierFulfillmentController extends Controller
                 'warehouse' => 'required|in:US,UK', // Validate giá trị warehouse
             ]);
 
-            // Kiểm tra warehouse US chưa hỗ trợ
-            if (strtoupper($request->input('warehouse')) === 'US') {
-                return back()->with('error', 'Warehouse US is not supported yet');
-            }
 
             $file = $request->file('file');
             // Giữ lại tên file gốc và thêm timestamp hoặc chuỗi ngẫu nhiên để tránh trùng lặp
@@ -2281,8 +2277,7 @@ class SupplierFulfillmentController extends Controller
     {
         try {
             // Khởi tạo query với điều kiện file_id là null
-            $query = ExcelOrder::with(['items', 'creator'])
-                ->whereNull('import_file_id');
+            $query = ExcelOrder::with(['items', 'creator', 'orderMapping']);
 
             // Thêm điều kiện tìm kiếm theo external_id nếu có
             if ($request->filled('external_id')) {
@@ -2290,16 +2285,11 @@ class SupplierFulfillmentController extends Controller
                 $query->where('external_id', 'LIKE', "%{$searchTerm}%");
             }
 
-            // Thêm điều kiện tìm kiếm theo email khách hàng
-            if ($request->filled('customer_email')) {
-                $searchTerm = trim($request->customer_email);
-                $query->where('buyer_email', 'LIKE', "%{$searchTerm}%");
-            }
 
             // Thêm điều kiện tìm kiếm theo tên khách hàng
             if ($request->filled('customer_name')) {
                 $searchTerm = trim($request->customer_name);
-                $query->where(function ($q) use ($searchTerm) {
+                $query->whereHas('creator', function ($q) use ($searchTerm) {
                     $q->where('first_name', 'LIKE', "%{$searchTerm}%")
                         ->orWhere('last_name', 'LIKE', "%{$searchTerm}%")
                         ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$searchTerm}%"]);

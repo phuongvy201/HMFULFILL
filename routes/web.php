@@ -73,21 +73,24 @@ Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(func
     Route::get('/products/create', [ProductController::class, 'create'])->name('admin.products.create');
     Route::post('/products', [ProductController::class, 'store'])->name('admin.products.store');
     Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('admin.products.destroy');
+
+    // Topup routes
     Route::get('/topup-requests', [FinanceController::class, 'topupRequests'])->name('admin.topup.requests');
-    Route::get('topup/approve/{id}', [FinanceController::class, 'approveTopup'])->name('admin.topup.approve');
-    Route::get('topup/reject/{id}', [FinanceController::class, 'rejectTopup'])->name('admin.topup.reject');
-    Route::get('finance/balance-overview', [FinanceController::class, 'balanceOverview'])->name('admin.finance.balance-overview');
-    Route::get('finance/user-balance/{userId}', [FinanceController::class, 'userBalance'])->name('admin.finance.user-balance');
-    Route::post('finance/adjust-balance/{userId}', [FinanceController::class, 'adjustBalance'])->name('admin.finance.adjust-balance');
-    Route::get('finance/topup-requests', [FinanceController::class, 'topupRequests'])->name('admin.finance.topup-requests');
-    Route::post('finance/approve-topup/{id}', [FinanceController::class, 'approveTopup'])->name('admin.finance.approve-topup');
-    Route::post('finance/reject-topup/{id}', [FinanceController::class, 'rejectTopup'])->name('admin.finance.reject-topup');
-    Route::get('finance/refundable-transactions', [FinanceController::class, 'refundableTransactions'])->name('admin.finance.refundable-transactions');
-    Route::post('finance/refund-transaction/{transactionId}', [FinanceController::class, 'refundTransaction'])->name('admin.finance.refund-transaction');
+    Route::get('/topup/approve/{id}', [FinanceController::class, 'approveTopup'])->name('admin.topup.approve');
+    Route::get('/topup/reject/{id}', [FinanceController::class, 'rejectTopup'])->name('admin.topup.reject');
+
+    // Finance routes
+    Route::get('/finance/balance-overview', [FinanceController::class, 'balanceOverview'])->name('admin.finance.balance-overview');
+    Route::get('/finance/user-balance/{userId}', [FinanceController::class, 'userBalance'])->name('admin.finance.user-balance');
+    Route::post('/finance/adjust-balance/{userId}', [FinanceController::class, 'adjustBalance'])->name('admin.finance.adjust-balance');
+    Route::get('/finance/refundable-transactions', [FinanceController::class, 'refundableTransactions'])->name('admin.finance.refundable-transactions');
+    Route::post('/finance/refund-transaction/{transactionId}', [FinanceController::class, 'refundTransaction'])->name('admin.finance.refund-transaction');
 
     Route::post('/admin/import-tracking', [SupplierFulfillmentController::class, 'importTrackingNumbers'])->name('admin.import-tracking');
     Route::post('/fulfillment/files/{id}/update-status', [SupplierFulfillmentController::class, 'updateStatus'])->name('fulfillment.files.update-status');
     Route::post('/orders/{orderId}/cancel', [SupplierFulfillmentController::class, 'cancelOrder'])->name('admin.orders.cancel');
+    Route::put('/dtf/orders/{orderId}', [OrderUploadController::class, 'updateDtfOrder'])
+        ->name('api.dtf.orders.update');
 
     // Route cho admin đổi status
     Route::post('/admin/orders/change-status/{id}', [SupplierFulfillmentController::class, 'changeStatus'])
@@ -97,6 +100,10 @@ Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(func
     Route::get('/api-orders', [SupplierFulfillmentController::class, 'getAdminApiOrders'])
         ->name('admin.api-orders')
         ->middleware(['auth', 'admin']);
+
+    // DTF Orders routes
+    Route::put('/api/dtf/orders/{orderId}', [OrderUploadController::class, 'updateDtfOrder'])
+        ->name('dtf.orders.update');
 });
 
 Route::middleware(['auth', 'admin'])->group(function () {
@@ -140,6 +147,7 @@ Route::controller(RegisterController::class)->group(function () {
 Route::view('fulfill', 'fulfill')->middleware('auth');
 
 Route::get('/test-order', [OrderUploadController::class, 'testOrder']);
+Route::get('/test-batch-order', [OrderUploadController::class, 'testBatchOrder']);
 Route::post('/find-variant-sku/{productId}', [ProductController::class, 'findVariantSku'])->name('products.find-variant-sku');
 Route::get('/products/{slug}', [ProductController::class, 'productList']);
 Route::post('/products/import', [ProductController::class, 'import'])->name('products.import');

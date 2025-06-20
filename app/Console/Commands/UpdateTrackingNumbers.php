@@ -4,16 +4,30 @@ namespace App\Console\Commands;
 
 use App\Models\ExcelOrder;
 use App\Services\TwofifteenService;
+use App\Services\DtfService;
 use Illuminate\Console\Command;
 use Illuminate\Support\Facades\Log;
 
 class UpdateTrackingNumbers extends Command
 {
     protected $signature = 'orders:update-tracking-numbers';
-    protected $description = 'Lấy mã vận đơn và cập nhật trạng thái Đã giao hàng từ API Twofifteen bằng internal_id vào bảng excel_orders';
+    protected $description = 'Lấy mã vận đơn và cập nhật trạng thái Đã giao hàng từ API Twofifteen (UK) và DTF (US) bằng internal_id vào bảng excel_orders';
 
     public function handle()
     {
+        // Xử lý đơn hàng UK (Twofifteen)
+        $this->processTwofifteenOrders();
+
+        // Xử lý đơn hàng US (DTF)
+        $this->processDtfOrders();
+
+        $this->info('Hoàn tất cập nhật mã vận đơn và trạng thái cho cả UK và US.');
+    }
+
+    private function processTwofifteenOrders()
+    {
+        $this->info('Bắt đầu xử lý đơn hàng UK (Twofifteen)...');
+
         // Lấy các đơn hàng thiếu mã vận đơn hoặc có phương thức vận chuyển là tiktok_label với trạng thái processing và có ánh xạ trong orders_mapping
         $orders = ExcelOrder::query()
             ->where('warehouse', 'UK')
@@ -37,13 +51,13 @@ class UpdateTrackingNumbers extends Command
             ->pluck('internal_id', 'excel_orders.id');
 
         if ($orders->isEmpty()) {
-            $this->info('Không có đơn hàng nào cần cập nhật mã vận đơn hoặc trạng thái.');
-            Log::info('Không tìm thấy đơn hàng nào thiếu mã vận đơn hoặc có phương thức tiktok_label với trạng thái processing, warehouse=UK, và có ánh xạ Twofifteen trong orders_mapping');
+            $this->info('Không có đơn hàng UK nào cần cập nhật mã vận đơn hoặc trạng thái.');
+            Log::info('Không tìm thấy đơn hàng UK nào thiếu mã vận đơn hoặc có phương thức tiktok_label với trạng thái processing, warehouse=UK, và có ánh xạ Twofifteen trong orders_mapping');
             return;
         }
 
-        $this->info("Tìm thấy {$orders->count()} đơn hàng cần cập nhật. Bắt đầu xử lý...");
-        Log::info("Tìm thấy {$orders->count()} đơn hàng để xử lý", ['internal_ids' => $orders->values()->toArray()]);
+        $this->info("Tìm thấy {$orders->count()} đơn hàng UK cần cập nhật. Bắt đầu xử lý...");
+        Log::info("Tìm thấy {$orders->count()} đơn hàng UK để xử lý", ['internal_ids' => $orders->values()->toArray()]);
 
         $twofifteenService = app(TwofifteenService::class);
         $internalIds = $orders->values()->toArray();
@@ -60,7 +74,7 @@ class UpdateTrackingNumbers extends Command
             })->toArray();
 
         foreach ($batches as $batchIndex => $batchInternalIds) {
-            $this->info("Xử lý lô " . ($batchIndex + 1) . "...");
+            $this->info("Xử lý lô UK " . ($batchIndex + 1) . "...");
             try {
                 $apiOrders = $twofifteenService->getOrdersByInternalIds($batchInternalIds);
                 if (empty($apiOrders)) {
@@ -91,37 +105,151 @@ class UpdateTrackingNumbers extends Command
                                 $order->updateTrackingAndStatus($trackingNumber, $status);
 
                                 if ($trackingNumber) {
-                                    $this->info("Cập nhật mã vận đơn {$trackingNumber} cho đơn hàng {$externalId}");
-                                    Log::info("Cập nhật mã vận đơn cho đơn hàng {$externalId}", [
+                                    $this->info("Cập nhật mã vận đơn {$trackingNumber} cho đơn hàng UK {$externalId}");
+                                    Log::info("Cập nhật mã vận đơn cho đơn hàng UK {$externalId}", [
                                         'tracking_number' => $trackingNumber,
                                         'status' => $status
                                     ]);
                                 } else {
-                                    $this->info("Không có mã vận đơn, chỉ cập nhật trạng thái cho đơn hàng {$externalId} (tiktok_label)");
-                                    Log::info("Không có mã vận đơn, cập nhật trạng thái cho đơn hàng {$externalId} (tiktok_label)", [
+                                    $this->info("Không có mã vận đơn, chỉ cập nhật trạng thái cho đơn hàng UK {$externalId} (tiktok_label)");
+                                    Log::info("Không có mã vận đơn, cập nhật trạng thái cho đơn hàng UK {$externalId} (tiktok_label)", [
                                         'status' => $status
                                     ]);
                                 }
 
                                 if ($status === 'Shipped') {
-                                    $this->info("Cập nhật trạng thái Đã giao hàng cho đơn hàng {$externalId}");
+                                    $this->info("Cập nhật trạng thái Đã giao hàng cho đơn hàng UK {$externalId}");
                                 }
                             } else {
-                                $this->warn("Không có mã vận đơn và không phải tiktok_label cho đơn hàng {$externalId}");
-                                Log::warning("Không có mã vận đơn và không phải tiktok_label cho đơn hàng {$externalId}");
+                                $this->warn("Không có mã vận đơn và không phải tiktok_label cho đơn hàng UK {$externalId}");
+                                Log::warning("Không có mã vận đơn và không phải tiktok_label cho đơn hàng UK {$externalId}");
                             }
                         }
                     } catch (\Exception $e) {
-                        Log::error("Lỗi khi cập nhật đơn hàng {$externalId}: " . $e->getMessage());
-                        $this->error("Lỗi khi xử lý đơn hàng {$externalId}");
+                        Log::error("Lỗi khi cập nhật đơn hàng UK {$externalId}: " . $e->getMessage());
+                        $this->error("Lỗi khi xử lý đơn hàng UK {$externalId}");
                     }
                 }
             } catch (\Exception $e) {
-                Log::error("Lỗi khi xử lý lô " . ($batchIndex + 1) . ": " . $e->getMessage());
-                $this->error("Lỗi khi xử lý lô " . ($batchIndex + 1));
+                Log::error("Lỗi khi xử lý lô UK " . ($batchIndex + 1) . ": " . $e->getMessage());
+                $this->error("Lỗi khi xử lý lô UK " . ($batchIndex + 1));
             }
         }
+    }
 
-        $this->info('Hoàn tất cập nhật mã vận đơn và trạng thái.');
+    private function processDtfOrders()
+    {
+        $this->info('Bắt đầu xử lý đơn hàng US (DTF)...');
+
+        // Lấy các đơn hàng US thiếu mã vận đơn hoặc có trạng thái processed và có ánh xạ trong orders_mapping
+        $orders = ExcelOrder::query()
+            ->where('warehouse', 'US')
+            ->where(function ($query) {
+                $query->whereNull('tracking_number')
+                    ->orWhere('status', ExcelOrder::STATUS_PROCESSED);
+            })
+            ->where('status', ExcelOrder::STATUS_PROCESSED)
+            ->join('orders_mapping', 'excel_orders.external_id', '=', 'orders_mapping.external_id')
+            ->where('orders_mapping.factory', 'dtf') // Chỉ lấy ánh xạ của DTF
+            ->select('excel_orders.id', 'excel_orders.external_id', 'orders_mapping.internal_id')
+            ->get();
+
+        if ($orders->isEmpty()) {
+            $this->info('Không có đơn hàng US nào cần cập nhật mã vận đơn hoặc trạng thái.');
+            Log::info('Không tìm thấy đơn hàng US nào thiếu mã vận đơn hoặc có trạng thái processed, warehouse=US, và có ánh xạ DTF trong orders_mapping');
+            return;
+        }
+
+        $this->info("Tìm thấy {$orders->count()} đơn hàng US cần cập nhật. Bắt đầu xử lý...");
+        Log::info("Tìm thấy {$orders->count()} đơn hàng US để xử lý", ['orders' => $orders->toArray()]);
+
+        $dtfService = app(DtfService::class);
+
+        // Chia danh sách orders thành các lô 100 đơn
+        $batches = $orders->chunk(100);
+        $this->info("Chia thành " . count($batches) . " lô, mỗi lô tối đa 100 đơn.");
+
+        foreach ($batches as $batchIndex => $batchOrders) {
+            $this->info("Xử lý lô US " . ($batchIndex + 1) . "...");
+            try {
+                // Lấy trạng thái từ API DTF
+                $statusOrders = $dtfService->getOrdersStatus($batchOrders);
+
+                // Lấy tracking number từ API DTF
+                $trackingOrders = $dtfService->getOrdersTracking($batchOrders);
+
+                // Kết hợp dữ liệu từ cả hai API
+                $combinedOrders = [];
+
+                // Tạo mapping từ internal_id sang dữ liệu tracking
+                $trackingMap = collect($trackingOrders)->keyBy('internal_id')->toArray();
+
+                foreach ($statusOrders as $statusOrder) {
+                    $internalId = $statusOrder['internal_id'];
+                    $trackingData = $trackingMap[$internalId] ?? [];
+
+                    $combinedOrders[] = [
+                        'internal_id' => $internalId,
+                        'external_id' => $statusOrder['external_id'],
+                        'status' => $statusOrder['status'],
+                        'tracking_number' => $trackingData['tracking_number'] ?? null,
+                    ];
+                }
+
+                if (empty($combinedOrders)) {
+                    $this->warn("Không có dữ liệu từ DTF cho lô " . ($batchIndex + 1));
+                    Log::warning("Không có dữ liệu từ API DTF cho lô " . ($batchIndex + 1));
+                    continue;
+                }
+
+                // Cập nhật bảng excel_orders
+                foreach ($combinedOrders as $apiOrder) {
+                    if (!$apiOrder['internal_id']) {
+                        continue;
+                    }
+
+                    try {
+                        $order = ExcelOrder::where('external_id', $apiOrder['external_id'])->first();
+                        if ($order) {
+                            $orderId = $order->id;
+                            $externalId = $apiOrder['external_id'];
+
+                            // Chỉ cập nhật trạng thái thành 'Shipped' nếu API trả về 'completed'
+                            $status = ($apiOrder['status'] === 'completed') ? 'Shipped' : $order->status;
+                            $trackingNumber = $apiOrder['tracking_number'];
+
+                            // Cập nhật mã vận đơn nếu có, hoặc chỉ cập nhật trạng thái
+                            if ($trackingNumber && $trackingNumber !== 'No shipment') {
+                                $order->updateTrackingAndStatus($trackingNumber, $status);
+
+                                $this->info("Cập nhật mã vận đơn {$trackingNumber} cho đơn hàng US {$externalId}");
+                                Log::info("Cập nhật mã vận đơn cho đơn hàng US {$externalId}", [
+                                    'tracking_number' => $trackingNumber,
+                                    'status' => $status
+                                ]);
+                            } else {
+                                // Chỉ cập nhật trạng thái nếu không có tracking number
+                                $order->updateTrackingAndStatus(null, $status);
+
+                                $this->info("Không có mã vận đơn, chỉ cập nhật trạng thái cho đơn hàng US {$externalId}");
+                                Log::info("Không có mã vận đơn, cập nhật trạng thái cho đơn hàng US {$externalId}", [
+                                    'status' => $status
+                                ]);
+                            }
+
+                            if ($status === 'Shipped') {
+                                $this->info("Cập nhật trạng thái Đã giao hàng cho đơn hàng US {$externalId}");
+                            }
+                        }
+                    } catch (\Exception $e) {
+                        Log::error("Lỗi khi cập nhật đơn hàng US {$apiOrder['external_id']}: " . $e->getMessage());
+                        $this->error("Lỗi khi xử lý đơn hàng US {$apiOrder['external_id']}");
+                    }
+                }
+            } catch (\Exception $e) {
+                Log::error("Lỗi khi xử lý lô US " . ($batchIndex + 1) . ": " . $e->getMessage());
+                $this->error("Lỗi khi xử lý lô US " . ($batchIndex + 1));
+            }
+        }
     }
 }

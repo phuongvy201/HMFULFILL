@@ -2,6 +2,7 @@
 
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SupplierFulfillmentController;
+use App\Http\Controllers\OrderUploadController;
 use Illuminate\Support\Facades\Route;
 
 
@@ -17,6 +18,10 @@ Route::get('/orders/{orderId}', [SupplierFulfillmentController::class, 'getOrder
 Route::put('/orders/{orderId}', [SupplierFulfillmentController::class, 'updateOrder'])
     ->middleware('auth.api.token')
     ->name('api.orders.update');
+
+Route::put('/dtf/orders/{orderId}', [OrderUploadController::class, 'updateDtfOrder'])
+    ->middleware('auth.api.token')
+    ->name('api.dtf.orders.update');
 
 Route::post('/orders/{orderId}/cancel', [SupplierFulfillmentController::class, 'cancelOrder'])
     ->middleware('auth.api.token')

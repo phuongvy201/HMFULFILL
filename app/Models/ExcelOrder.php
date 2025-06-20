@@ -63,6 +63,10 @@ class ExcelOrder extends Model
     {
         return $this->hasOne(ExcelOrderFulfillment::class);
     }
+    public function orderMapping(): HasOne
+    {
+        return $this->hasOne(OrderMapping::class, 'external_id', 'external_id');
+    }
 
     public function markAsProcessed($apiResponse = null, $internalId = null, $factory = null)
     {

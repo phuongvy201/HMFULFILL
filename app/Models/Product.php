@@ -111,15 +111,53 @@ class Product extends Model
     }
 
     /**
+     * Set base price và currency
+     */
+    public function setPrice($price, $currency)
+    {
+        if (!in_array($currency, array_keys(self::$validCurrencies))) {
+            throw new \InvalidArgumentException("Currency not supported: {$currency}");
+        }
+
+        $this->currency = $currency;
+        $this->base_price = $price;
+        return $this;
+    }
+
+    /**
+     * Set price từ USD
+     */
+    public function setPriceFromUSD($priceUSD)
+    {
+        return $this->setPrice($priceUSD, self::CURRENCY_USD);
+    }
+
+    /**
+     * Set price từ GBP
+     */
+    public function setPriceFromGBP($priceGBP)
+    {
+        return $this->setPrice($priceGBP, self::CURRENCY_GBP);
+    }
+
+    /**
+     * Set price từ VND
+     */
+    public function setPriceFromVND($priceVND)
+    {
+        return $this->setPrice($priceVND, self::CURRENCY_VND);
+    }
+
+    /**
      * Method để chuyển đổi giá sang VND
      */
     public function getPriceInVND()
     {
         switch ($this->currency) {
             case self::CURRENCY_USD:
-                return $this->base_price * config('currency.usd_to_vnd', 24500);
+                return $this->base_price * config('currency.usd_to_vnd', 26128.0);
             case self::CURRENCY_GBP:
-                return $this->base_price * config('currency.gbp_to_vnd', 31000);
+                return $this->base_price * config('currency.gbp_to_vnd', 35078.0);
             case self::CURRENCY_VND:
                 return $this->base_price;
             default:
@@ -134,9 +172,9 @@ class Product extends Model
     {
         switch ($this->currency) {
             case self::CURRENCY_GBP:
-                return $this->base_price * config('currency.gbp_to_usd', 1.27);
+                return $this->base_price * config('currency.gbp_to_usd', 1.34);
             case self::CURRENCY_VND:
-                return $this->base_price / config('currency.usd_to_vnd', 24500);
+                return $this->base_price / config('currency.usd_to_vnd', 26128.0);
             case self::CURRENCY_USD:
                 return $this->base_price;
             default:
@@ -151,9 +189,9 @@ class Product extends Model
     {
         switch ($this->currency) {
             case self::CURRENCY_USD:
-                return $this->base_price / config('currency.gbp_to_usd', 1.27);
+                return $this->base_price / config('currency.gbp_to_usd', 1.34);
             case self::CURRENCY_VND:
-                return $this->base_price / config('currency.usd_to_vnd', 24500) * config('currency.gbp_to_usd', 1.27);
+                return $this->base_price / config('currency.usd_to_vnd', 26128.0) / config('currency.gbp_to_usd', 1.34);
             case self::CURRENCY_GBP:
                 return $this->base_price;
             default:

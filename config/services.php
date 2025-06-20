@@ -41,5 +41,10 @@ return [
         'api_url' => env('TWOFIFTEEN_API_URL'),
     ],
 
+    'dtf' => [
+        'api_url' => env('DTF_API_URL'),
+        'bearer_token' => env('DTF_BEARER_TOKEN'),
+    ],
+
 
 ];

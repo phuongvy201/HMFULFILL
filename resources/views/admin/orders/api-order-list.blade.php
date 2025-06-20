@@ -247,10 +247,6 @@
                 <h2 class="text-3xl font-bold text-gray-900">{{ $statistics['total_items'] }}</h2>
             </div>
             <div class="stat-card">
-                <h5 class="text-sm font-medium text-gray-500">Total Value</h5>
-                <h2 class="text-3xl font-bold text-gray-900">${{ number_format($statistics['total_amount'], 2) }}</h2>
-            </div>
-            <div class="stat-card">
                 <h5 class="text-sm font-medium text-gray-500">Pending Orders</h5>
                 <h2 class="text-3xl font-bold text-gray-900">{{ $statistics['pending_orders'] }}</h2>
             </div>
@@ -266,11 +262,7 @@
                             <input type="text" class="form-input" name="external_id" value="{{ $filters['external_id'] ?? '' }}">
                         </div>
                         <div>
-                            <label class="form-label">Customer Email</label>
-                            <input type="email" class="form-input" name="customer_email" value="{{ $filters['customer_email'] ?? '' }}">
-                        </div>
-                        <div>
-                            <label class="form-label">Customer Name</label>
+                            <label class="form-label">Name</label>
                             <input type="text" class="form-input" name="customer_name" value="{{ $filters['customer_name'] ?? '' }}">
                         </div>
                         <div>
@@ -324,12 +316,14 @@
                                         <th class="w-10">
                                             <input type="checkbox" id="selectAll" class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
                                         </th>
+                                        <th>Internal ID</th>
                                         <th>External ID</th>
                                         <th>Customer</th>
                                         <th>Email</th>
                                         <th>Warehouse</th>
-                                        <th>Status</th>
                                         <th>Total Amount</th>
+                                        <th>Status</th>
+                                        <th>Tracking Number</th>
                                         <th>Created Date</th>
                                         <th>Actions</th>
                                     </tr>
@@ -341,17 +335,33 @@
                                         <td>
                                             <input type="checkbox" name="selected_orders[]" value="{{ $order->id }}" class="order-checkbox rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50">
                                         </td>
+                                        <td>{{ $order->orderMapping->internal_id ?? 'N/A' }}</td>
                                         <td>{{ $order->external_id }}</td>
-                                        <td>{{ $order->first_name }} {{ $order->last_name }}</td>
-                                        <td>{{ $order->buyer_email }}</td>
+                                        <td>{{ $order->creator->first_name }} {{ $order->creator->last_name }}</td>
+                                        <td>{{ $order->creator->email }}</td>
                                         <td>{{ $order->warehouse }}</td>
+                                        <td>${{ number_format($order->items->sum(function($item) {
+                                            return (float)$item->print_price * (int)$item->quantity;
+                                        }), 2) }}</td>
                                         <td>
-                                            <span class="status-badge bg-{{ 
-                                                $order->status === 'processed' ? 'green-100 text-green-700' : 
-                                                ($order->status === 'pending' ? 'yellow-100 text-yellow-700' : 
-                                                ($order->status === 'cancelled' ? 'red-100 text-red-700' : 
-                                                ($order->status === 'on hold' ? 'blue-100 text-blue-700' : 'gray-100 text-gray-700'))) 
-                                            }}">
+                                            @php
+                                            if ($order->status === 'processed') {
+                                            $statusClass = 'green-100 text-green-700';
+                                            } elseif ($order->status === 'pending') {
+                                            $statusClass = 'yellow-100 text-yellow-700';
+                                            } elseif ($order->status === 'cancelled') {
+                                            $statusClass = 'red-100 text-red-700';
+                                            } elseif ($order->status === 'Shipped') {
+                                            $statusClass = 'green-100 text-green-700';
+                                            } elseif ($order->status === 'failed') {
+                                            $statusClass = 'red-100 text-red-700';
+                                            } elseif ($order->status === 'on hold') {
+                                            $statusClass = 'blue-100 text-blue-700';
+                                            } else {
+                                            $statusClass = 'gray-100 text-gray-700';
+                                            }
+                                            @endphp
+                                            <span class="status-badge bg-{{ $statusClass }}">
                                                 {{ ucfirst($order->status) }}
                                             </span>
                                             <br>
@@ -367,18 +377,26 @@
                                                 @endif
                                             </span>
                                         </td>
-                                        <td>${{ number_format($order->items->sum(function($item) {
-                                            return (float)$item->print_price * (int)$item->quantity;
-                                        }), 2) }}</td>
+                                        <td>{{ $order->tracking_number }}</td>
                                         <td>{{ $order->created_at->format('d/m/Y H:i') }}</td>
                                         <td>
-                                            <a href="{{ route('admin.orders.show', $order->id) }}" class="btn btn-primary">
-                                                <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
-                                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
-                                                </svg>
-                                                View
-                                            </a>
+                                            <div class="flex items-center gap-2">
+                                                <a href="{{ route('admin.orders.show', $order->id) }}" class="btn btn-primary">
+                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15 12a3 3 0 11-6 0 3 3 0 016 0z" />
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M2.458 12C3.732 7.943 7.523 5 12 5c4.478 0 8.268 2.943 9.542 7-1.274 4.057-5.064 7-9.542 7-4.477 0-8.268-2.943-9.542-7z" />
+                                                    </svg>
+                                                    View
+                                                </a>
+                                                @if($order->warehouse === 'US' && $order->status === 'processed')
+                                                <button onclick="editDtfOrder('{{ $order->orderMapping->internal_id }}')" class="btn btn-secondary">
+                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
+                                                    </svg>
+                                                    Edit
+                                                </button>
+                                                @endif
+                                            </div>
                                         </td>
                                     </tr>
 
@@ -602,5 +620,103 @@
             }
         });
     });
+
+    function editDtfOrder(orderId) {
+        Swal.fire({
+            title: 'Edit DTF Order',
+            html: `
+                <form id="editOrderForm" class="text-left">
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700">Channel</label>
+                        <input type="text" id="channel" name="channel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700">Buyer Email</label>
+                        <input type="email" id="buyer_email" name="buyer_email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    </div>
+                    <div class="mb-4">
+                        <label class="block text-sm font-medium text-gray-700">Shipping Address</label>
+                        <div class="grid grid-cols-2 gap-4">
+                            <input type="text" id="firstName" name="shipping_address[firstName]" placeholder="First Name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <input type="text" id="lastName" name="shipping_address[lastName]" placeholder="Last Name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <input type="text" id="company" name="shipping_address[company]" placeholder="Company" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <input type="text" id="address1" name="shipping_address[address1]" placeholder="Address 1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <input type="text" id="address2" name="shipping_address[address2]" placeholder="Address 2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <input type="text" id="city" name="shipping_address[city]" placeholder="City" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <input type="text" id="state" name="shipping_address[state]" placeholder="State" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <input type="text" id="postcode" name="shipping_address[postcode]" placeholder="Postcode" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <input type="text" id="country" name="shipping_address[country]" placeholder="Country" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <input type="text" id="phone1" name="shipping_address[phone1]" placeholder="Phone 1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                            <input type="text" id="phone2" name="shipping_address[phone2]" placeholder="Phone 2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                        </div>
+                    </div>
+                </form>
+            `,
+            showCancelButton: true,
+            confirmButtonText: 'Update',
+            cancelButtonText: 'Cancel',
+            showLoaderOnConfirm: true,
+            preConfirm: async () => {
+                const form = document.getElementById('editOrderForm');
+                const formData = new FormData(form);
+                const data = {};
+
+                // Chỉ lấy những trường có giá trị
+                for (let [key, value] of formData.entries()) {
+                    if (value.trim() !== '') {
+                        if (key.startsWith('shipping_address[')) {
+                            const field = key.match(/\[(.*?)\]/)[1];
+                            if (!data.shipping_address) {
+                                data.shipping_address = {};
+                            }
+                            data.shipping_address[field] = value;
+                        } else {
+                            data[key] = value;
+                        }
+                    }
+                }
+
+                // Nếu không có dữ liệu nào được nhập
+                if (Object.keys(data).length === 0) {
+                    Swal.showValidationMessage('Vui lòng nhập ít nhất một trường để cập nhật');
+                    return false;
+                }
+
+                try {
+                    const response = await fetch(`/admin/api/dtf/orders/${orderId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                            'Accept': 'application/json'
+                        },
+                        body: JSON.stringify(data)
+                    });
+
+                    if (!response.ok) {
+                        const errorData = await response.json();
+                        throw new Error(errorData.message || 'Failed to update order');
+                    }
+
+                    const result = await response.json();
+                    return result;
+                } catch (error) {
+                    console.error('Update error:', error);
+                    Swal.showValidationMessage(`Request failed: ${error.message}`);
+                    return false;
+                }
+            }
+        }).then((result) => {
+            if (result.isConfirmed) {
+                Swal.fire({
+                    icon: 'success',
+                    title: 'Success',
+                    text: 'Order updated successfully'
+                }).then(() => {
+                    window.location.reload();
+                });
+            }
+        });
+    }
 </script>
 @endsection

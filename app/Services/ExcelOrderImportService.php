@@ -22,12 +22,14 @@ class ExcelOrderImportService
 {
     private function getPositionTitle(string $position): string
     {
+        // Chỉ xử lý UK format, US format sẽ giữ nguyên
         return match ($position) {
             'Front' => 'Printing Front Side',
             'Back' => 'Printing Back Side',
             'Left sleeve' => 'Printing Left Sleeve Side',
             'Right sleeve' => 'Printing Right Sleeve Side',
-            'Hem' => 'Printing Hem Side'
+            'Hem' => 'Printing Hem Side',
+            default => $position // Giữ nguyên cho US format hoặc các trường hợp khác
         };
     }
 
@@ -165,10 +167,20 @@ class ExcelOrderImportService
             }
 
             foreach ($positions as $index => $position) {
+                // Xử lý title dựa trên warehouse
+                $title = '';
+                if ($importFile->warehouse === 'UK') {
+                    // UK: Chuyển đổi position thành title
+                    $title = $this->getPositionTitle($position);
+                } else {
+                    // US: Giữ nguyên position
+                    $title = $position;
+                }
+
                 if (!empty($mockupUrls[$index])) {
                     ExcelOrderMockup::create([
                         'excel_order_item_id' => $orderItem->id,
-                        'title' => $this->getPositionTitle($position),
+                        'title' => $title,
                         'url' => $mockupUrls[$index]
                     ]);
                 }
@@ -176,7 +188,7 @@ class ExcelOrderImportService
                 if (!empty($designUrls[$index])) {
                     ExcelOrderDesign::create([
                         'excel_order_item_id' => $orderItem->id,
-                        'title' => $this->getPositionTitle($position),
+                        'title' => $title,
                         'url' => $designUrls[$index]
                     ]);
                 }
@@ -503,7 +515,9 @@ class ExcelOrderImportService
     public function validateRows(array $rows, ImportFile $importFile): array
     {
         $errors = [];
-        $validPositions = ['Front', 'Back', 'Left sleeve', 'Right sleeve', 'Hem'];
+        $validPositionsUK = ['Front', 'Back', 'Left sleeve', 'Right sleeve', 'Hem'];
+        $validPositionsUS = ['Front', 'Back', 'Right Sleeve', 'Left Sleeve', 'Special'];
+        $validSizes = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
         $validImageMimeTypes = ['image/jpeg', 'image/png', 'image/jpg'];
         $externalIds = [];
 
@@ -524,6 +538,47 @@ class ExcelOrderImportService
                 }
             }
             return false;
+        };
+
+        // Hàm kiểm tra SKU và warehouse
+        $validateSkuAndWarehouse = function ($sku, $warehouse, $excelRow) {
+            $skuParts = explode('-', $sku);
+            $skuSuffix = end($skuParts);
+
+            if ($skuSuffix === 'UK' && $warehouse !== 'UK') {
+                return "Row $excelRow: SKU '$sku' is for UK warehouse but selected warehouse is $warehouse";
+            }
+            if ($skuSuffix === 'US' && $warehouse !== 'US') {
+                return "Row $excelRow: SKU '$sku' is for US warehouse but selected warehouse is $warehouse";
+            }
+            return null;
+        };
+
+        // Hàm kiểm tra position dựa trên warehouse
+        $validatePosition = function ($position, $warehouse, $excelRow, $positionCol) use ($validPositionsUK, $validPositionsUS, $validSizes) {
+            if ($warehouse === 'UK') {
+                if (!in_array($position, $validPositionsUK)) {
+                    return "Row $excelRow: Invalid print position at column $positionCol: '$position'. Valid values for UK warehouse are: " . implode(', ', $validPositionsUK);
+                }
+            } elseif ($warehouse === 'US') {
+                // Kiểm tra format size-side cho US
+                $parts = explode('-', $position);
+                if (count($parts) !== 2) {
+                    return "Row $excelRow: Invalid print position format at column $positionCol: '$position'. For US warehouse, position must be in format 'size-side' (e.g., S-Front, L-Left Sleeve).";
+                }
+
+                $size = $parts[0];
+                $side = $parts[1];
+
+                if (!in_array($size, $validSizes)) {
+                    return "Row $excelRow: Invalid size '$size' in position at column $positionCol. Valid sizes are: " . implode(', ', $validSizes);
+                }
+
+                if (!in_array($side, $validPositionsUS)) {
+                    return "Row $excelRow: Invalid side '$side' in position at column $positionCol. Valid sides for US warehouse are: " . implode(', ', $validPositionsUS);
+                }
+            }
+            return null;
         };
 
         foreach ($rows as $index => $row) {
@@ -585,7 +640,16 @@ class ExcelOrderImportService
             if (empty($sku)) {
                 $rowErrors[] = "Row $excelRow: Missing product code (SKU).";
             } else {
-                $variant = ProductVariant::where('sku', $sku)->first();
+                // Kiểm tra SKU và warehouse
+                $skuError = $validateSkuAndWarehouse($sku, $importFile->warehouse, $excelRow);
+                if ($skuError) {
+                    $rowErrors[] = $skuError;
+                }
+
+                $variant = ProductVariant::where('sku', $sku)
+                    ->orWhere('twofifteen_sku', $sku)
+                    ->orWhere('flashship_sku', $sku)
+                    ->first();
                 if (!$variant) {
                     $rowErrors[] = "Row $excelRow: Product code (SKU) does not exist in the system: '$sku'.";
                 }
@@ -608,8 +672,11 @@ class ExcelOrderImportService
                 if (!empty($row[$positionCol])) {
                     $hasPosition = true;
                     $position = trim($row[$positionCol]);
-                    if (!in_array($position, $validPositions)) {
-                        $rowErrors[] = "Row $excelRow: Invalid print position at column $positionCol: '$position'. Valid values are: " . implode(', ', $validPositions);
+
+                    // Kiểm tra position dựa trên warehouse
+                    $positionError = $validatePosition($position, $importFile->warehouse, $excelRow, $positionCol);
+                    if ($positionError) {
+                        $rowErrors[] = $positionError;
                     }
                 }
 

@@ -20,68 +20,63 @@
         </div>
     </div>
     <div
-        class="max-w-7xl  mx-auto bg-white p-6 mb-10 shadow-md rounded-lg product-sans-regular">
+        class="max-w-7xl mx-auto bg-white p-6 mb-10 shadow-md rounded-lg product-sans-regular">
         <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
-            <!-- Hình ảnh sản phẩm -->
-
+            <!-- Product Images -->
             <div id="gallery" class="relative w-full">
                 <!-- Main image -->
                 <div class="relative h-56 overflow-hidden rounded-lg md:h-96">
                     <img
                         id="main-image"
-                        src="{{ asset($product->images->first()->image_url) }}"
+                        src="{{ $product->images->isNotEmpty() ? asset($product->images->first()->image_url) : asset('images/placeholder.jpg') }}"
                         class="absolute block w-full h-full object-contain -translate-x-1/2 -translate-y-1/2 top-1/2 left-1/2"
                         alt="{{ $product->name }}" />
                 </div>
-
                 <!-- Thumbnails -->
                 <div class="flex gap-4 mt-4 custom-scrollbar overflow-x-auto">
                     @foreach ($product->images as $image)
                     <img
                         onclick="showImage(this)"
                         src="{{ asset($image->image_url) }}"
-                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition thumbnail-active"
-                        alt="{{ $product->name }}" />
+                        class="w-20 h-20 object-cover rounded cursor-pointer hover:opacity-75 transition"
+                        alt="Thumbnail of {{ $product->name }}" />
                     @endforeach
-
                 </div>
             </div>
-            <!-- Thông tin sản phẩm -->
+            <!-- Product Information -->
             <div>
                 <h2 class="text-gray-600 text-sm uppercase">{{ $product->category->name }}</h2>
-                <h1 class="text-2xl font-bold text-gray-800 font-serif">
-                    {{ $product->name }}
-                </h1>
+                <h1 class="text-2xl font-bold text-gray-800 font-serif">{{ $product->name }}</h1>
                 <p class="text-gray-500 text-sm font-medium mt-1">
                     <span class="bg-gray-200 px-2 py-1 rounded">SKU: <span id="selected-sku">-</span></span>
                 </p>
                 <p style="color: #f7961d" class="text-2xl mt-2 roboto-bold">
                     Price:
-                    <span>GBP £<span id="total-price-gbp">{{ $product->base_price }}</span></span> |
-                    <span>USD $<span id="total-price-usd">{{ $product->base_price * 1.27 }}</span></span> |
-                    <span>VND ₫<span id="total-price-vnd">{{ $product->base_price * 30894.31 }}</span></span>
+                    @if($product->currency === 'GBP')
+                    <span>GBP £<span id="total-price-gbp">{{ number_format($product->base_price, 2) }}</span></span> |
+                    <span>USD $<span id="total-price-usd">{{ number_format($product->base_price * 1.27, 2) }}</span></span> |
+                    <span>VND ₫<span id="total-price-vnd">{{ number_format($product->base_price * 30894.31, 0) }}</span></span>
+                    @elseif($product->currency === 'USD')
+                    <span>USD $<span id="total-price-usd">{{ number_format($product->base_price, 2) }}</span></span> |
+                    <span>GBP £<span id="total-price-gbp">{{ number_format($product->base_price / 1.27, 2) }}</span></span> |
+                    <span>VND ₫<span id="total-price-vnd">{{ number_format($product->base_price * 24326.23, 0) }}</span></span>
+                    @endif
                 </p>
                 <p class="text-sm text-gray-500">Fulfillment Location:
-                    @foreach($product->fulfillmentLocations as $fulfillmentLocation)
-                    <span id="fulfillment-location">{{ $fulfillmentLocation->country_code }}</span>
+                    @foreach($product->fulfillmentLocations as $location)
+                    <span id="fulfillment-location">{{ $location->country_code }}</span>
                     @endforeach
                 </p>
-
-
-                <!-- Tùy chọn -->
-
+                <!-- Product Attributes -->
                 @foreach($groupedAttributes as $name => $values)
                 <div class="mt-4">
                     <label
                         style="color: #005366"
                         class="block text-gray-700 font-semibold">{{ $name }}</label>
                     <select
-                        name="{{ strtolower(str_replace(' ', '_', $name)) }}"
+                        name="{{ strtolower(str_replace(' ', '-', $name)) }}"
                         onchange="findMatchingVariant()"
-                        class="attribute-select bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg
-                   focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5
-                   dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400
-                   dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
+                        class="attribute-select bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
                         <option value="">Choose {{ $name }}</option>
                         @foreach($values as $value)
                         <option value="{{ $value }}">{{ $value }}</option>
@@ -89,11 +84,7 @@
                     </select>
                 </div>
                 @endforeach
-
-
-
-
-                <!-- Vận chuyển -->
+                <!-- Shipping Method -->
                 <div class="mt-6">
                     <label
                         style="color: #005366"
@@ -101,44 +92,28 @@
                     <select
                         id="shipping-method"
                         onchange="updateShippingPrice()"
-                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5 dark:bg-gray-700 dark:border-gray-600 dark:placeholder-gray-400 dark:text-white dark:focus:ring-blue-500 dark:focus:border-blue-500">
-                        <option selected value="">Select Shipping Method</option>
-                        <option value="tiktok_1st">Ship by Tiktok - 1 item</option>
-                        <option value="tiktok_next">Ship by Tiktok - 2 items</option>
+                        class="bg-gray-50 border border-gray-300 text-gray-900 text-sm rounded-lg focus:ring-blue-500 focus:border-blue-500 block w-full p-2.5">
+                        <option value="">Select Shipping Method</option>
+                        <option value="tiktok_1st">Ship by TikTok - 1 item</option>
+                        <option value="tiktok_next">Ship by TikTok - 2 items</option>
                         <option value="seller_1st">Ship by Seller - 1 item</option>
                         <option value="seller_next">Ship by Seller - 2 items</option>
                     </select>
                 </div>
-
-
-
-                <!-- Nút hành động -->
-
-                <!-- Chia sẻ -->
             </div>
         </div>
     </div>
     <div
         class="max-w-5xl mx-auto p-4 border rounded-lg shadow-sm product-sans-regular mb-10">
         <!-- Tabs -->
-        <div class="flex ">
-            <button style="border-bottom: 2px solid #f7961d" class="px-4 py-2">
-                Product Information
-            </button>
-
+        <div class="flex">
+            <button style="padding: 1rem 1.5rem; border-bottom: 2px solid #d97706" class="active">Product Information</button>
+            <button style="padding: 1rem 1.5rem; border-bottom: 2px solid #d97706">Product Description</button>
         </div>
-
         <!-- Content -->
         <div class="p-6">
-            <h2 class="text-lg font-semibold text-gray-800">
-                PRODUCT DESCRIPTION
-            </h2>
-            <p class="mt-2 text-gray-600">
-                {{ $product->description }}
-            </p>
-
-
-
+            <h2 class="text-lg font-semibold text-gray-800">PRODUCT DESCRIPTION</h2>
+            <p class="mt-2 text-gray-600">{{ $product->description }}</p>
             <!-- Download Button -->
             <div class="mt-6">
                 <a href="{{ $product->template_link }}" target="_blank" class="relative inline-flex items-center justify-center p-0.5 mb-2 me-2 overflow-hidden text-sm font-medium text-gray-900 rounded-lg group bg-gradient-to-br from-pink-500 to-orange-400 group-hover:from-pink-500 group-hover:to-orange-400 hover:text-white dark:text-white focus:ring-4 focus:outline-none focus:ring-pink-200 dark:focus:ring-pink-800">
@@ -151,128 +126,127 @@
     </div>
 </section>
 <script>
+    // Thumbnail gallery functionality
     function showImage(thumbnail) {
-        // Cập nhật ảnh chính
-        const mainImage = document.getElementById("main-image");
+        const mainImage = document.getElementById('main-image');
         mainImage.src = thumbnail.src;
-
-        // Xóa class active từ tất cả thumbnails
-        const thumbnails = document.querySelectorAll(".custom-scrollbar img");
-        thumbnails.forEach((thumb) => {
-            thumb.classList.remove("thumbnail-active");
+        document.querySelectorAll('.custom-scrollbar img').forEach(thumb => {
+            thumb.classList.remove('thumbnail-active');
         });
-
-        // Thêm class active cho thumbnail được chọn
-        thumbnail.classList.add("thumbnail-active");
+        thumbnail.classList.add('thumbnail-active');
     }
 
-    // Khởi tạo thumbnail đầu tiên là active
-    document.addEventListener("DOMContentLoaded", function() {
-        const firstThumbnail = document.querySelector(".custom-scrollbar img");
+    // Initialize first thumbnail
+    document.addEventListener('DOMContentLoaded', () => {
+        const firstThumbnail = document.querySelector('.custom-scrollbar img');
         if (firstThumbnail) {
+            firstThumbnail.classList.add('thumbnail-active');
             showImage(firstThumbnail);
         }
     });
 
-    // Khởi tạo dữ liệu variants từ PHP
-    var variants = @json($product->variants);
-    var basePrice = {
-        gbp: {{ $product->base_price }}, // Base price in GBP
-        usd: {{ $product->base_price * 1.27 }}, // Convert to USD (approximate rate from data)
-        vnd: {{ $product->base_price * 30894.31 }} // Convert to VND (approximate rate from data)
+    // Initialize variants and base price
+    const variants = @json($product->variants);
+    const basePrice = {
+        @if($product->currency === 'GBP')
+            gbp: {{ $product->base_price }},
+            usd: {{ $product->base_price * 1.34 }},
+            vnd: {{ $product->base_price * 35078.0 }}
+        @elseif($product->currency === 'USD')
+            usd: {{ $product->base_price }},
+            gbp: {{ $product->base_price / 1.34 }},
+            vnd: {{ $product->base_price * 26128.0 }}
+        @endif
     };
 
+    // Update price display
+    function updatePrices(prices) {
+        document.getElementById('total-price-gbp').textContent = prices.gbp.toFixed(2);
+        document.getElementById('total-price-usd').textContent = prices.usd.toFixed(2);
+        document.getElementById('total-price-vnd').textContent = Math.round(prices.vnd).toLocaleString('vi-VN');
+    }
+
+    // Find matching variant based on selected attributes
     function findMatchingVariant() {
-        var selectedValues = {};
-        var selects = document.querySelectorAll('.attribute-select');
-        
-        selects.forEach(function(select) {
-            var name = select.name.replace(/_/g, ' ').replace(/\b\w/g, function(l) { 
-                return l.toUpperCase(); 
-            });
+        const selectedValues = {};
+        const selects = document.querySelectorAll('.attribute-select');
+
+        selects.forEach(select => {
+            const name = select.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
             selectedValues[name] = select.value;
         });
 
-        var allSelected = Object.values(selectedValues).every(function(value) {
-            return value !== '';
-        });
+        const allSelected = Object.values(selectedValues).every(value => value !== '');
+        const skuElement = document.getElementById('selected-sku');
 
-        var skuElement = document.getElementById('selected-sku');
         if (!allSelected) {
             skuElement.textContent = '-';
+            updatePrices(basePrice);
             return null;
         }
 
-        var matchingVariant = variants.find(function(variant) {
-            return variant.attributes.every(function(attr) {
-                return selectedValues[attr.name] === attr.value;
-            });
+        const matchingVariant = variants.find(variant => {
+            return variant.attributes.every(attr => selectedValues[attr.name] === attr.value);
         });
 
         if (matchingVariant) {
-            skuElement.textContent = matchingVariant.sku;
+            skuElement.textContent = matchingVariant.sku || '-';
             return matchingVariant;
         } else {
             skuElement.textContent = 'No matching variant found';
+            updatePrices(basePrice);
             return null;
         }
     }
 
+    // Update shipping price based on selected variant and shipping method
     function updateShippingPrice() {
-        var currentVariant = findMatchingVariant();
+        const currentVariant = findMatchingVariant();
+        const shippingMethod = document.getElementById('shipping-method').value;
+
         if (!currentVariant) {
             alert('Please select all product options');
             document.getElementById('shipping-method').value = '';
-            document.getElementById('total-price-gbp').textContent = basePrice.gbp.toFixed(2);
-            document.getElementById('total-price-usd').textContent = basePrice.usd.toFixed(2);
-            document.getElementById('total-price-vnd').textContent = basePrice.vnd.toFixed(0);
+            updatePrices(basePrice);
             return;
         }
 
-        var shippingMethod = document.getElementById('shipping-method').value;
-        
         if (!shippingMethod) {
-            document.getElementById('total-price-gbp').textContent = basePrice.gbp.toFixed(2);
-            document.getElementById('total-price-usd').textContent = basePrice.usd.toFixed(2);
-            document.getElementById('total-price-vnd').textContent = basePrice.vnd.toFixed(0);
+            updatePrices(basePrice);
             return;
         }
 
-        var shippingPrice = currentVariant.shipping_prices.find(function(price) {
-            return price.method === shippingMethod;
-        });
+        const shippingPrice = currentVariant.shipping_prices.find(price => price.method === shippingMethod);
 
         if (shippingPrice) {
-            var total = {
-                gbp:  parseFloat(shippingPrice.price_gbp),
-                usd:  parseFloat(shippingPrice.price_usd),
-                vnd:    parseFloat(shippingPrice.price_vnd)
+            const total = {
+                @if($product->currency === 'GBP')
+                    gbp:parseFloat(shippingPrice.price_gbp || 0),
+                    usd: parseFloat(shippingPrice.price_usd || 0),
+                    vnd:  parseFloat(shippingPrice.price_vnd || 0)
+                @elseif($product->currency === 'USD')
+                    usd: parseFloat(shippingPrice.price_usd || 0),
+                    gbp: parseFloat(shippingPrice.price_gbp || 0),
+                    vnd:  parseFloat(shippingPrice.price_vnd || 0)
+                @endif
             };
-            
-            document.getElementById('total-price-gbp').textContent = total.gbp.toFixed(2);
-            document.getElementById('total-price-usd').textContent = total.usd.toFixed(2);
-            document.getElementById('total-price-vnd').textContent = total.vnd.toFixed(0);
+            updatePrices(total);
+        } else {
+            updatePrices(basePrice);
         }
     }
 
-    // Event listeners cho attribute selects
-    document.querySelectorAll('.attribute-select').forEach(function(select) {
-        select.addEventListener('change', function() {
-            findMatchingVariant(); // Cập nhật SKU
-            // Reset shipping
-            document.getElementById('shipping-method').value = '';
-            document.getElementById('total-price-gbp').textContent = basePrice.gbp.toFixed(2);
-            document.getElementById('total-price-usd').textContent = basePrice.usd.toFixed(2);
-            document.getElementById('total-price-vnd').textContent = basePrice.vnd.toFixed(0);
+    // Initialize event listeners
+    document.addEventListener('DOMContentLoaded', () => {
+        document.querySelectorAll('.attribute-select').forEach(select => {
+            select.addEventListener('change', () => {
+                findMatchingVariant();
+                document.getElementById('shipping-method').value = '';
+                updatePrices(basePrice);
+            });
         });
-    });
-
-    // Khởi tạo ban đầu
-    document.addEventListener('DOMContentLoaded', function() {
         findMatchingVariant();
-        document.getElementById('total-price-gbp').textContent = basePrice.gbp.toFixed(2);
-        document.getElementById('total-price-usd').textContent = basePrice.usd.toFixed(2);
-        document.getElementById('total-price-vnd').textContent = basePrice.vnd.toFixed(0);
+        updatePrices(basePrice);
     });
 </script>
 @endsection

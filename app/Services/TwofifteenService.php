@@ -27,7 +27,7 @@ class TwofifteenService
             'sort'   => 'created_at',
             'order'  => 'desc',
             'page'   => 1,
-            'per_page' => count($internalIds),
+            'limit' => count($internalIds),
         ];
         $params['Signature'] = sha1(http_build_query($params) . $config['secretKey']);
         $url = "{$config['apiUrl']}/orders.php?" . http_build_query($params);

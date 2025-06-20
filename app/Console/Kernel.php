@@ -24,6 +24,7 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('orders:update-status')->everyMinute();
         $schedule->command('orders:update-tracking-numbers')->dailyAt('01:00');
+        $schedule->command('orders:update-dtf-tracking-numbers')->dailyAt('02:00');
     }
 }
 //* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1

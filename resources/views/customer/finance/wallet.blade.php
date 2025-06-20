@@ -99,7 +99,7 @@
                                 <div class="bg-blue-50 p-4 rounded-lg mb-6">
                                     <div class="flex items-center gap-2">
                                         <span class="text-sm text-gray-700">
-                                            Min top up: $1.00 ↔ {{ number_format($usdToVndRate, 2, '.', ',') }}đ
+                                            Exchange rate today: $1.00 ↔ {{ number_format($usdToVndRate, 2, '.', ',') }}đ
                                         </span>
                                     </div>
                                 </div>
@@ -241,8 +241,8 @@
                                                 <div class="space-y-4">
                                                     <div>
                                                         <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Amount (USD)</label>
-                                                        <input name="amount" type="number" step="0.01"  x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
-                                                        <p class="text-sm text-gray-500">* Minimum top up amount is $1.00</p>
+                                                        <input name="amount" type="number" step="0.01" x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
+                                                        <p class="text-sm text-gray-500">* Minimum top up amount is $10.00</p>
                                                     </div>
                                                     @error('amount')
                                                     <div class="text-red-500 text-sm">
@@ -346,8 +346,8 @@
                                                 <div class="space-y-4">
                                                     <div>
                                                         <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Amount (USD)</label>
-                                                        <input name="amount" type="number" step="0.01"  x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
-                                                        <p class="text-sm text-gray-500">* Minimum top up amount is $1.00</p>
+                                                        <input name="amount" type="number" step="0.01" x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
+                                                        <p class="text-sm text-gray-500">* Minimum top up amount is $10.00</p>
                                                     </div>
                                                     @error('amount')
                                                     <div class="text-red-500 text-sm">
@@ -484,7 +484,7 @@
                                                     <div>
                                                         <label class="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-400">Amount (USD)</label>
                                                         <input name="amount" type="number" step="0.01" x-model="form.amount" class="h-11 w-full rounded-lg border bg-transparent px-4 py-2.5 text-sm text-gray-800 dark:bg-gray-900 dark:text-white/90" required>
-                                                        <p class="text-sm text-gray-500">* Minimum top up amount is $1.00</p>
+                                                        <p class="text-sm text-gray-500">* Minimum top up amount is $10.00</p>
                                                     </div>
                                                     @error('amount')
                                                     <div class="text-red-500 text-sm">
@@ -580,7 +580,7 @@
                 <div class="mt-3 flex items-end justify-between">
                     <div>
                         <h4 class="text-2xl font-bold text-gray-800 dark:text-white/90">
-                            {{ number_format($totalBalance, 0, ',', '.') }} USD
+                            {{ number_format($totalBalance, 2, '.', '') }} USD
                         </h4>
                     </div>
 
@@ -598,7 +598,7 @@
                 <div class="mt-3 flex items-end justify-between">
                     <div>
                         <h4 class="text-2xl font-bold text-gray-800 dark:text-white/90">
-                            {{ number_format($availableBalance, 0, ',', '.') }} USD
+                            {{ number_format($availableBalance, 2, '.', '') }} USD
                         </h4>
                     </div>
 
@@ -613,7 +613,7 @@
                 <div class="mt-3 flex items-end justify-between">
                     <div>
                         <h4 class="text-2xl font-bold text-gray-800 dark:text-white/90">
-                            {{ number_format($holdAmount, 0, ',', '.') }} USD
+                            {{ number_format($holdAmount, 2, '.', '') }} USD
                         </h4>
                     </div>
 
@@ -629,7 +629,7 @@
                 <div class="mt-3 flex items-end justify-between">
                     <div>
                         <h4 class="text-2xl font-bold text-gray-800 dark:text-white/90">
-                            {{ number_format($creditAmount, 0, ',', '.') }} USD
+                            {{ number_format($creditAmount, 2, '.', '') }} USD
                         </h4>
                     </div>
 
@@ -699,7 +699,7 @@
                                 <td class="px-6 py-3.5">
                                     @if($transaction->isRefund())
                                     <p class="text-theme-sm text-warning-500">
-                                         + {{ number_format($transaction->amount, 2) }} USD
+                                        + {{ number_format($transaction->amount, 2) }} USD
                                     </p>
                                     @else
                                     <p class="text-theme-sm {{ $transaction->type == 'topup' ? 'text-success-600' : 'text-error-500' }}">

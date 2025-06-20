@@ -12,6 +12,7 @@ use App\Helpers\UrlHelper;
 use App\Models\OrderMapping;
 use Illuminate\Support\Facades\Http;
 use Carbon\Carbon;
+use App\Models\User;
 
 class OrderUploadController extends Controller
 {
@@ -19,22 +20,11 @@ class OrderUploadController extends Controller
     // private $brickApiService;
 
     protected $apiServices = [
+        'dtf' => [
+            'apiUrl' => '',
+            'bearerToken' => '',
+        ],
         'twofifteen' => [
-            'apiUrl' => '',
-            'appId' => '',
-            'secretKey' => '',
-        ],
-        'prinful' => [
-            'apiUrl' => '',
-            'appId' => '',
-            'secretKey' => '',
-        ],
-        'dtg' => [
-            'apiUrl' => '',
-            'appId' => '',
-            'secretKey' => '',
-        ],
-        'lenful' => [
             'apiUrl' => '',
             'appId' => '',
             'secretKey' => '',
@@ -43,40 +33,28 @@ class OrderUploadController extends Controller
 
     public function __construct()
     {
-        // Xóa phần khởi tạo BrickApiService nếu có
         $this->apiServices = [
+            'dtf' => [
+                'apiUrl' => config('services.dtf.api_url'),
+                'bearerToken' => config('services.dtf.bearer_token'),
+            ],
             'twofifteen' => [
                 'apiUrl' => config('services.twofifteen.api_url'),
                 'appId' => config('services.twofifteen.app_id'),
                 'secretKey' => config('services.twofifteen.secret_key'),
-            ],
-            'prinful' => [
-                'apiUrl' => config('services.prinful.api_url'),
-                'appId' => config('services.prinful.app_id'),
-                'secretKey' => config('services.prinful.secret_key'),
-            ],
-            'dtg' => [
-                'apiUrl' => config('services.dtg.api_url'),
-                'appId' => config('services.dtg.app_id'),
-                'secretKey' => config('services.dtg.secret_key'),
-            ],
-            'lenful' => [
-                'apiUrl' => config('services.lenful.api_url'),
-                'appId' => config('services.lenful.app_id'),
-                'secretKey' => config('services.lenful.secret_key'),
             ],
         ];
     }
 
     private function buildOrderData($order)
     {
-        // Kiểm tra dữ liệu đơn hàng
+        // Check for empty order items
         if ($order->items->isEmpty()) {
             Log::warning("Order {$order->external_id} has no items");
-            throw new \Exception("Đơn hàng {$order->external_id} không có items");
+            throw new \Exception("Order {$order->external_id} has no items");
         }
 
-        // Kiểm tra tính hợp lệ của items
+        // Validate items
         foreach ($order->items as $item) {
             if (!$item->quantity || $item->mockups->isEmpty() || $item->designs->isEmpty()) {
                 Log::warning("Invalid item in order {$order->external_id}", [
@@ -84,66 +62,116 @@ class OrderUploadController extends Controller
                     'mockups_count' => $item->mockups->count(),
                     'designs_count' => $item->designs->count(),
                 ]);
-                throw new \Exception("Item không hợp lệ trong đơn hàng {$order->external_id}");
+                throw new \Exception("Invalid item in order {$order->external_id}");
             }
 
-            // Kiểm tra URL hợp lệ
+            // Validate mockup URLs
             foreach ($item->mockups as $mockup) {
                 if (!filter_var($mockup->url, FILTER_VALIDATE_URL)) {
                     Log::warning("Invalid mockup URL in order {$order->external_id}", ['url' => $mockup->url]);
-                    throw new \Exception("URL mockup không hợp lệ trong đơn hàng {$order->external_id}");
+                    throw new \Exception("Invalid mockup URL in order {$order->external_id}");
                 }
             }
             foreach ($item->designs as $design) {
                 if (!filter_var($design->url, FILTER_VALIDATE_URL)) {
                     Log::warning("Invalid design URL in order {$order->external_id}", ['url' => $design->url]);
-                    throw new \Exception("URL design không hợp lệ trong đơn hàng {$order->external_id}");
+                    throw new \Exception("Invalid design URL in order {$order->external_id}");
                 }
             }
         }
 
-        $orderData = [
-            'external_id' => $order->external_id,
-            'brand' => $order->brand,
-            'channel' => $order->channel,
-            'buyer_email' => $order->buyer_email,
-            'shipping_address' => [
-                'firstName' => $order->first_name,
-                'lastName' => $order->last_name,
-                'company' => $order->company,
-                'address1' => $order->address1,
-                'address2' => $order->address2,
-                'city' => $order->city,
-                'county' => $order->county,
-                'postcode' => $order->post_code,
-                'country' => $order->country,
-                'phone1' => $order->phone1,
-                'phone2' => $order->phone2
-            ],
-            'shipping' => [
-                'shippingMethod' => $order->shipping_method ?? null,
-            ],
-            'items' => $order->items->map(function ($item) {
-                return [
-                    'pn' => $item->part_number,
-                    'quantity' => (int) $item->quantity,
-                    'description' => $item->description,
-                    'mockups' => $item->mockups->map(function ($mockup) {
-                        return [
-                            'title' => $mockup->title,
-                            'src' => $mockup->url
-                        ];
-                    })->toArray(),
-                    'designs' => $item->designs->map(function ($design) {
-                        return [
-                            'title' => $design->title,
-                            'src' => $design->url
-                        ];
-                    })->toArray()
-                ];
-            })->toArray(),
-            'comment' => $order->comment
-        ];
+        // Determine factory based on warehouse
+        $factory = strtoupper($order->warehouse) === 'US' ? 'dtf' : 'twofifteen';
+
+        if ($factory === 'dtf') {
+            $orderData = [
+                'external_id' => $order->external_id,
+                'brand' => !empty($order->brand) ? $order->brand : 'HM Fulfill',
+                'channel' => !empty($order->channel) ? $order->channel : 'tiktok',
+                'buyer_email' => !empty($order->buyer_email) ? $order->buyer_email : 'customer@example.com',
+                'shipping_address' => [
+                    'firstName' => $order->first_name,
+                    'lastName' => !empty($order->last_name) ? $order->last_name : '',
+                    'company' => !empty($order->company) ? $order->company : '',
+                    'address1' => !empty($order->address1) ? $order->address1 : '',
+                    'address2' => !empty($order->address2) ? $order->address2 : '',
+                    'city' => !empty($order->city) ? $order->city : '',
+                    'state' => !empty($order->county) ? $order->county : '', // Use county as state
+                    'postcode' => !empty($order->post_code) ? $order->post_code : '',
+                    'country' => !empty($order->country) ? $order->country : '',
+                    'phone1' => !empty($order->phone1) ? $order->phone1 : '',
+                    'phone2' => !empty($order->phone2) ? $order->phone2 : ''
+                ],
+                'items' => $order->items->map(function ($item) {
+                    return [
+                        'product_name' => $item->part_number,
+                        'quantity' => (int) $item->quantity,
+                        'description' => $item->description,
+                        'mockups' => $item->mockups->map(function ($mockup) {
+                            return [
+                                'title' => $mockup->title,
+                                'src' => $mockup->url
+                            ];
+                        })->values()->toArray(),
+                        'designs' => $item->designs->map(function ($design) {
+                            return [
+                                'title' => $design->title,
+                                'src' => $design->url
+                            ];
+                        })->values()->toArray()
+                    ];
+                })->values()->toArray(),
+                'shipping' => [
+                    'shippingMethod' => !empty($order->shipping_method) ? $order->shipping_method : 'Standard',
+                ],
+                'label_url' => !empty($order->comment) ? $order->comment : '',
+                'comments' => ""
+            ];
+        } else {
+            // Twofifteen
+            $orderData = [
+                'external_id' => $order->external_id,
+                'brand' => $order->brand,
+                'channel' => $order->channel,
+                'buyer_email' => $order->buyer_email,
+                'shipping_address' => [
+                    'firstName' => $order->first_name,
+                    'lastName' => $order->last_name,
+                    'company' => $order->company,
+                    'address1' => $order->address1,
+                    'address2' => $order->address2,
+                    'city' => $order->city,
+                    'county' => $order->county,
+                    'postcode' => $order->post_code,
+                    'country' => $order->country,
+                    'phone1' => $order->phone1,
+                    'phone2' => $order->phone2
+                ],
+                'shipping' => [
+                    'shippingMethod' => $order->shipping_method ?? null,
+                ],
+                'items' => $order->items->map(function ($item) {
+                    return [
+                        'pn' => $item->part_number,
+                        'quantity' => (int) $item->quantity,
+                        'description' => $item->description,
+                        'mockups' => $item->mockups->map(function ($mockup) {
+                            return [
+                                'title' => $mockup->title,
+                                'src' => $mockup->url
+                            ];
+                        })->toArray(),
+                        'designs' => $item->designs->map(function ($design) {
+                            return [
+                                'title' => $design->title,
+                                'src' => $design->url
+                            ];
+                        })->toArray()
+                    ];
+                })->toArray(),
+                'comment' => $order->comment
+            ];
+        }
 
         Log::debug("Order Data for {$order->external_id}:", $orderData);
         return $orderData;
@@ -158,7 +186,7 @@ class OrderUploadController extends Controller
         }
 
         // Kiểm tra cấu hình
-        if (empty($config['apiUrl']) || empty($config['appId']) || empty($config['secretKey'])) {
+        if (empty($config['apiUrl'])) {
             Log::error("Incomplete API config for factory {$factory}", $config);
             throw new \Exception("Cấu hình API không đầy đủ cho factory {$factory}");
         }
@@ -169,24 +197,40 @@ class OrderUploadController extends Controller
             throw new \Exception("Lỗi mã hóa JSON: " . json_last_error_msg());
         }
 
-        $signature = sha1($jsonBody . $config['secretKey']);
-        Log::debug("API Config for {$factory}:", [
-            'apiUrl' => $config['apiUrl'],
-            'appId' => $config['appId'],
-            'signature' => $signature
-        ]);
-
-        return [
-            'config' => $config,
-            'headers' => [
-                'Content-Type' => 'application/json',
-                'Accept' => 'application/json'
-            ],
-            'parameters' => [
-                'AppId' => $config['appId'],
-                'Signature' => $signature
-            ]
-        ];
+        // Cấu hình khác nhau cho từng factory
+        if ($factory === 'dtf') {
+            if (empty($config['bearerToken'])) {
+                Log::error("Missing bearer token for DTF API");
+                throw new \Exception("Thiếu bearer token cho DTF API");
+            }
+            return [
+                'config' => $config,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'Authorization' => 'Bearer ' . $config['bearerToken']
+                ],
+                'parameters' => []
+            ];
+        } else {
+            // Twofifteen
+            if (empty($config['appId']) || empty($config['secretKey'])) {
+                Log::error("Missing appId or secretKey for Twofifteen API");
+                throw new \Exception("Thiếu appId hoặc secretKey cho Twofifteen API");
+            }
+            $signature = sha1($jsonBody . $config['secretKey']);
+            return [
+                'config' => $config,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
+                ],
+                'parameters' => [
+                    'AppId' => $config['appId'],
+                    'Signature' => $signature
+                ]
+            ];
+        }
     }
 
     private function processOrderResponse($order, $response, $factory = null)
@@ -260,7 +304,6 @@ class OrderUploadController extends Controller
     {
         try {
             $orderIds = $request->input('order_ids');
-            $factory = $request->input('factory', 'twofifteen');
 
             if (empty($orderIds)) {
                 Log::warning('No order IDs provided in request');
@@ -270,8 +313,7 @@ class OrderUploadController extends Controller
                 ], 400);
             }
 
-            // Thêm log để kiểm tra order IDs
-            Log::info('Processing orders', ['order_ids' => $orderIds, 'factory' => $factory]);
+            Log::info('Processing orders', ['order_ids' => $orderIds]);
 
             $orders = ExcelOrder::with(['items.mockups', 'items.designs'])
                 ->whereIn('id', $orderIds)
@@ -288,13 +330,14 @@ class OrderUploadController extends Controller
             // Log chi tiết về các đơn hàng tìm thấy
             Log::info('Found orders for processing', [
                 'orders_count' => $orders->count(),
-                'orders_summary' => $orders->map(function($order) {
+                'orders_summary' => $orders->map(function ($order) {
                     return [
                         'id' => $order->id,
                         'external_id' => $order->external_id,
+                        'warehouse' => $order->warehouse,
                         'items_count' => $order->items->count(),
                         'items_loaded' => $order->relationLoaded('items'),
-                        'mockups_designs_loaded' => $order->items->every(function($item) {
+                        'mockups_designs_loaded' => $order->items->every(function ($item) {
                             return $item->relationLoaded('mockups') && $item->relationLoaded('designs');
                         })
                     ];
@@ -313,16 +356,184 @@ class OrderUploadController extends Controller
             }
 
             $results = [];
+            $dtfOrders = [];
+            $twofifteenOrders = [];
+
+            // Phân loại đơn hàng theo warehouse
             foreach ($orders as $order) {
                 try {
                     $orderData = $this->buildOrderData($order);
-                    $apiConfig = $this->buildApiConfig($factory, $orderData);
+                    if (strtoupper($order->warehouse) === 'US') {
+                        $dtfOrders[] = $orderData;
+                    } else {
+                        $twofifteenOrders[] = [
+                            'order' => $order,
+                            'data' => $orderData
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Error processing order {$order->external_id}:", [
+                        'message' => $e->getMessage()
+                    ]);
+                    $results[] = [
+                        'order_id' => $order->id,
+                        'external_id' => $order->external_id,
+                        'success' => false,
+                        'message' => "Lỗi xử lý đơn hàng {$order->external_id}: " . $e->getMessage()
+                    ];
+                }
+            }
+
+            // Xử lý đơn hàng DTF
+            if (!empty($dtfOrders)) {
+                try {
+                    $apiConfig = $this->buildApiConfig('dtf', $dtfOrders);
+                    $response = Http::withHeaders($apiConfig['headers'])
+                        ->withQueryParameters($apiConfig['parameters'])
+                        ->post($apiConfig['config']['apiUrl'] . '/api/orders/batch', $dtfOrders);
+
+                    if ($response->successful()) {
+                        $apiResponse = $response->json();
+
+                        // Log cấu trúc response để debug
+                        Log::info('DTF API Response structure:', [
+                            'response_keys' => array_keys($apiResponse),
+                            'orders_count' => isset($apiResponse['orders']) ? count($apiResponse['orders']) : 'no orders key',
+                            'first_order_keys' => isset($apiResponse['orders'][0]) ? array_keys($apiResponse['orders'][0]) : 'no first order'
+                        ]);
+
+                        foreach ($apiResponse['orders'] as $orderResponse) {
+                            $order = $orders->firstWhere('external_id', $orderResponse['external_id']);
+                            if ($order) {
+                                // Kiểm tra và lấy internal_id an toàn - DTF batch response sử dụng 'order_id'
+                                $internalId = $orderResponse['order_id'] ?? $orderResponse['id'] ?? $orderResponse['internal_id'] ?? null;
+
+                                if (!$internalId) {
+                                    Log::error('No internal_id found in DTF response:', [
+                                        'external_id' => $order->external_id,
+                                        'order_response_keys' => array_keys($orderResponse),
+                                        'order_response' => $orderResponse
+                                    ]);
+
+                                    $results[] = [
+                                        'order_id' => $order->id,
+                                        'external_id' => $order->external_id,
+                                        'success' => false,
+                                        'message' => 'Không tìm thấy internal_id trong response DTF'
+                                    ];
+                                    continue;
+                                }
+
+                                $results[] = [
+                                    'order_id' => $order->id,
+                                    'external_id' => $order->external_id,
+                                    'internal_id' => $internalId,
+                                    'factory' => 'dtf',
+                                    'success' => true,
+                                    'message' => 'Tải lên thành công'
+                                ];
+
+                                // Cập nhật trạng thái đơn hàng
+                                $order->markAsProcessed($apiResponse, $internalId, 'dtf');
+
+                                // Lưu mapping vào OrderMapping
+                                OrderMapping::createOrUpdate(
+                                    $order->external_id,
+                                    $internalId,
+                                    'dtf',
+                                    $apiResponse
+                                );
+
+                                Log::info('Order mapping created:', [
+                                    'external_id' => $order->external_id,
+                                    'internal_id' => $internalId,
+                                    'factory' => 'dtf'
+                                ]);
+                            }
+                        }
+                    } else {
+                        foreach ($dtfOrders as $orderData) {
+                            $order = $orders->firstWhere('external_id', $orderData['external_id']);
+                            if ($order) {
+                                $errorResponse = $response->json();
+                                $errorMessage = '';
+
+                                // Xử lý lỗi validation từ API
+                                if (isset($errorResponse['detail']) && is_array($errorResponse['detail'])) {
+                                    $errorMessages = [];
+                                    foreach ($errorResponse['detail'] as $error) {
+                                        $field = implode('.', $error['loc']);
+                                        $errorMessages[] = "{$field}: {$error['msg']}";
+                                    }
+                                    $errorMessage = implode(', ', $errorMessages);
+                                } else {
+                                    $errorMessage = $errorResponse['error'] ?? 'Lỗi không xác định';
+                                }
+
+                                $errorData = [
+                                    'success' => false,
+                                    'error' => $errorMessage,
+                                    'status_code' => $response->status(),
+                                    'timestamp' => now()->toISOString(),
+                                    'api_response' => $errorResponse
+                                ];
+
+                                $order->markAsFailed($errorMessage, $errorData);
+
+                                $results[] = [
+                                    'order_id' => $order->id,
+                                    'external_id' => $order->external_id,
+                                    'success' => false,
+                                    'message' => "Lỗi khi gửi đơn hàng đến DTF: " . $errorMessage
+                                ];
+
+                                Log::error('DTF API Error:', [
+                                    'order_id' => $order->id,
+                                    'external_id' => $order->external_id,
+                                    'error_response' => $errorResponse
+                                ]);
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Error processing DTF batch:", [
+                        'message' => $e->getMessage()
+                    ]);
+                    foreach ($dtfOrders as $orderData) {
+                        $order = $orders->firstWhere('external_id', $orderData['external_id']);
+                        if ($order) {
+                            $errorResponse = [
+                                'success' => false,
+                                'error' => $e->getMessage(),
+                                'status_code' => null,
+                                'timestamp' => now()->toISOString()
+                            ];
+
+                            $order->markAsFailed($e->getMessage(), $errorResponse);
+
+                            $results[] = [
+                                'order_id' => $order->id,
+                                'external_id' => $order->external_id,
+                                'success' => false,
+                                'message' => "Lỗi xử lý đơn hàng {$order->external_id}: " . $e->getMessage()
+                            ];
+                        }
+                    }
+                }
+            }
+
+            // Xử lý đơn hàng Twofifteen
+            foreach ($twofifteenOrders as $orderInfo) {
+                try {
+                    $order = $orderInfo['order'];
+                    $orderData = $orderInfo['data'];
+                    $apiConfig = $this->buildApiConfig('twofifteen', $orderData);
 
                     $response = Http::withHeaders($apiConfig['headers'])
                         ->withQueryParameters($apiConfig['parameters'])
                         ->post($apiConfig['config']['apiUrl'] . '/orders.php', $orderData);
 
-                    $results[] = $this->processOrderResponse($order, $response, $factory);
+                    $results[] = $this->processOrderResponse($order, $response, 'twofifteen');
                 } catch (\Exception $e) {
                     Log::error("Error processing order {$order->external_id}:", [
                         'message' => $e->getMessage()
@@ -663,6 +874,130 @@ class OrderUploadController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'An error occurred while fetching order details'
+            ], 500);
+        }
+    }
+
+    /**
+     * Cập nhật đơn hàng DTF
+     * 
+     * @param Request $request
+     * @param string $orderId UUID của đơn hàng DTF
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function updateDtfOrder(Request $request, $orderId)
+    {
+        try {
+            // 1. Tìm đơn hàng trong OrderMapping
+            $orderMapping = OrderMapping::where('internal_id', $orderId)
+                ->where('factory', 'dtf')
+                ->first();
+
+            if (!$orderMapping) {
+                Log::error('DTF order not found:', ['order_id' => $orderId]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy đơn hàng DTF'
+                ], 404);
+            }
+
+            // 2. Lấy dữ liệu cập nhật từ request
+            $updateData = $request->all();
+            if (empty($updateData)) {
+                Log::warning('No update data provided:', ['order_id' => $orderId]);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không có dữ liệu cập nhật'
+                ], 400);
+            }
+
+            // Log dữ liệu cập nhật
+            Log::info('Updating DTF order:', [
+                'order_id' => $orderId,
+                'external_id' => $orderMapping->external_id,
+                'update_data' => $updateData
+            ]);
+
+            // 3. Gọi API DTF để cập nhật đơn hàng
+            $apiConfig = $this->buildApiConfig('dtf', $updateData);
+
+            // Log cấu hình API
+            Log::info('DTF API config:', [
+                'url' => $apiConfig['config']['apiUrl'] . '/api/orders/' . $orderId,
+                'headers' => $apiConfig['headers']
+            ]);
+
+            $response = Http::withHeaders($apiConfig['headers'])
+                ->withQueryParameters($apiConfig['parameters'])
+                ->put($apiConfig['config']['apiUrl'] . '/api/orders/' . $orderId, $updateData);
+
+            // Log response từ API
+            Log::info('DTF API response:', [
+                'status' => $response->status(),
+                'body' => $response->body()
+            ]);
+
+            if ($response->successful()) {
+                $apiResponse = $response->json();
+
+                // Cập nhật OrderMapping với response mới
+                $orderMapping->update([
+                    'api_response' => $apiResponse
+                ]);
+
+                Log::info('DTF order updated successfully:', [
+                    'order_id' => $orderId,
+                    'external_id' => $orderMapping->external_id,
+                    'update_data' => $updateData
+                ]);
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Cập nhật đơn hàng thành công',
+                    'data' => $apiResponse
+                ]);
+            }
+
+            // Xử lý lỗi từ API
+            $errorResponse = $response->json();
+            $errorMessage = '';
+
+            if (isset($errorResponse['detail']) && is_array($errorResponse['detail'])) {
+                $errorMessages = [];
+                foreach ($errorResponse['detail'] as $error) {
+                    $field = implode('.', $error['loc']);
+                    $errorMessages[] = "{$field}: {$error['msg']}";
+                }
+                $errorMessage = implode(', ', $errorMessages);
+            } else {
+                $errorMessage = $errorResponse['error'] ?? $errorResponse['message'] ?? 'Lỗi không xác định từ API DTF';
+            }
+
+            Log::error('DTF API Error:', [
+                'order_id' => $orderId,
+                'external_id' => $orderMapping->external_id,
+                'status_code' => $response->status(),
+                'error_response' => $errorResponse,
+                'error_message' => $errorMessage,
+                'request_data' => $updateData
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => "Lỗi cập nhật đơn hàng: " . $errorMessage,
+                'error' => $errorResponse
+            ], $response->status());
+        } catch (\Exception $e) {
+            Log::error('Error updating DTF order:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'order_id' => $orderId,
+                'request_data' => $request->all()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Đã xảy ra lỗi khi cập nhật đơn hàng: ' . $e->getMessage()
             ], 500);
         }
     }

@@ -272,37 +272,26 @@ class ProductController extends Controller
         ];
 
         // Lấy giá sản phẩm theo từng loại tiền
-        $priceUSD = $product->getPriceInUSD();
-        $priceVND = $product->getPriceInVND();
-        $priceGBP = $product->getPriceInGBP();
+        $priceUSD = $product->price_usd;
+        $priceVND = $product->price_vnd;
+        $priceGBP = $product->price_gbp;
 
         // Lấy giá cho từng variant (nếu cần dùng ở JS)
-        $variants = $product->variants->map(function ($variant) use ($currencyRates) {
-            // Giả sử variant có trường price (USD), hoặc bạn có thể tính lại theo tỷ giá
-            $priceUSD = $variant->price_usd ? $variant->price_usd : ($variant->price ?? 0);
-            $priceVND = $variant->price_vnd ? $variant->price_vnd : ($priceUSD * $currencyRates['usd_to_vnd']);
-            $priceGBP = $variant->price_gbp ? $variant->price_gbp : ($priceUSD / $currencyRates['gbp_to_usd']);
-
-            // Shipping prices cho từng loại tiền
-            $shipping_prices = $variant->shippingPrices->map(function ($sp) use ($currencyRates) {
-                $priceUSD = $sp->price_usd ? $sp->price_usd : ($sp->price ?? 0);
-                $priceVND = $sp->price_vnd ? $sp->price_vnd : ($priceUSD * $currencyRates['usd_to_vnd']);
-                $priceGBP = $sp->price_gbp ? $sp->price_gbp : ($priceUSD / $currencyRates['gbp_to_usd']);
-                return [
-                    'method'    => $sp->method,
-                    'price_usd' => $priceUSD,
-                    'price_vnd' => $priceVND,
-                    'price_gbp' => $priceGBP,
-                ];
-            });
-
+        $variants = $product->variants->map(function ($variant) {
             return [
                 'id' => $variant->id,
                 'attributes' => $variant->attributes,
-                'price_usd' => $priceUSD,
-                'price_vnd' => $priceVND,
-                'price_gbp' => $priceGBP,
-                'shipping_prices' => $shipping_prices,
+                'price_usd' => $variant->price_usd,
+                'price_vnd' => $variant->price_vnd,
+                'price_gbp' => $variant->price_gbp,
+                'shipping_prices' => $variant->shippingPrices->map(function ($sp) {
+                    return [
+                        'method' => $sp->method,
+                        'price_usd' => $sp->price_usd,
+                        'price_vnd' => $sp->price_vnd,
+                        'price_gbp' => $sp->price_gbp,
+                    ];
+                }),
             ];
         });
 
@@ -318,33 +307,26 @@ class ProductController extends Controller
     }
     public function import(Request $request)
     {
-        try {
-            $currency = $request->input('currency', 'USD'); // Lấy currency từ form
+        ini_set('memory_limit', '2048M');
+        ini_set('max_execution_time', 300);
 
+        try {
+            $currency = $request->input('currency', 'USD');
             $file = $request->file('excel_file');
             $spreadsheet = IOFactory::load($file->getPathname());
             $worksheet = $spreadsheet->getActiveSheet();
             $rows = $worksheet->toArray();
 
-            // Bỏ qua hàng tiêu đề
-            $headers = array_shift($rows);
+            $headers = array_shift($rows); // Bỏ dòng tiêu đề
 
-            // Tìm các cột thuộc tính variant
-            $attributeColumns = [];
-            foreach ($headers as $index => $header) {
-                if (strpos(strtolower($header), 'attribute_') === 0) {
-                    $attributeName = str_replace('attribute_', '', strtolower($header));
-                    $attributeColumns[$index] = $attributeName;
-                }
-            }
+            DB::beginTransaction();
 
             $currentProductId = null;
             $currentProduct = null;
 
-            foreach ($rows as $row) {
-                DB::beginTransaction();
+            foreach ($rows as $rowIndex => $row) {
                 try {
-                    // Nếu có tên sản phẩm mới thì tạo sản phẩm mới
+                    // Tạo sản phẩm mới nếu có tên
                     if (!empty($row[0])) {
                         $categoryId = $this->getCategoryId($row[1]);
 
@@ -352,7 +334,7 @@ class ProductController extends Controller
                             'name' => $row[0],
                             'category_id' => $categoryId,
                             'base_price' => (float)$row[2],
-                            'currency' => $currency, // Lấy từ form
+                            'currency' => $currency,
                             'template_link' => $row[3] ?? null,
                             'description' => $row[4] ?? null,
                             'status' => 1,
@@ -361,7 +343,6 @@ class ProductController extends Controller
 
                         $currentProductId = $currentProduct->id;
 
-                        // Xử lý fulfillment location
                         if (!empty($row[5])) {
                             FulfillmentLocation::create([
                                 'product_id' => $currentProductId,
@@ -369,7 +350,6 @@ class ProductController extends Controller
                             ]);
                         }
 
-                        // Xử lý images (cột G đến P)
                         for ($i = 6; $i <= 15; $i++) {
                             if (!empty($row[$i])) {
                                 ProductImage::create([
@@ -380,17 +360,15 @@ class ProductController extends Controller
                         }
                     }
 
-                    // Tạo variant mới
+                    // Tạo variant
                     if ($currentProductId) {
-                        // Tạo variant
                         $variant = ProductVariant::create([
                             'product_id' => $currentProductId,
-                            'sku' => $row[16] ?? null, // cột Q
-                            'twofifteen_sku' => $row[17] ?? null, // cột R
-                            'flashship_sku' => $row[18] ?? null, // cột S
+                            'sku' => $row[16] ?? null,
+                            'twofifteen_sku' => $row[17] ?? null,
+                            'flashship_sku' => $row[18] ?? null,
                         ]);
 
-                        // Xử lý shipping prices (cột T đến W)
                         $shippingMethods = [
                             19 => ShippingPrice::METHOD_TIKTOK_1ST,
                             20 => ShippingPrice::METHOD_TIKTOK_NEXT,
@@ -404,13 +382,12 @@ class ProductController extends Controller
                                     'variant_id' => $variant->id,
                                     'method' => $method,
                                     'price' => (float)$row[$colIndex],
-                                    'currency' => $currency // Lấy từ form
+                                    'currency' => $currency
                                 ]);
                             }
                         }
 
-                        // Xử lý attributes (cột X và Y, AA và AB, ...)
-                        $attributeStartColumn = 23; // Cột X
+                        $attributeStartColumn = 23;
                         while (isset($row[$attributeStartColumn]) && isset($row[$attributeStartColumn + 1])) {
                             $attrName = $row[$attributeStartColumn];
                             $attrValue = $row[$attributeStartColumn + 1];
@@ -423,20 +400,20 @@ class ProductController extends Controller
                                 ]);
                             }
 
-                            $attributeStartColumn += 2; // Di chuyển đến cặp attribute tiếp theo
+                            $attributeStartColumn += 2;
                         }
                     }
-
-                    DB::commit();
                 } catch (\Exception $e) {
-                    DB::rollBack();
-                    Log::error('Lỗi khi import hàng Excel: ' . $e->getMessage());
-                    throw $e;
+                    Log::error("Dòng $rowIndex bị lỗi: " . $e->getMessage());
+                    // Không rollback toàn bộ, tiếp tục dòng sau
+                    continue;
                 }
             }
 
+            DB::commit();
             return redirect()->back()->with('success', 'Import dữ liệu thành công');
         } catch (\Exception $e) {
+            DB::rollBack();
             Log::error('Lỗi khi xử lý file Excel: ' . $e->getMessage());
             return redirect()->back()->with('error', 'Có lỗi xảy ra khi import: ' . $e->getMessage());
         }
