@@ -205,7 +205,7 @@
                 <nav class="breadcrumb">
                     <ol class="flex items-center gap-2">
                         <li>
-                            <a class="inline-flex items-center gap-2 text-gray-500 hover:text-blue-600" href="{{ route('admin.dashboard') }}">
+                            <a class="inline-flex items-center gap-2 text-gray-500 hover:text-blue-600" href="{{ route('admin.statistics.dashboard') }}">
                                 Dashboard
                                 <svg class="w-4 h-4 stroke-current" fill="none" viewBox="0 0 17 16" xmlns="http://www.w3.org/2000/svg">
                                     <path d="M6.0765 12.667L10.2432 8.50033L6.0765 4.33366" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round" />
@@ -337,12 +337,12 @@
                                         </td>
                                         <td>{{ $order->orderMapping->internal_id ?? 'N/A' }}</td>
                                         <td>{{ $order->external_id }}</td>
-                                        <td>{{ $order->creator->first_name }} {{ $order->creator->last_name }}</td>
-                                        <td>{{ $order->creator->email }}</td>
+                                        <td>{{ $order->creator->first_name ?? 'N/A' }} {{ $order->creator->last_name ?? '' }}</td>
+                                        <td>{{ $order->creator->email ?? 'N/A' }}</td>
                                         <td>{{ $order->warehouse }}</td>
-                                        <td>${{ number_format($order->items->sum(function($item) {
+                                        <td>${{ number_format($order->items ? $order->items->sum(function($item) {
                                             return (float)$item->print_price * (int)$item->quantity;
-                                        }), 2) }}</td>
+                                        }) : 0, 2) }}</td>
                                         <td>
                                             @php
                                             if ($order->status === 'processed') {
@@ -388,7 +388,7 @@
                                                     </svg>
                                                     View
                                                 </a>
-                                                @if($order->warehouse === 'US' && $order->status === 'processed')
+                                                @if($order->warehouse === 'US' && $order->status === 'processed' && $order->orderMapping)
                                                 <button onclick="editDtfOrder('{{ $order->orderMapping->internal_id }}')" class="btn btn-secondary">
                                                     <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
@@ -401,6 +401,7 @@
                                     </tr>
 
                                     <!-- Order Items Rows -->
+                                    @if($order->items)
                                     @foreach($order->items as $item)
                                     <tr class="bg-gray-50">
                                         <td colspan="9" class="px-8 py-4">
@@ -419,6 +420,7 @@
                                                 <div class="bg-white rounded-lg p-4 shadow-sm">
                                                     <h4 class="font-semibold text-gray-900 mb-2">Mockups</h4>
                                                     <div class="flex space-x-4">
+                                                        @if($item->mockups)
                                                         @foreach($item->mockups as $mockup)
                                                         <a href="{{ $mockup->url }}" target="_blank" class="group">
                                                             <div class="relative w-24 h-24 overflow-hidden rounded-lg border border-gray-200 hover:border-blue-500 transition-colors duration-200">
@@ -437,6 +439,9 @@
                                                             </div>
                                                         </a>
                                                         @endforeach
+                                                        @else
+                                                        <p class="text-sm text-gray-500">No mockups available</p>
+                                                        @endif
                                                     </div>
                                                 </div>
 
@@ -444,6 +449,7 @@
                                                 <div class="bg-white rounded-lg p-4 shadow-sm">
                                                     <h4 class="font-semibold text-gray-900 mb-2">Designs</h4>
                                                     <div class="flex space-x-4">
+                                                        @if($item->designs)
                                                         @foreach($item->designs as $design)
                                                         <a href="{{ $design->url }}" target="_blank" class="group">
                                                             <div class="relative w-24 h-24 overflow-hidden rounded-lg border border-gray-200 hover:border-blue-500 transition-colors duration-200">
@@ -462,12 +468,16 @@
                                                             </div>
                                                         </a>
                                                         @endforeach
+                                                        @else
+                                                        <p class="text-sm text-gray-500">No designs available</p>
+                                                        @endif
                                                     </div>
                                                 </div>
                                             </div>
                                         </td>
                                     </tr>
                                     @endforeach
+                                    @endif
                                     @empty
                                     <tr>
                                         <td colspan="9" class="px-6 py-4 text-center text-sm text-gray-500">

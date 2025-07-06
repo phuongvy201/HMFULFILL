@@ -7,73 +7,8 @@ use Illuminate\Support\Facades\Log;
 
 class DtfService
 {
-    public function getOrdersStatus($orders)
-    {
-        $config = [
-            'apiUrl' => config('services.dtf.api_url'),
-            'bearerToken' => config('services.dtf.bearer_token'),
-        ];
-
-        if (empty($config['apiUrl']) || empty($config['bearerToken'])) {
-            Log::error('Missing DTF API configuration');
-            throw new \Exception('Cấu hình API DTF không đầy đủ');
-        }
-
-        // Lấy danh sách internal_id (order_id của DTF) từ orders
-        $internalIds = $orders->pluck('internal_id')->filter()->toArray();
-
-        if (empty($internalIds)) {
-            Log::warning('No internal_ids found for DTF orders');
-            return [];
-        }
-
-        $headers = [
-            'Content-Type' => 'application/json',
-            'Accept' => 'application/json',
-            'Authorization' => 'Bearer ' . $config['bearerToken']
-        ];
-
-        $response = Http::withHeaders($headers)
-            ->post($config['apiUrl'] . '/api/orders/status', $internalIds);
-
-        Log::info('DTF API status response', [
-            'url' => $config['apiUrl'] . '/api/orders/status',
-            'internal_ids_count' => count($internalIds),
-            'internal_ids' => $internalIds,
-            'response_status' => $response->status(),
-            'response' => $response->json()
-        ]);
-
-        if ($response->successful()) {
-            $data = $response->json();
-            $apiOrders = data_get($data, 'orders', []);
-
-            // Tạo mapping từ internal_id sang external_id để dễ xử lý
-            $orderMapping = $orders->pluck('external_id', 'internal_id')->toArray();
-
-            return array_map(function ($orderData) use ($orderMapping) {
-                $internalId = $orderData['order_id'] ?? null;
-                $externalId = $orderMapping[$internalId] ?? null;
-
-                return [
-                    'external_id' => $externalId,
-                    'internal_id' => $internalId,
-                    'tracking_number' => null, // API status không trả về tracking number
-                    'status' => $orderData['status'] ?? null,
-                ];
-            }, $apiOrders);
-        }
-
-        Log::warning('Không thể lấy dữ liệu từ DTF API status', [
-            'url' => $config['apiUrl'] . '/api/orders/status',
-            'status' => $response->status(),
-            'response' => $response->json()
-        ]);
-        return [];
-    }
-
     /**
-     * Lấy tracking number cho đơn hàng DTF
+     * Lấy tracking number và status cho đơn hàng DTF
      */
     public function getOrdersTracking($orders)
     {
@@ -83,7 +18,7 @@ class DtfService
         ];
 
         if (empty($config['apiUrl']) || empty($config['bearerToken'])) {
-            Log::error('Missing DTF API configuration');
+            Log::error('Thiếu cấu hình API DTF');
             throw new \Exception('Cấu hình API DTF không đầy đủ');
         }
 
@@ -91,7 +26,7 @@ class DtfService
         $internalIds = $orders->pluck('internal_id')->filter()->toArray();
 
         if (empty($internalIds)) {
-            Log::warning('No internal_ids found for DTF orders tracking');
+            Log::warning('Không tìm thấy internal_ids cho đơn hàng DTF');
             return [];
         }
 
@@ -107,7 +42,7 @@ class DtfService
 
         $response = Http::withHeaders($headers)->get($url);
 
-        Log::info('DTF API tracking response', [
+        Log::info('Phản hồi API DTF', [
             'url' => $url,
             'internal_ids_count' => count($internalIds),
             'internal_ids' => $internalIds,
@@ -117,9 +52,9 @@ class DtfService
 
         if ($response->successful()) {
             $data = $response->json();
-            $apiOrders = data_get($data, 'orders', []);
+            $apiOrders = $data; // Dữ liệu trả về là mảng đơn hàng trực tiếp
 
-            // Tạo mapping từ internal_id sang external_id để dễ xử lý
+            // Tạo mapping từ internal_id sang external_id
             $orderMapping = $orders->pluck('external_id', 'internal_id')->toArray();
 
             return array_map(function ($orderData) use ($orderMapping) {
@@ -129,13 +64,13 @@ class DtfService
                 return [
                     'external_id' => $externalId,
                     'internal_id' => $internalId,
-                    'tracking_number' => data_get($orderData, 'tracking_number', data_get($orderData, 'shipping.tracking_number', null)),
-                    'status' => data_get($orderData, 'status', null),
+                    'tracking_number' => $orderData['tracking_number'] ?? null,
+                    'status' => $orderData['status'] ?? null,
                 ];
             }, $apiOrders);
         }
 
-        Log::warning('Không thể lấy tracking data từ DTF API', [
+        Log::warning('Không thể lấy dữ liệu từ API DTF', [
             'url' => $url,
             'status' => $response->status(),
             'response' => $response->json()

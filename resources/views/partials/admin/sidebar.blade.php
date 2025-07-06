@@ -6,9 +6,9 @@
     <div
         :class="sidebarToggle ? 'justify-center' : 'justify-between'"
         class="flex items-center gap-2 ">
-        <a href="{{ route('admin.dashboard') }}">
+        <a href="{{ route('admin.statistics.dashboard') }}">
             <span class="logo" :class="sidebarToggle ? 'hidden' : ''">
-                <img class="dark:hidden w-10" src="{{ asset('assets/images/logo HM-02.png') }}" alt="Logo" />
+                <img style="width: 100px;" class="dark:hidden" src="{{ asset('assets/images/logo HM-02.png') }}" alt="Logo" />
                 <img
                     class="hidden dark:block"
                     src="{{ asset('assets/images/logo HM-02.png') }}"
@@ -80,10 +80,58 @@
                                 :class="sidebarToggle ? 'lg:hidden' : ''">
                                 Dashboard
                             </span>
+
+                            <svg
+                                class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
+                                :class="[(selectedAdmin === 'Dashboard') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
+                                width="20"
+                                height="20"
+                                viewBox="0 0 20 20"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M4.79175 7.39584L10.0001 12.6042L15.2084 7.39585"
+                                    stroke=""
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
                         </a>
 
                         <!-- Dropdown Menu Start -->
+                        <div
+                            class="overflow-hidden transform translate"
+                            :class="(selectedAdmin === 'Dashboard') ? 'block' :'hidden'">
+                            <ul
+                                :class="sidebarToggle ? 'lg:hidden' : 'flex'"
+                                class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
+                                <li>
+                                    <a
+                                        href="{{ route('admin.statistics.dashboard') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'dashboard' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
 
+                                        Order Statistics
+                                    </a>
+                                </li>
+                                <li>
+                                    <a
+                                        href="{{ route('admin.statistics.topup-dashboard') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'topup-dashboard' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Topup Statistics
+                                    </a>
+                                </li>
+                                <li>
+                                    <a
+                                        href="{{ route('admin.statistics.tier-dashboard') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'tier-dashboard' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Tier Statistics
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
                         <!-- Dropdown Menu End -->
                     </li>
                     <!-- Menu Item Dashboard -->
@@ -403,6 +451,7 @@
                                         Sent to Supplier
                                     </a>
                                 </li>
+
                             </ul>
                         </div>
                         <!-- Dropdown Menu End -->
@@ -476,10 +525,77 @@
                                 </li> -->
                                 <li>
                                     <a
+                                        href="{{ route('admin.all-orders') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'allOrders' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        All Orders
+                                    </a>
+                                </li>
+                                <li>
+                                    <a
                                         href="{{ route('admin.api-orders') }}"
                                         class="menu-dropdown-item group"
                                         :class="page === 'apiOrders' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
                                         API Orders
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <!-- Dropdown Menu End -->
+                    </li>
+                    <!-- User Tier -->
+                    <li>
+                        <a href="{{ route('admin.user-tiers.index') }}" class="menu-item group"
+                            :class="(selectedAdmin === 'UserTier') ? 'menu-item-active' : 'menu-item-inactive'">
+                            <svg
+                                :class="(selectedAdmin === 'UserTier') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M5 16L3 6L8.5 10L12 4L15.5 10L21 6L19 16H5ZM19 16C19 16.6 18.6 17 18 17H6C5.4 17 5 16.6 5 16"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    fill="none" />
+                                <path
+                                    d="M5 16V19C5 19.6 5.4 20 6 20H18C18.6 20 19 19.6 19 19V16"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round"
+                                    fill="none" />
+                            </svg>
+                            <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">
+                                User Tier
+                            </span>
+                            <svg
+                                class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
+                                :class="[(selectedAdmin === 'UserTier') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
+                                width="20"
+                                height="20"
+                                viewBox="0 0 20 20"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M4.79175 7.39584L10.0001 12.6042L15.2084 7.39585"
+                                    stroke=""
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                        </a>
+                        <div
+                            class="overflow-hidden transform translate"
+                            :class="(selectedAdmin === 'UserTier') ? 'block' :'hidden'">
+                            <ul :class="sidebarToggle ? 'lg:hidden' : 'flex'" class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
+                                <li>
+                                    <a href="{{ route('admin.user-tiers.index') }}" class="menu-dropdown-item group"
+                                        :class="page === 'userTier' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        User Tier List
                                     </a>
                                 </li>
                             </ul>

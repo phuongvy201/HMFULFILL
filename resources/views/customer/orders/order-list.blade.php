@@ -55,6 +55,9 @@
                         Delete Selected Files
                     </div>
                 </button>
+                <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                    * Only files with "failed" status can be deleted
+                </div>
                 <!-- Modal -->
                 <div x-show="isModalOpen" x-cloak class="fixed inset-0 flex items-center justify-center p-5 overflow-y-auto modal z-99999">
                     <!-- Overlay -->
@@ -81,7 +84,7 @@
                             <div class="mb-5 space-y-4 sm:space-y-0 sm:flex sm:flex-wrap sm:gap-6 text-sm text-gray-600 dark:text-gray-300">
                                 <div>
                                     <p class="mb-1">📄 Download template sample file:</p>
-                                    <a href="https://hmfulfill.com/uploads/fulfillment/TemplateImportOrder.xlsx" download class="flex items-center text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-600">
+                                    <a href="https://hmfulfill.com/uploads/fulfillment/TemplateOrderImport.xlsx" download class="flex items-center text-blue-600 hover:text-blue-800 hover:underline dark:text-blue-400 dark:hover:text-blue-600">
                                         <svg xmlns="http://www.w3.org/2000/svg" class="h-4 w-4 mr-2 flex-shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
                                             <path stroke-linecap="round" stroke-linejoin="round" d="M4 16v1a3 3 0 003 3h10a3 3 0 003-3v-1m-4-4l-4 4m0 0l-4-4m4 4V4" />
                                         </svg>
@@ -209,6 +212,7 @@
                                     <span class="block mx-2 font-medium text-gray-500 text-theme-xs dark:text-gray-400">
                                         File ID
                                     </span>
+                                    <span class="text-xs text-gray-400">(Only select failed files)</span>
                                 </div>
                             </th>
 
@@ -265,7 +269,11 @@
                         <tr>
                             <td class="px-6 py-3 whitespace-nowrap">
                                 <div class="flex items-center">
+                                    @if($file->status === 'failed')
                                     <input type="checkbox" class="file-checkbox h-5 w-5 rounded-lg border-gray-300 cursor-pointer" value="{{ $file->id }}">
+                                    @else
+                                    <input type="checkbox" class="h-5 w-5 rounded-lg border-gray-300 cursor-not-allowed opacity-50" disabled>
+                                    @endif
                                     <span class="ml-3 block font-medium text-gray-700 text-theme-sm dark:text-gray-400">{{ $file->id }}</span>
                                 </div>
                             </td>
@@ -453,7 +461,7 @@
         const fileCheckboxes = document.querySelectorAll('.file-checkbox');
         const selectedCountSpan = document.getElementById('selectedCount');
 
-        // Hàm cập nhật trạng thái nút xóa và số lượng item đã chọn
+        // Function to update delete button state and selected item count
         function updateDeleteButton() {
             const selectedFiles = document.querySelectorAll('.file-checkbox:checked');
             const count = selectedFiles.length;
@@ -461,31 +469,35 @@
             deleteButton.style.display = count > 0 ? 'block' : 'none';
         }
 
-        // Xử lý sự kiện cho checkbox "Chọn tất cả"
+        // Handle "Select All" checkbox event
         selectAllCheckbox.addEventListener('change', function() {
+            // Only check files with failed status
             fileCheckboxes.forEach(checkbox => {
-                checkbox.checked = this.checked;
+                if (!checkbox.disabled) {
+                    checkbox.checked = this.checked;
+                }
             });
             updateDeleteButton();
         });
 
-        // Xử lý sự kiện cho từng checkbox
+        // Handle individual checkbox events
         fileCheckboxes.forEach(checkbox => {
             checkbox.addEventListener('change', function() {
-                const allChecked = Array.from(fileCheckboxes).every(cb => cb.checked);
+                const enabledCheckboxes = Array.from(fileCheckboxes).filter(cb => !cb.disabled);
+                const allChecked = enabledCheckboxes.every(cb => cb.checked);
                 selectAllCheckbox.checked = allChecked;
                 updateDeleteButton();
             });
         });
 
-        // Xử lý sự kiện xóa
+        // Handle delete event
         deleteButton.addEventListener('click', function() {
             const selectedFiles = Array.from(document.querySelectorAll('.file-checkbox:checked')).map(checkbox => checkbox.value);
 
             if (selectedFiles.length === 0) {
                 Swal.fire({
                     title: 'Notification',
-                    text: 'Please select at least one file to delete',
+                    text: 'Please select at least one file with "failed" status to delete',
                     icon: 'warning'
                 });
                 return;
@@ -493,7 +505,7 @@
 
             Swal.fire({
                 title: 'Are you sure you want to delete the selected files?',
-                text: `Are you sure you want to delete ${selectedFiles.length} files selected?`,
+                text: `Are you sure you want to delete ${selectedFiles.length} selected files? Only files with "failed" status can be deleted.`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
@@ -525,7 +537,7 @@
                             } else {
                                 Swal.fire({
                                     title: 'Error',
-                                    text: 'An error occurred while deleting the file: ' + data.message,
+                                    text: data.message || 'An error occurred while deleting the files',
                                     icon: 'error'
                                 });
                             }
@@ -533,7 +545,7 @@
                         .catch(error => {
                             Swal.fire({
                                 title: 'Error',
-                                text: 'An error occurred while deleting the file: ' + error.message,
+                                text: 'An error occurred while deleting the files: ' + error.message,
                                 icon: 'error'
                             });
                         });
@@ -541,14 +553,28 @@
             });
         });
 
-        // Khởi tạo trạng thái ban đầu của nút xóa
+        // Initialize delete button state
         updateDeleteButton();
 
-        // Xử lý xóa một file
+        // Handle single file deletion
         function deleteSingleFile(fileId) {
+            // Check if file has failed status
+            const fileRow = document.querySelector(`input[value="${fileId}"]`).closest('tr');
+            const statusCell = fileRow.querySelector('td:nth-child(3)');
+            const status = statusCell.textContent.trim().toLowerCase();
+
+            if (status !== 'failed') {
+                Swal.fire({
+                    title: 'Cannot Delete',
+                    text: 'Only files with "failed" status can be deleted',
+                    icon: 'warning'
+                });
+                return;
+            }
+
             Swal.fire({
                 title: 'Are you sure you want to delete this file?',
-                text: 'Are you sure you want to delete this file?',
+                text: 'Are you sure you want to delete this file? This action cannot be undone.',
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
@@ -557,12 +583,12 @@
                 cancelButtonText: 'Cancel'
             }).then((result) => {
                 if (result.isConfirmed) {
-                    fetch('/customer/delete-files', { // Sửa đường dẫn API
+                    fetch('/customer/delete-files', {
                             method: 'POST',
                             headers: {
                                 'Content-Type': 'application/json',
                                 'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                                'Accept': 'application/json' // Thêm header Accept
+                                'Accept': 'application/json'
                             },
                             body: JSON.stringify({
                                 ids: [fileId]
@@ -586,7 +612,7 @@
                             } else {
                                 Swal.fire({
                                     title: 'Error',
-                                    text: 'An error occurred while deleting the file: ' + data.message,
+                                    text: data.message || 'An error occurred while deleting the file',
                                     icon: 'error'
                                 });
                             }

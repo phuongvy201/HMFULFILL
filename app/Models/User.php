@@ -57,4 +57,48 @@ class User extends Authenticatable
     {
         return $this->hasOne(Wallet::class);
     }
+
+    /**
+     * Relationship với UserTier
+     */
+    public function userTiers()
+    {
+        return $this->hasMany(UserTier::class);
+    }
+
+    /**
+     * Lấy tier hiện tại của user
+     */
+    public function getCurrentTier()
+    {
+        return $this->userTiers()
+            ->where('month', now()->startOfMonth())
+            ->first();
+    }
+
+    /**
+     * Lấy tier của user cho tháng cụ thể
+     */
+    public function getTierForMonth($month)
+    {
+        return $this->userTiers()
+            ->where('month', $month->startOfMonth())
+            ->first();
+    }
+
+    /**
+     * Kiểm tra xem user có phải admin không
+     */
+    public function isAdmin(): bool
+    {
+        return $this->role === 'admin';
+    }
+
+    /**
+     * Scope để lấy chỉ admin users
+     */
+    public function scopeAdmin($query)
+    {
+        return $query->where('role', 'admin');
+    }
 }

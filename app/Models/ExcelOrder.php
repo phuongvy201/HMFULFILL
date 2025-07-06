@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use Carbon\Carbon;
 
 class ExcelOrder extends Model
 {
@@ -118,5 +119,39 @@ class ExcelOrder extends Model
             'tracking_number' => $trackingNumber,
             'status' => $status
         ]);
+    }
+
+    /**
+     * Tính tổng doanh thu của đơn hàng
+     * 
+     * @return float
+     */
+    public function getTotalRevenue(): float
+    {
+        return $this->items->sum(function ($item) {
+            return $item->print_price * $item->quantity;
+        });
+    }
+
+    /**
+     * Tính tổng doanh thu của user trong khoảng thời gian
+     * 
+     * @param int $userId
+     * @param Carbon $startDate
+     * @param Carbon $endDate
+     * @param string|null $status
+     * @return float
+     */
+    public static function calculateUserRevenue(int $userId, Carbon $startDate, Carbon $endDate): float
+    {
+        $query = self::where('created_by', $userId)
+            ->whereBetween('created_at', [$startDate, $endDate]);
+
+
+        return $query->with('items')
+            ->get()
+            ->sum(function ($order) {
+                return $order->getTotalRevenue();
+            });
     }
 }

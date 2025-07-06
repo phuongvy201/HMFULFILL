@@ -14,7 +14,7 @@ class RefundTransactionSeeder extends Seeder
     // public function run(): void
     // {
     //     // ID của giao dịch cần hoàn tiền (bạn có thể thay đổi ID này)
-    //     $transactionId = 293;
+    //     $transactionId = 710;
 
     //     // ID của admin hoặc người thực hiện refund
     //     $refundedBy = 1;
@@ -35,7 +35,7 @@ class RefundTransactionSeeder extends Seeder
     //     DB::beginTransaction();
     //     try {
     //         // Thực hiện refund
-    //         $refund = $transaction->refund($refundedBy, 'Refund transaction 293');
+    //         $refund = $transaction->refund($refundedBy, 'Refund transaction 710');
 
     //         echo "Refund thành công! Mã giao dịch hoàn tiền: {$refund->transaction_code}\n";
     //         DB::commit();
@@ -46,9 +46,9 @@ class RefundTransactionSeeder extends Seeder
     // }
     public function run()
     {
-        $userId = 178; // ID người dùng
-        $amount = 2.00; // Số tiền trừ
-        $note = "Deduct extra top-up balance";
+        $userId = 123; // ID người dùng
+        $amount = 7.63; // Số tiền trừ
+        $note = "Refund external_id: 576753766007412834";
 
         $wallet = Wallet::where('user_id', $userId)->first();
 
@@ -58,19 +58,19 @@ class RefundTransactionSeeder extends Seeder
         }
 
         // Trừ tiền khỏi ví
-        $wallet->withdraw($amount);
+        $wallet->deposit($amount);
 
         // Tạo giao dịch deduct
         Transaction::create([
             'user_id' => $userId,
-            'transaction_code' => 'DEDUCT_' . strtoupper(uniqid()),
-            'type' => Transaction::TYPE_DEDUCT, // Bạn cần đảm bảo hằng số TYPE_DEDUCT tồn tại
+            'transaction_code' => 'Refund_' . strtoupper(uniqid()),
+            'type' => Transaction::TYPE_REFUND, // Bạn cần đảm bảo hằng số TYPE_DEDUCT tồn tại
             'method' => Transaction::METHOD_VND,
             'amount' => $amount,
             'status' => Transaction::STATUS_APPROVED,
             'note' => $note,
             'approved_at' => Carbon::now(),
-            'approved_by' => 1 // ID admin thực hiện deduct
+            'approved_by' => 1, // ID admin thực hiện deduct
         ]);
 
         $this->command->info("Manual deduct created for user ID: {$userId}");

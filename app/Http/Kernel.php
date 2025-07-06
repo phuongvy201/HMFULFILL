@@ -58,9 +58,4 @@ class Kernel extends HttpKernel
         'auth.api.token' => \App\Http\Middleware\AuthenticateApiToken::class,
         // Thêm các middleware khác nếu cần
     ];
-
-    protected function schedule(Schedule $schedule)
-    {
-        $schedule->command('tracking:sync-from-factory')->dailyAt('02:00');
-    }
 }

@@ -72,7 +72,6 @@ class RegisterController extends Controller
 
             return redirect('/signin')->with('message', 'Email verified successfully!');
         }
-
         return redirect('/signin')->with('error', 'Invalid verification token.');
     }
 
@@ -92,7 +91,7 @@ class RegisterController extends Controller
             $user = Auth::user();
 
             if ($user->role === 'admin') {
-                return redirect()->route('admin.dashboard');
+                return redirect()->route('admin.statistics.dashboard');
             } elseif ($user->role === 'customer') {
                 return redirect()->route('customer.index');
             }

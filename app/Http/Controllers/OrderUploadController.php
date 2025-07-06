@@ -57,24 +57,20 @@ class OrderUploadController extends Controller
         // Validate items
         foreach ($order->items as $item) {
             if (!$item->quantity || $item->mockups->isEmpty() || $item->designs->isEmpty()) {
-                Log::warning("Invalid item in order {$order->external_id}", [
-                    'quantity' => $item->quantity,
-                    'mockups_count' => $item->mockups->count(),
-                    'designs_count' => $item->designs->count(),
-                ]);
+                Log::warning("Invalid item in order {$order->external_id}");
                 throw new \Exception("Invalid item in order {$order->external_id}");
             }
 
             // Validate mockup URLs
             foreach ($item->mockups as $mockup) {
                 if (!filter_var($mockup->url, FILTER_VALIDATE_URL)) {
-                    Log::warning("Invalid mockup URL in order {$order->external_id}", ['url' => $mockup->url]);
+                    Log::warning("Invalid mockup URL in order {$order->external_id}");
                     throw new \Exception("Invalid mockup URL in order {$order->external_id}");
                 }
             }
             foreach ($item->designs as $design) {
                 if (!filter_var($design->url, FILTER_VALIDATE_URL)) {
-                    Log::warning("Invalid design URL in order {$order->external_id}", ['url' => $design->url]);
+                    Log::warning("Invalid design URL in order {$order->external_id}");
                     throw new \Exception("Invalid design URL in order {$order->external_id}");
                 }
             }
@@ -98,7 +94,7 @@ class OrderUploadController extends Controller
                     'city' => !empty($order->city) ? $order->city : '',
                     'state' => !empty($order->county) ? $order->county : '', // Use county as state
                     'postcode' => !empty($order->post_code) ? $order->post_code : '',
-                    'country' => !empty($order->country) ? $order->country : '',
+                    'country' => 'US',
                     'phone1' => !empty($order->phone1) ? $order->phone1 : '',
                     'phone2' => !empty($order->phone2) ? $order->phone2 : ''
                 ],
@@ -121,12 +117,20 @@ class OrderUploadController extends Controller
                         })->values()->toArray()
                     ];
                 })->values()->toArray(),
-                'shipping' => [
-                    'shippingMethod' => !empty($order->shipping_method) ? $order->shipping_method : 'Standard',
-                ],
-                'label_url' => !empty($order->comment) ? $order->comment : '',
                 'comments' => ""
             ];
+
+            // Chỉ thêm shipping nếu có shipping_method
+            if (!empty($order->shipping_method)) {
+                $orderData['shipping'] = [
+                    'shippingMethod' => $order->shipping_method,
+                ];
+            }
+
+            // Chỉ thêm label_url nếu có comment
+            if (!empty($order->comment)) {
+                $orderData['label_url'] = $order->comment;
+            }
         } else {
             // Twofifteen
             $orderData = [
@@ -146,9 +150,6 @@ class OrderUploadController extends Controller
                     'country' => $order->country,
                     'phone1' => $order->phone1,
                     'phone2' => $order->phone2
-                ],
-                'shipping' => [
-                    'shippingMethod' => $order->shipping_method ?? null,
                 ],
                 'items' => $order->items->map(function ($item) {
                     return [
@@ -173,7 +174,6 @@ class OrderUploadController extends Controller
             ];
         }
 
-        Log::debug("Order Data for {$order->external_id}:", $orderData);
         return $orderData;
     }
 
@@ -187,7 +187,7 @@ class OrderUploadController extends Controller
 
         // Kiểm tra cấu hình
         if (empty($config['apiUrl'])) {
-            Log::error("Incomplete API config for factory {$factory}", $config);
+            Log::error("Incomplete API config for factory {$factory}");
             throw new \Exception("Cấu hình API không đầy đủ cho factory {$factory}");
         }
 
@@ -239,8 +239,6 @@ class OrderUploadController extends Controller
             $apiResponse = $response->json();
             $internalId = $apiResponse['order']['id'] ?? $apiResponse['id'] ?? null;
 
-            Log::debug("API Response for order {$order->external_id}:", $apiResponse);
-
             // Cập nhật trạng thái đơn hàng với full response
             $order->markAsProcessed($apiResponse, $internalId, $factory);
 
@@ -253,11 +251,7 @@ class OrderUploadController extends Controller
                     $apiResponse
                 );
 
-                Log::info('Order mapping created:', [
-                    'external_id' => $order->external_id,
-                    'internal_id' => $internalId,
-                    'factory' => $factory
-                ]);
+                Log::info("Order processed successfully: {$order->external_id} -> {$internalId} ({$factory})");
             }
 
             return [
@@ -280,13 +274,7 @@ class OrderUploadController extends Controller
                 'timestamp' => now()->toISOString()
             ];
 
-            Log::error('API Error:', [
-                'order_id' => $order->id,
-                'external_id' => $order->external_id,
-                'factory' => $factory,
-                'status_code' => $response ? $response->status() : null,
-                'error_response' => $fullApiResponse
-            ]);
+            Log::error("Order processing failed: {$order->external_id} - {$errorMessage}");
 
             // Lưu chỉ error response, không lưu full response
             $order->markAsFailed($errorMessage, $errorResponse);
@@ -313,36 +301,19 @@ class OrderUploadController extends Controller
                 ], 400);
             }
 
-            Log::info('Processing orders', ['order_ids' => $orderIds]);
+            Log::info('Processing orders', ['count' => count($orderIds)]);
 
             $orders = ExcelOrder::with(['items.mockups', 'items.designs'])
                 ->whereIn('id', $orderIds)
                 ->get();
 
             if ($orders->isEmpty()) {
-                Log::warning('No valid orders found for IDs:', $orderIds);
+                Log::warning('No valid orders found for provided IDs');
                 return response()->json([
                     'success' => false,
                     'message' => 'Không tìm thấy đơn hàng hợp lệ'
                 ], 400);
             }
-
-            // Log chi tiết về các đơn hàng tìm thấy
-            Log::info('Found orders for processing', [
-                'orders_count' => $orders->count(),
-                'orders_summary' => $orders->map(function ($order) {
-                    return [
-                        'id' => $order->id,
-                        'external_id' => $order->external_id,
-                        'warehouse' => $order->warehouse,
-                        'items_count' => $order->items->count(),
-                        'items_loaded' => $order->relationLoaded('items'),
-                        'mockups_designs_loaded' => $order->items->every(function ($item) {
-                            return $item->relationLoaded('mockups') && $item->relationLoaded('designs');
-                        })
-                    ];
-                })->toArray()
-            ]);
 
             // Kiểm tra dữ liệu quan hệ
             foreach ($orders as $order) {
@@ -372,9 +343,7 @@ class OrderUploadController extends Controller
                         ];
                     }
                 } catch (\Exception $e) {
-                    Log::error("Error processing order {$order->external_id}:", [
-                        'message' => $e->getMessage()
-                    ]);
+                    Log::error("Error processing order {$order->external_id}: {$e->getMessage()}");
                     $results[] = [
                         'order_id' => $order->id,
                         'external_id' => $order->external_id,
@@ -395,13 +364,6 @@ class OrderUploadController extends Controller
                     if ($response->successful()) {
                         $apiResponse = $response->json();
 
-                        // Log cấu trúc response để debug
-                        Log::info('DTF API Response structure:', [
-                            'response_keys' => array_keys($apiResponse),
-                            'orders_count' => isset($apiResponse['orders']) ? count($apiResponse['orders']) : 'no orders key',
-                            'first_order_keys' => isset($apiResponse['orders'][0]) ? array_keys($apiResponse['orders'][0]) : 'no first order'
-                        ]);
-
                         foreach ($apiResponse['orders'] as $orderResponse) {
                             $order = $orders->firstWhere('external_id', $orderResponse['external_id']);
                             if ($order) {
@@ -409,11 +371,7 @@ class OrderUploadController extends Controller
                                 $internalId = $orderResponse['order_id'] ?? $orderResponse['id'] ?? $orderResponse['internal_id'] ?? null;
 
                                 if (!$internalId) {
-                                    Log::error('No internal_id found in DTF response:', [
-                                        'external_id' => $order->external_id,
-                                        'order_response_keys' => array_keys($orderResponse),
-                                        'order_response' => $orderResponse
-                                    ]);
+                                    Log::error("No internal_id found in DTF response for {$order->external_id}");
 
                                     $results[] = [
                                         'order_id' => $order->id,
@@ -444,11 +402,7 @@ class OrderUploadController extends Controller
                                     $apiResponse
                                 );
 
-                                Log::info('Order mapping created:', [
-                                    'external_id' => $order->external_id,
-                                    'internal_id' => $internalId,
-                                    'factory' => 'dtf'
-                                ]);
+                                Log::info("DTF order processed: {$order->external_id} -> {$internalId}");
                             }
                         }
                     } else {
@@ -487,18 +441,12 @@ class OrderUploadController extends Controller
                                     'message' => "Lỗi khi gửi đơn hàng đến DTF: " . $errorMessage
                                 ];
 
-                                Log::error('DTF API Error:', [
-                                    'order_id' => $order->id,
-                                    'external_id' => $order->external_id,
-                                    'error_response' => $errorResponse
-                                ]);
+                                Log::error("DTF API Error for {$order->external_id}: {$errorMessage}");
                             }
                         }
                     }
                 } catch (\Exception $e) {
-                    Log::error("Error processing DTF batch:", [
-                        'message' => $e->getMessage()
-                    ]);
+                    Log::error("Error processing DTF batch: {$e->getMessage()}");
                     foreach ($dtfOrders as $orderData) {
                         $order = $orders->firstWhere('external_id', $orderData['external_id']);
                         if ($order) {
@@ -535,9 +483,7 @@ class OrderUploadController extends Controller
 
                     $results[] = $this->processOrderResponse($order, $response, 'twofifteen');
                 } catch (\Exception $e) {
-                    Log::error("Error processing order {$order->external_id}:", [
-                        'message' => $e->getMessage()
-                    ]);
+                    Log::error("Error processing order {$order->external_id}: {$e->getMessage()}");
                     $results[] = [
                         'order_id' => $order->id,
                         'external_id' => $order->external_id,
@@ -553,10 +499,7 @@ class OrderUploadController extends Controller
                 'results' => $results
             ]);
         } catch (\Exception $e) {
-            Log::error('Order upload error:', [
-                'message' => $e->getMessage(),
-                'order_ids' => $request->input('order_ids')
-            ]);
+            Log::error('Order upload error: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -564,69 +507,6 @@ class OrderUploadController extends Controller
             ], 500);
         }
     }
-
-    // public function testOrder()
-    // {
-    //     try {
-    //         $testData = [
-    //             "external_id" => "TEST-002",
-    //             "brand" => "HM Fulfill",
-    //             "channel" => "site",
-    //             "buyer_email" => "test@example.com",
-    //             "shipping_address" => [
-    //                 "firstName" => "John",
-    //                 "lastName" => "Doe",
-    //                 "company" => "Test Company",
-    //                 "address1" => "123 Test St",
-    //                 "address2" => "Suite 1",
-    //                 "city" => "London",
-    //                 "county" => "Greater London",
-    //                 "postcode" => "SW1A 1AA",
-    //                 "country" => "UK",
-    //                 "phone1" => "02012345678",
-    //                 "phone2" => ""
-    //             ],
-    //             "items" => [
-    //                 [
-    //                     "pn" => "BY003-WH-S",
-
-    //                     "quantity" => 1,
-    //                     "description" => "Test product description",
-
-    //                     "mockups" => [
-    //                         [
-    //                             "title" => "Printing Front Side",
-    //                             "src" => "https://www.twofifteen.co.uk/images/svg/mockup-5d3cf2a60e21468f6b5bfbcedeef1e8a.png?v=fd41c3f2"
-    //                         ],
-    //                         [
-    //                             "title" => "Printing Back Side",
-    //                             "src" => "https://www.twofifteen.co.uk/images/svg/mockup-5d3cf2a60e21468f6b5bfbcedeef1e8a.png?v=fd41c3f2"
-    //                         ]
-    //                     ],
-    //                     "designs" => [
-    //                         [
-    //                             "title" => "Printing Front Side",
-    //                             "src" => "https://www.twofifteen.co.uk/images/svg/mockup-5d3cf2a60e21468f6b5bfbcedeef1e8a.png?v=fd41c3f2"
-    //                         ],
-    //                         [
-    //                             "title" => "Printing Back Side",
-    //                             "src" => "https://www.twofifteen.co.uk/images/svg/mockup-5d3cf2a60e21468f6b5bfbcedeef1e8a.png?v=fd41c3f2"
-    //                         ]
-    //                     ]
-    //                 ]
-    //             ],
-    //             "comments" => "Test order"
-    //         ];
-
-    //         $result = $this->brickApiService->sendOrder($testData, 1);
-    //         return response()->json($result);
-    //     } catch (\Exception $e) {
-    //         return response()->json([
-    //             'success' => false,
-    //             'message' => $e->getMessage()
-    //         ], 500);
-    //     }
-    // }
 
     public function index(Request $request)
     {
@@ -672,10 +552,6 @@ class OrderUploadController extends Controller
 
             // --- Gọi API ---
             $url = $config['apiUrl'] . '/orders.php?' . http_build_query($params);
-            Log::debug('Yêu cầu API Brick:', [
-                'url' => $url,
-                'query_params' => $params
-            ]);
             $response = Http::get($url);
 
             if ($response->successful()) {
@@ -716,7 +592,7 @@ class OrderUploadController extends Controller
                     'path' => $request->url(),
                     'query' => $request->query(),
                 ]);
-                Log::info('Paginated orders:', ['orders' => $paginatedOrders]);
+
                 return view('admin.orders.submitted-order-list', [
                     'orders' => $paginatedOrders
                 ]);
@@ -727,10 +603,7 @@ class OrderUploadController extends Controller
                 'message' => $response->json()['error'] ?? 'Lỗi API không xác định'
             ], 400);
         } catch (\Exception $e) {
-            Log::error('Get orders error:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            Log::error('Get orders error: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -806,8 +679,6 @@ class OrderUploadController extends Controller
         try {
             $orderId = $request->query('id');
 
-            Log::info('Received order ID:', ['orderId' => $orderId]);
-
             if (empty($orderId)) {
                 Log::warning('Missing order ID in request');
                 return response()->json([
@@ -833,32 +704,18 @@ class OrderUploadController extends Controller
             // Thêm signature vào query parameters
             $queryParams['Signature'] = $signature;
 
-            // Log request details
-            Log::info('TwoFifteen API getOrderDetails Request:', [
-                'url' => $config['apiUrl'] . '/order.php',
-                'query_params' => $queryParams
-            ]);
-
             $response = Http::get($config['apiUrl'] . '/order.php?' . http_build_query($queryParams));
-
-            Log::info('TwoFifteen API getOrderDetails Response:', [
-                'status' => $response->status(),
-                'response' => $response->json()
-            ]);
 
             if ($response->successful()) {
                 $orderData = $response->json();
-
-                Log::info('Order details retrieved successfully:', $orderData);
-
                 return view('admin.orders.submitted-order-detail', [
                     'order' => $orderData
                 ]);
             }
 
-            Log::error('Failed to fetch order details:', [
-                'status' => $response->status(),
-                'response' => $response->json()
+            Log::error('Failed to fetch order details', [
+                'order_id' => $orderId,
+                'status' => $response->status()
             ]);
 
             return response()->json([
@@ -866,10 +723,7 @@ class OrderUploadController extends Controller
                 'message' => $response->json()['error'] ?? 'Unknown error'
             ], 400);
         } catch (\Exception $e) {
-            Log::error('Error fetching order details:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            Log::error('Error fetching order details: ' . $e->getMessage());
 
             return response()->json([
                 'success' => false,
@@ -911,31 +765,17 @@ class OrderUploadController extends Controller
                 ], 400);
             }
 
-            // Log dữ liệu cập nhật
-            Log::info('Updating DTF order:', [
+            Log::info('Updating DTF order', [
                 'order_id' => $orderId,
-                'external_id' => $orderMapping->external_id,
-                'update_data' => $updateData
+                'external_id' => $orderMapping->external_id
             ]);
 
             // 3. Gọi API DTF để cập nhật đơn hàng
             $apiConfig = $this->buildApiConfig('dtf', $updateData);
 
-            // Log cấu hình API
-            Log::info('DTF API config:', [
-                'url' => $apiConfig['config']['apiUrl'] . '/api/orders/' . $orderId,
-                'headers' => $apiConfig['headers']
-            ]);
-
             $response = Http::withHeaders($apiConfig['headers'])
                 ->withQueryParameters($apiConfig['parameters'])
                 ->put($apiConfig['config']['apiUrl'] . '/api/orders/' . $orderId, $updateData);
-
-            // Log response từ API
-            Log::info('DTF API response:', [
-                'status' => $response->status(),
-                'body' => $response->body()
-            ]);
 
             if ($response->successful()) {
                 $apiResponse = $response->json();
@@ -945,10 +785,9 @@ class OrderUploadController extends Controller
                     'api_response' => $apiResponse
                 ]);
 
-                Log::info('DTF order updated successfully:', [
+                Log::info('DTF order updated successfully', [
                     'order_id' => $orderId,
-                    'external_id' => $orderMapping->external_id,
-                    'update_data' => $updateData
+                    'external_id' => $orderMapping->external_id
                 ]);
 
                 return response()->json([
@@ -973,13 +812,11 @@ class OrderUploadController extends Controller
                 $errorMessage = $errorResponse['error'] ?? $errorResponse['message'] ?? 'Lỗi không xác định từ API DTF';
             }
 
-            Log::error('DTF API Error:', [
+            Log::error('DTF API Error', [
                 'order_id' => $orderId,
                 'external_id' => $orderMapping->external_id,
                 'status_code' => $response->status(),
-                'error_response' => $errorResponse,
-                'error_message' => $errorMessage,
-                'request_data' => $updateData
+                'error_message' => $errorMessage
             ]);
 
             return response()->json([
@@ -988,11 +825,8 @@ class OrderUploadController extends Controller
                 'error' => $errorResponse
             ], $response->status());
         } catch (\Exception $e) {
-            Log::error('Error updating DTF order:', [
-                'message' => $e->getMessage(),
-                'trace' => $e->getTraceAsString(),
-                'order_id' => $orderId,
-                'request_data' => $request->all()
+            Log::error('Error updating DTF order: ' . $e->getMessage(), [
+                'order_id' => $orderId
             ]);
 
             return response()->json([

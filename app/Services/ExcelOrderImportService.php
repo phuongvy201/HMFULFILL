@@ -17,9 +17,17 @@ use App\Models\Transaction;
 use GuzzleHttp\Client;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\Log;
+use App\Services\OrderRowValidator;
 
 class ExcelOrderImportService
 {
+    private OrderRowValidator $validator;
+
+    public function __construct(OrderRowValidator $validator)
+    {
+        $this->validator = $validator;
+    }
+
     private function getPositionTitle(string $position): string
     {
         // Chỉ xử lý UK format, US format sẽ giữ nguyên
@@ -119,20 +127,60 @@ class ExcelOrderImportService
                 ->first();
 
             if ($variant) {
-                // Lấy giá shipping dựa trên variant
-                $shippingPrices = ShippingPrice::where('variant_id', $variant->id)->get();
+                // Lấy tier hiện tại của user
+                $userTier = \App\Models\UserTier::getCurrentTier($importFile->user_id);
+                $currentTier = $userTier ? $userTier->tier : 'Wood'; // Mặc định là Wood nếu không có tier
 
-                // Giả định bạn muốn lấy giá shipping đầu tiên (hoặc có thể thêm logic để chọn giá phù hợp)
-                if ($shippingPrices->isNotEmpty()) {
-                    $shippingPrice = $shippingPrices->first(); // Lấy giá shipping đầu tiên
+                // Xác định shipping method dựa trên shipping_method và position
+                $shippingMethod = $this->determineShippingMethod($row['W'] ?? '', $order->id);
 
+                // Lấy giá shipping theo tier và method
+                $shippingPrice = ShippingPrice::where('variant_id', $variant->id)
+                    ->where('tier_name', $currentTier)
+                    ->where('method', $shippingMethod)
+                    ->first();
+
+                if ($shippingPrice) {
                     // Cập nhật giá và product_id vào orderItem
                     $orderItem->update([
-                        'print_price' => $shippingPrice->price_usd, // Hoặc bạn có thể lưu giá theo currency khác
-                        'product_id' => $variant->product_id // Lưu product_id từ variant
+                        'print_price' => $shippingPrice->price_usd,
+                        'product_id' => $variant->product_id
+                    ]);
+
+                    Log::info("Applied tier pricing", [
+                        'user_id' => $importFile->user_id,
+                        'tier' => $currentTier,
+                        'variant_id' => $variant->id,
+                        'method' => $shippingMethod,
+                        'price' => $shippingPrice->price_usd
                     ]);
                 } else {
-                    Log::warning("No shipping prices found for variant ID: {$variant->id}");
+                    // Fallback: Lấy giá Wood tier nếu không tìm thấy giá cho tier hiện tại
+                    $fallbackPrice = ShippingPrice::where('variant_id', $variant->id)
+                        ->where('tier_name', 'Wood')
+                        ->where('method', $shippingMethod)
+                        ->first();
+
+                    if ($fallbackPrice) {
+                        $orderItem->update([
+                            'print_price' => $fallbackPrice->price_usd,
+                            'product_id' => $variant->product_id
+                        ]);
+
+                        Log::warning("Used fallback Wood tier pricing", [
+                            'user_id' => $importFile->user_id,
+                            'requested_tier' => $currentTier,
+                            'variant_id' => $variant->id,
+                            'method' => $shippingMethod,
+                            'price' => $fallbackPrice->price_usd
+                        ]);
+                    } else {
+                        Log::warning("No shipping prices found for variant", [
+                            'variant_id' => $variant->id,
+                            'tier' => $currentTier,
+                            'method' => $shippingMethod
+                        ]);
+                    }
                 }
             } else {
                 Log::warning("Product variant not found for part_number: {$row['Q']}");
@@ -200,7 +248,7 @@ class ExcelOrderImportService
 
     public function processCustomer(ImportFile $importFile, array $rows, string $warehouse)
     {
-        $errors = $this->validateRows($rows, $importFile);
+        $errors = $this->validator->validateRows($rows, $warehouse);
         if (!empty($errors)) {
             $importFile->update([
                 'status' => 'failed',
@@ -212,9 +260,22 @@ class ExcelOrderImportService
         }
         Log::info('Warehouse: ' . $warehouse);
 
+        // Lấy tier hiện tại của user
+        $userTier = \App\Models\UserTier::getCurrentTier($importFile->user_id);
+        $currentTier = $userTier ? $userTier->tier : 'Wood';
+        Log::info('[IMPORT] Tier hiện tại của user', [
+            'user_id' => $importFile->user_id,
+            'tier' => $currentTier,
+            'tier_data' => $userTier
+        ]);
+
         $rowsByExternalId = [];
         foreach ($rows as $row) {
-            if (empty(array_filter($row))) continue;
+            // Loại bỏ khoảng trắng từ tất cả giá trị trong mảng $row
+            $filteredRow = array_filter(array_map('trim', $row));
+            if (empty($filteredRow)) {
+                continue; // Bỏ qua nếu dòng rỗng hoặc chỉ chứa khoảng trắng
+            }
             $externalId = trim($row['A'] ?? '');
             if (!isset($rowsByExternalId[$externalId])) {
                 $rowsByExternalId[$externalId] = [];
@@ -224,8 +285,8 @@ class ExcelOrderImportService
 
         $totalAmount = 0;
         $orderPriceBreakdowns = [];
-        $itemPrices = []; // Lưu giá trung bình cho mỗi item
-        $itemPriceBreakdowns = []; // Lưu chi tiết giá
+        $itemPrices = [];
+        $itemPriceBreakdowns = [];
 
         foreach ($rowsByExternalId as $externalId => $orderRows) {
             $allItems = [];
@@ -243,8 +304,8 @@ class ExcelOrderImportService
                         'quantity' => $quantity,
                         'row' => $row,
                         'row_index' => $rowIndex,
-                        'first_item_price' => $variant->getFirstItemPrice($shippingMethod),
-                        'part_number' => $variant->twofifteen_sku ?? $partNumber, // Sử dụng twofifteen_sku nếu có
+                        'first_item_price' => $variant->getFirstItemPrice($shippingMethod, $importFile->user_id),
+                        'part_number' => $variant->twofifteen_sku ?? $partNumber,
                         'shipping_method' => $shippingMethod
                     ];
                 }
@@ -276,6 +337,7 @@ class ExcelOrderImportService
                     $quantity = $item['quantity'];
                     $rowIndex = $item['row_index'];
                     $shippingMethod = $item['shipping_method'];
+                    $row = $item['row'];
 
                     $isFirstItem = (!$firstItemProcessed && $highestPriceItem && $highestPriceItem['row_index'] === $rowIndex);
                     if ($isFirstItem) {
@@ -286,14 +348,26 @@ class ExcelOrderImportService
                     $averagePrice = 0;
                     $priceBreakdown = [];
                     $logType = '';
+                    $specialPriceAdjustment = 0;
+
+                    // Kiểm tra position Special (chỉ áp dụng cho warehouse US)
+                    if ($warehouse === 'US') {
+                        $positionCols = ['X', 'AA', 'AD', 'AG', 'AJ'];
+                        foreach ($positionCols as $col) {
+                            if (!empty($row[$col]) && str_contains(trim($row[$col]), '(Special)')) {
+                                $specialPriceAdjustment = 2 * $quantity; // +$2 cho mỗi quantity
+                                break;
+                            }
+                        }
+                    }
 
                     if ($isFirstItem && $quantity > 1) {
-                        $priceInfo1 = $variant->getOrderPriceInfo($shippingMethod, 1);
-                        $priceInfo2 = $variant->getOrderPriceInfo($shippingMethod, 2);
+                        $priceInfo1 = $variant->getOrderPriceInfo($shippingMethod, 1, $importFile->user_id);
+                        $priceInfo2 = $variant->getOrderPriceInfo($shippingMethod, 2, $importFile->user_id);
                         if ($priceInfo1['shipping_price_found'] && $priceInfo2['shipping_price_found']) {
                             $firstPrice = round($priceInfo1['print_price'], 2);
                             $secondPrice = round($priceInfo2['print_price'], 2);
-                            $itemTotal = $firstPrice + ($secondPrice * ($quantity - 1));
+                            $itemTotal = $firstPrice + ($secondPrice * ($quantity - 1)) + $specialPriceAdjustment;
                             $itemTotal = round($itemTotal, 2);
                             $averagePrice = round($itemTotal / $quantity, 2);
                             $logType = 'first_item_mix';
@@ -301,7 +375,10 @@ class ExcelOrderImportService
                                 'first_item_price' => $firstPrice,
                                 'additional_item_price' => $secondPrice,
                                 'quantity' => $quantity,
-                                'breakdown' => "1x{$firstPrice} + " . ($quantity - 1) . "x{$secondPrice}"
+                                'special_price_adjustment' => $specialPriceAdjustment,
+                                'tier_price' => $priceInfo1['tier_price'] ?? false,
+                                'tier' => $priceInfo1['tier'] ?? null,
+                                'breakdown' => "1x{$firstPrice} + " . ($quantity - 1) . "x{$secondPrice}" . ($specialPriceAdjustment > 0 ? " + {$quantity}x2 (Special)" : "")
                             ];
                             Log::info('[IMPORT] Tính giá (first_item_mix)', [
                                 'external_id' => $externalId,
@@ -309,33 +386,42 @@ class ExcelOrderImportService
                                 'quantity' => $quantity,
                                 'first_item_price' => $firstPrice,
                                 'second_item_price' => $secondPrice,
+                                'special_price_adjustment' => $specialPriceAdjustment,
                                 'item_total' => $itemTotal,
                                 'average_price' => $averagePrice,
+                                'tier_price' => $priceInfo1['tier_price'] ?? false,
+                                'tier' => $priceInfo1['tier'] ?? null,
                                 'breakdown' => $priceBreakdown['breakdown']
                             ]);
                         }
                     } else {
                         $position = $isFirstItem ? 1 : 2;
-                        $priceInfo = $variant->getOrderPriceInfo($shippingMethod, $position);
+                        $priceInfo = $variant->getOrderPriceInfo($shippingMethod, $position, $importFile->user_id);
                         if ($priceInfo['shipping_price_found']) {
                             $unitPrice = round($priceInfo['print_price'], 2);
-                            $itemTotal = $unitPrice * $quantity;
+                            $itemTotal = ($unitPrice * $quantity) + $specialPriceAdjustment;
                             $itemTotal = round($itemTotal, 2);
-                            $averagePrice = $unitPrice;
+                            $averagePrice = round($itemTotal / $quantity, 2);
                             $logType = $isFirstItem ? 'first_item' : 'second_item';
                             $priceBreakdown = [
                                 'unit_price' => $unitPrice,
                                 'quantity' => $quantity,
                                 'is_first_item' => $isFirstItem,
-                                'breakdown' => $quantity . "x" . $unitPrice
+                                'special_price_adjustment' => $specialPriceAdjustment,
+                                'tier_price' => $priceInfo['tier_price'] ?? false,
+                                'tier' => $priceInfo['tier'] ?? null,
+                                'breakdown' => $quantity . "x" . $unitPrice . ($specialPriceAdjustment > 0 ? " + {$quantity}x2 (Special)" : "")
                             ];
                             Log::info('[IMPORT] Tính giá (' . $logType . ')', [
                                 'external_id' => $externalId,
                                 'part_number' => $partNumber,
                                 'quantity' => $quantity,
                                 'unit_price' => $unitPrice,
+                                'special_price_adjustment' => $specialPriceAdjustment,
                                 'item_total' => $itemTotal,
                                 'average_price' => $averagePrice,
+                                'tier_price' => $priceInfo['tier_price'] ?? false,
+                                'tier' => $priceInfo['tier'] ?? null,
                                 'breakdown' => $priceBreakdown['breakdown']
                             ]);
                         }
@@ -455,7 +541,7 @@ class ExcelOrderImportService
                     'label_name' => trim($row['U'] ?? ''),
                     'label_type' => trim($row['V'] ?? ''),
                     'product_id' => $productId,
-                    'print_price' => $itemPrices[$externalId][$index] ?? 0 // Sử dụng giá trung bình
+                    'print_price' => $itemPrices[$externalId][$index] ?? 0
                 ]);
 
                 $orderTotalQuantity += (int)($row['S'] ?? 0);
@@ -509,216 +595,15 @@ class ExcelOrderImportService
             $orderTotalPrices[$externalId] = $orderPriceBreakdowns[$externalId] ?? 0;
         }
 
+        Log::info('[IMPORT] Hoàn thành import đơn hàng với tier pricing', [
+            'import_file_id' => $importFile->id,
+            'user_id' => $importFile->user_id,
+            'tier' => $currentTier,
+            'total_amount' => $totalAmount,
+            'warehouse' => $warehouse
+        ]);
+
         return true;
-    }
-
-    public function validateRows(array $rows, ImportFile $importFile): array
-    {
-        $errors = [];
-        $validPositionsUK = ['Front', 'Back', 'Left sleeve', 'Right sleeve', 'Hem'];
-        $validPositionsUS = ['Front', 'Back', 'Right Sleeve', 'Left Sleeve', 'Special'];
-        $validSizes = ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL'];
-        $validImageMimeTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-        $externalIds = [];
-
-        // Hàm kiểm tra mimetype từ URL
-        $isValidImageMime = function ($url) use ($validImageMimeTypes) {
-            $headers = @get_headers($url, 1);
-            if (!$headers) return false;
-            $mime = isset($headers['Content-Type']) ? (is_array($headers['Content-Type']) ? $headers['Content-Type'][0] : $headers['Content-Type']) : '';
-            return in_array(strtolower($mime), $validImageMimeTypes);
-        };
-
-        // Hàm kiểm tra hàng có dữ liệu hay không
-        $hasRowData = function ($row) {
-            $requiredColumns = ['A', 'E', 'H', 'J', 'K', 'L', 'M', 'Q', 'S', 'X', 'Y', 'Z'];
-            foreach ($requiredColumns as $col) {
-                if (!empty(trim($row[$col] ?? ''))) {
-                    return true;
-                }
-            }
-            return false;
-        };
-
-        // Hàm kiểm tra SKU và warehouse
-        $validateSkuAndWarehouse = function ($sku, $warehouse, $excelRow) {
-            $skuParts = explode('-', $sku);
-            $skuSuffix = end($skuParts);
-
-            if ($skuSuffix === 'UK' && $warehouse !== 'UK') {
-                return "Row $excelRow: SKU '$sku' is for UK warehouse but selected warehouse is $warehouse";
-            }
-            if ($skuSuffix === 'US' && $warehouse !== 'US') {
-                return "Row $excelRow: SKU '$sku' is for US warehouse but selected warehouse is $warehouse";
-            }
-            return null;
-        };
-
-        // Hàm kiểm tra position dựa trên warehouse
-        $validatePosition = function ($position, $warehouse, $excelRow, $positionCol) use ($validPositionsUK, $validPositionsUS, $validSizes) {
-            if ($warehouse === 'UK') {
-                if (!in_array($position, $validPositionsUK)) {
-                    return "Row $excelRow: Invalid print position at column $positionCol: '$position'. Valid values for UK warehouse are: " . implode(', ', $validPositionsUK);
-                }
-            } elseif ($warehouse === 'US') {
-                // Kiểm tra format size-side cho US
-                $parts = explode('-', $position);
-                if (count($parts) !== 2) {
-                    return "Row $excelRow: Invalid print position format at column $positionCol: '$position'. For US warehouse, position must be in format 'size-side' (e.g., S-Front, L-Left Sleeve).";
-                }
-
-                $size = $parts[0];
-                $side = $parts[1];
-
-                if (!in_array($size, $validSizes)) {
-                    return "Row $excelRow: Invalid size '$size' in position at column $positionCol. Valid sizes are: " . implode(', ', $validSizes);
-                }
-
-                if (!in_array($side, $validPositionsUS)) {
-                    return "Row $excelRow: Invalid side '$side' in position at column $positionCol. Valid sides for US warehouse are: " . implode(', ', $validPositionsUS);
-                }
-            }
-            return null;
-        };
-
-        foreach ($rows as $index => $row) {
-            // Bỏ qua hàng không có dữ liệu
-            if (!$hasRowData($row)) {
-                continue;
-            }
-
-            $rowErrors = [];
-            $excelRow = $index + 2;
-
-            // Kiểm tra các trường bắt buộc
-            $externalId = trim($row['A'] ?? '');
-            if (empty($externalId)) {
-                $rowErrors[] = "Row $excelRow: Missing order code (External_ID).";
-            } else {
-                // Chỉ kiểm tra xem đã tồn tại trong database chưa
-                if (ExcelOrder::where('external_id', $externalId)->exists()) {
-                    $rowErrors[] = "Row $excelRow: External_ID '$externalId' already exists in the database.";
-                }
-            }
-
-            if (empty(trim($row['E'] ?? ''))) {
-                $rowErrors[] = "Row $excelRow: Missing recipient name (First Name).";
-            }
-            if (empty(trim($row['H'] ?? ''))) {
-                $rowErrors[] = "Row $excelRow: Missing delivery address (Address 1).";
-            }
-            if (empty(trim($row['J'] ?? ''))) {
-                $rowErrors[] = "Row $excelRow: Missing city (City).";
-            }
-            if (empty(trim($row['K'] ?? ''))) {
-                $rowErrors[] = "Row $excelRow: Missing district/county (County).";
-            }
-            if (empty(trim($row['L'] ?? ''))) {
-                $rowErrors[] = "Row $excelRow: Missing postal code (Postcode).";
-            }
-            if (empty(trim($row['M'] ?? ''))) {
-                $rowErrors[] = "Row $excelRow: Missing country (Country).";
-            }
-
-            // Kiểm tra số lượng
-            if (empty($row['S']) || !is_numeric($row['S']) || (int)$row['S'] <= 0) {
-                $rowErrors[] = "Row $excelRow: Product quantity is invalid or empty.";
-            }
-
-            // Kiểm tra shipping method với Google Drive link
-            $comment = trim($row['P'] ?? '');
-            $hasGoogleDriveLink = str_contains(strtolower($comment), 'drive.google.com');
-            if ($hasGoogleDriveLink) {
-                $shippingMethod = strtolower(trim($row['W'] ?? ''));
-                if ($shippingMethod !== 'tiktok_label') {
-                    $rowErrors[] = "Row $excelRow: Shipping method must be 'tiktok_label' when Google Drive link is present in comment. Current value: '{$row['W']}'.";
-                }
-            }
-
-            // Kiểm tra SKU
-            $sku = trim($row['Q'] ?? '');
-            if (empty($sku)) {
-                $rowErrors[] = "Row $excelRow: Missing product code (SKU).";
-            } else {
-                // Kiểm tra SKU và warehouse
-                $skuError = $validateSkuAndWarehouse($sku, $importFile->warehouse, $excelRow);
-                if ($skuError) {
-                    $rowErrors[] = $skuError;
-                }
-
-                $variant = ProductVariant::where('sku', $sku)
-                    ->orWhere('twofifteen_sku', $sku)
-                    ->orWhere('flashship_sku', $sku)
-                    ->first();
-                if (!$variant) {
-                    $rowErrors[] = "Row $excelRow: Product code (SKU) does not exist in the system: '$sku'.";
-                }
-            }
-
-            // Kiểm tra vị trí in, mockup và design
-            $positionCols = ['X', 'AA', 'AD', 'AG', 'AJ'];
-            $mockupCols = ['Y', 'AB', 'AE', 'AH', 'AK'];
-            $designCols = ['Z', 'AC', 'AF', 'AI', 'AL'];
-            $hasPosition = false;
-            $hasMockup = false;
-            $hasDesign = false;
-
-            for ($i = 0; $i < 5; $i++) {
-                $positionCol = $positionCols[$i];
-                $mockupCol = $mockupCols[$i];
-                $designCol = $designCols[$i];
-
-                // Kiểm tra vị trí in
-                if (!empty($row[$positionCol])) {
-                    $hasPosition = true;
-                    $position = trim($row[$positionCol]);
-
-                    // Kiểm tra position dựa trên warehouse
-                    $positionError = $validatePosition($position, $importFile->warehouse, $excelRow, $positionCol);
-                    if ($positionError) {
-                        $rowErrors[] = $positionError;
-                    }
-                }
-
-                // Kiểm tra mockup và design
-                foreach (['mockup' => $mockupCol, 'design' => $designCol] as $type => $col) {
-                    if (!empty($row[$col])) {
-                        $url = trim($row[$col]);
-                        if ($type === 'mockup') {
-                            $hasMockup = true;
-                        } else {
-                            $hasDesign = true;
-                        }
-
-                        if (str_contains($url, 'drive.google.com')) {
-                            if (!str_contains($url, '/file/d/')) {
-                                $rowErrors[] = "Row $excelRow: Google Drive link for $type at column $col must be a sharing link.";
-                            }
-                        } else {
-                            if (!$isValidImageMime($url)) {
-                                $rowErrors[] = "Row $excelRow: File at column $col is not a valid image (JPG, JPEG, PNG).";
-                            }
-                        }
-                    }
-                }
-            }
-
-            if (!$hasPosition) {
-                $rowErrors[] = "Row $excelRow: At least one print position is required.";
-            }
-            if (!$hasMockup) {
-                $rowErrors[] = "Row $excelRow: At least one mockup URL is required.";
-            }
-            if (!$hasDesign) {
-                $rowErrors[] = "Row $excelRow: At least one design URL is required.";
-            }
-
-            if (!empty($rowErrors)) {
-                $errors[$excelRow] = $rowErrors;
-            }
-        }
-
-        return $errors;
     }
 
     /**
@@ -800,7 +685,7 @@ class ExcelOrderImportService
                             return in_array($mime, ['image/jpeg', 'image/png', 'image/jpg']);
                         };
                         if (!$isValidImageMime($url)) {
-                            $rowErrors[] = "Row $excelRow: File at $col is not a valid image (JPG, JPEG, PNG).";
+                            $rowErrors[] = "Row $excelRow: File at column $col is not a valid image (JPG, JPEG, PNG).";
                         }
                     }
                 }
@@ -850,5 +735,35 @@ class ExcelOrderImportService
         }
 
         return $errors;
+    }
+
+    /**
+     * Xác định shipping method dựa trên shipping_method và position trong order
+     *
+     * @param string $shippingMethod Shipping method từ Excel (cột W)
+     * @param int $orderId ID của order để đếm số item
+     * @return string Shipping method constant
+     */
+    private function determineShippingMethod(string $shippingMethod, int $orderId): string
+    {
+        // Đếm số item đã có trong order này
+        $itemCount = \App\Models\ExcelOrderItem::where('excel_order_id', $orderId)->count();
+
+        // Xác định đây là item đầu tiên hay tiếp theo
+        $isFirstItem = ($itemCount === 0);
+
+        // Xác định loại shipping (TikTok hay Seller)
+        $isTikTokShipping = stripos($shippingMethod, 'tiktok') !== false;
+
+        // Trả về method phù hợp
+        if ($isTikTokShipping) {
+            return $isFirstItem ?
+                \App\Models\ShippingPrice::METHOD_TIKTOK_1ST :
+                \App\Models\ShippingPrice::METHOD_TIKTOK_NEXT;
+        } else {
+            return $isFirstItem ?
+                \App\Models\ShippingPrice::METHOD_SELLER_1ST :
+                \App\Models\ShippingPrice::METHOD_SELLER_NEXT;
+        }
     }
 }

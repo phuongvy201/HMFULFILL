@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ShippingPrice extends Model
 {
-    protected $fillable = ['variant_id', 'method', 'price', 'currency'];
+    protected $fillable = ['variant_id', 'method', 'price', 'currency', 'tier_name'];
     protected $appends = ['price_usd', 'price_vnd', 'price_gbp'];
 
     // Định nghĩa các hằng số cho shipping methods
@@ -26,6 +26,14 @@ class ShippingPrice extends Model
     public function variant()
     {
         return $this->belongsTo(ProductVariant::class, 'variant_id');
+    }
+
+    /**
+     * Relationship với UserTier
+     */
+    public function tier()
+    {
+        return $this->belongsTo(UserTier::class, 'tier_id');
     }
 
     // Format giá shipping theo currency
@@ -59,7 +67,7 @@ class ShippingPrice extends Model
             case Product::CURRENCY_VND:
                 return $this->price;
             default:
-                    throw new \InvalidArgumentException("Currency not supported: {$this->currency}");
+                throw new \InvalidArgumentException("Currency not supported: {$this->currency}");
         }
     }
 
@@ -76,7 +84,7 @@ class ShippingPrice extends Model
             case Product::CURRENCY_USD:
                 return $this->price;
             default:
-                    throw new \InvalidArgumentException("Currency not supported: {$this->currency}");
+                throw new \InvalidArgumentException("Currency not supported: {$this->currency}");
         }
     }
 
@@ -95,5 +103,43 @@ class ShippingPrice extends Model
             default:
                 throw new \InvalidArgumentException("Currency not supported: {$this->currency}");
         }
+    }
+
+    /**
+     * Lấy shipping price theo variant, method và tier
+     */
+    public static function getPriceByVariantAndTier(int $variantId, string $method, ?int $tierId = null)
+    {
+        $query = self::where('variant_id', $variantId)
+            ->where('method', $method);
+
+        if ($tierId) {
+            $query->where('tier_id', $tierId);
+        } else {
+            $query->whereNull('tier_id'); // Giá mặc định khi không có tier
+        }
+
+        return $query->first();
+    }
+
+    /**
+     * Lấy tất cả shipping prices cho một variant
+     */
+    public static function getPricesByVariant(int $variantId)
+    {
+        return self::where('variant_id', $variantId)
+            ->with('tier')
+            ->get()
+            ->groupBy('method');
+    }
+
+    /**
+     * Lấy shipping prices theo tier
+     */
+    public static function getPricesByTier(int $tierId)
+    {
+        return self::where('tier_id', $tierId)
+            ->with(['variant', 'variant.product'])
+            ->get();
     }
 }

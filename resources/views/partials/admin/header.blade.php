@@ -19,8 +19,8 @@
             <!-- Hamburger Toggle BTN -->
 
             <a href="index.html" class="lg:hidden">
-                <img class="dark:hidden" src="src/images/logo/logo.svg" alt="Logo">
-                <img class="hidden dark:block" src="src/images/logo/logo-dark.svg" alt="Logo">
+                <img style="width: 100px;" class="dark:hidden" src="{{ asset('assets/images/logo HM-02.png') }}" alt="Logo">
+                <img style="width: 100px;" class="hidden dark:block" src="{{ asset('assets/images/logo HM-02.png') }}" alt="Logo">
             </a>
 
             <!-- Application nav menu button -->
@@ -31,7 +31,7 @@
             </button>
             <!-- Application nav menu button -->
 
-         
+
         </div>
 
         <div :class="menuToggle ? 'flex' : 'hidden'" class="w-full items-center justify-between gap-4 px-5 py-4 shadow-theme-md lg:flex lg:justify-end lg:px-0 lg:shadow-none hidden">
@@ -40,7 +40,7 @@
             <!-- User Area -->
             <div class="relative" x-data="{ dropdownOpen: false }" @click.outside="dropdownOpen = false">
                 <a class="flex items-center text-gray-700 dark:text-gray-400" href="#" @click.prevent="dropdownOpen = ! dropdownOpen">
-                    
+
 
                     <span class="mr-1 block text-theme-sm font-medium">
                         {{ Auth::user()->first_name . ' ' . Auth::user()->last_name ?? 'No Name' }}

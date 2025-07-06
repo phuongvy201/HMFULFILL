@@ -14,7 +14,7 @@
                 <ol class="flex items-center gap-1.5">
                     <li>
                         <a class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400"
-                            href="{{ route('admin.dashboard') }}">
+                            href="{{ route('admin.statistics.dashboard') }}">
                             Home
                             <svg class="stroke-current" width="17" height="16" viewBox="0 0 17 16" fill="none"
                                 xmlns="http://www.w3.org/2000/svg">

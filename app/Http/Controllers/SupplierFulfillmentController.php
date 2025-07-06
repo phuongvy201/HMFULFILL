@@ -26,10 +26,12 @@ use App\Models\ExcelOrderMockup;
 use App\Models\Product;
 use App\Models\ProductVariant;
 use App\Models\ShippingPrice;
+use App\Models\VariantAttribute;
 use App\Rules\ValidPartNumber;
 use App\Rules\ValidPrintSpace;
 use App\Models\Wallet;
 use App\Models\Transaction;
+use App\Services\OrderRowValidator;
 
 /**
  * @OA\Info(
@@ -44,11 +46,41 @@ class SupplierFulfillmentController extends Controller
     private $apiUrl = 'https://www.twofifteen.co.uk/api/orders.php';
     private $appId;
     private $secretKey;
+    private OrderRowValidator $validator;
+    private ExcelOrderImportService $excelOrderImportService;
 
-    public function __construct()
+    // Thêm properties cho API services
+    protected $apiServices = [
+        'dtf' => [
+            'apiUrl' => '',
+            'bearerToken' => '',
+        ],
+        'twofifteen' => [
+            'apiUrl' => '',
+            'appId' => '',
+            'secretKey' => '',
+        ],
+    ];
+
+    public function __construct(OrderRowValidator $validator, ExcelOrderImportService $excelOrderImportService)
     {
         $this->appId = config('services.twofifteen.app_id');
         $this->secretKey = config('services.twofifteen.secret_key');
+        $this->validator = $validator;
+        $this->excelOrderImportService = $excelOrderImportService;
+
+        // Khởi tạo API services
+        $this->apiServices = [
+            'dtf' => [
+                'apiUrl' => config('services.dtf.api_url'),
+                'bearerToken' => config('services.dtf.bearer_token'),
+            ],
+            'twofifteen' => [
+                'apiUrl' => config('services.twofifteen.api_url'),
+                'appId' => config('services.twofifteen.app_id'),
+                'secretKey' => config('services.twofifteen.secret_key'),
+            ],
+        ];
     }
 
     public function store(Request $request)
@@ -272,8 +304,7 @@ class SupplierFulfillmentController extends Controller
             }
 
             // Xử lý dữ liệu sử dụng ExcelOrderImportService
-            $excelOrderImportService = new ExcelOrderImportService();
-            $excelOrderImportService->process($importedFile, $rows);
+            $this->excelOrderImportService->process($importedFile, $rows);
 
             // Cập nhật trạng thái file
 
@@ -424,8 +455,7 @@ class SupplierFulfillmentController extends Controller
             }
 
             // Xử lý dữ liệu sử dụng ExcelOrderImportService
-            $excelOrderImportService = new ExcelOrderImportService();
-            $result = $excelOrderImportService->processCustomer($importedFile, $rows, $request->input('warehouse'));
+            $result = $this->excelOrderImportService->processCustomer($importedFile, $rows, $request->input('warehouse'));
 
             // Nếu result là false, nghĩa là đã có lỗi
             if ($result === false) {
@@ -508,6 +538,16 @@ class SupplierFulfillmentController extends Controller
             // Lấy thông tin các file trước khi xóa
             $files = ImportFile::whereIn('id', $ids)->get();
 
+            // Kiểm tra xem tất cả file có trạng thái "failed" không
+            $nonFailedFiles = $files->where('status', '!=', 'failed');
+            if ($nonFailedFiles->count() > 0) {
+                $nonFailedFileIds = $nonFailedFiles->pluck('id')->toArray();
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Only files with "failed" status can be deleted. Files with IDs: ' . implode(', ', $nonFailedFileIds) . ' cannot be deleted.'
+                ], 400);
+            }
+
             foreach ($files as $file) {
                 // Lấy đường dẫn vật lý của file
                 $filePath = public_path('uploads/customer_fulfillment/' . basename($file->file_name));
@@ -566,6 +606,10 @@ class SupplierFulfillmentController extends Controller
                 $query->where('created_at', '<=', $endDate);
             }
 
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
             // Lấy dữ liệu có phân trang
             $excelOrders = $query->orderBy('created_at', 'desc')
                 ->paginate(50)
@@ -598,13 +642,18 @@ class SupplierFulfillmentController extends Controller
     public function getCustomerOrderDetail($externalId)
     {
         try {
+            $userId = Auth::id();
+
             // Lấy chi tiết đơn hàng cụ thể với các relationships cần thiết
+            // Thêm điều kiện kiểm tra user_id để đảm bảo bảo mật
             $order = ExcelOrder::with([
                 'items.mockups',
                 'items.designs',
                 'items.product',
                 'importFile'
-            ])->where('external_id', $externalId)->firstOrFail();
+            ])->where('external_id', $externalId)
+                ->where('created_by', $userId)
+                ->firstOrFail();
 
             // Tính toán thống kê cho đơn hàng này
             $orderStatistics = [
@@ -628,7 +677,8 @@ class SupplierFulfillmentController extends Controller
             Log::error('Error in getCustomerOrderDetail:', [
                 'message' => $e->getMessage(),
                 'trace' => $e->getTraceAsString(),
-                'external_id' => $externalId
+                'external_id' => $externalId,
+                'user_id' => Auth::id()
             ]);
             return back()->with('error', 'Có lỗi khi tải thông tin đơn hàng: ' . $e->getMessage());
         }
@@ -1631,9 +1681,21 @@ class SupplierFulfillmentController extends Controller
             $comment = $validated['order_note'] ?? '';
 
             // Kiểm tra nếu shipping_method là tiktok_label
-            if (($validated['shipping_method'] ?? '') === 'tiktok_label') {
-                $comment .= ' Shipping label: http://example.com/label.pdf'; // Thay thế bằng link thực tế
+            // Validate shipping label link bắt buộc
+            if (($validated['shipping_method'] ?? ($existingOrder->shipping_method ?? null)) === 'tiktok_label') {
+                if (empty($validated['order_note'])) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Order note (shipping label link) is required when shipping_method is tiktok_label.'
+                    ], 400);
+                }
             }
+
+            // Gán comment nếu có
+            if (isset($validated['order_note'])) {
+                $updateData['comment'] = $validated['order_note'];
+            }
+
 
             $order = ExcelOrder::create([
                 'external_id' => $validated['order_number'],
@@ -2271,13 +2333,13 @@ class SupplierFulfillmentController extends Controller
     // }
 
     /**
-     * Lấy danh sách đơn hàng được tạo qua API (file_id = null) dành cho admin
+     * Lấy danh sách tất cả đơn hàng dành cho admin
      */
-    public function getAdminApiOrders(Request $request)
+    public function getAdminAllOrders(Request $request)
     {
         try {
-            // Khởi tạo query với điều kiện file_id là null
-            $query = ExcelOrder::with(['items', 'creator', 'orderMapping']);
+            // Khởi tạo query lấy tất cả đơn hàng
+            $query = ExcelOrder::with(['items', 'creator', 'orderMapping', 'importFile']);
 
             // Thêm điều kiện tìm kiếm theo external_id nếu có
             if ($request->filled('external_id')) {
@@ -2285,6 +2347,121 @@ class SupplierFulfillmentController extends Controller
                 $query->where('external_id', 'LIKE', "%{$searchTerm}%");
             }
 
+            // Thêm điều kiện tìm kiếm theo tên khách hàng
+            if ($request->filled('customer_name')) {
+                $searchTerm = trim($request->customer_name);
+                $query->whereHas('creator', function ($q) use ($searchTerm) {
+                    $q->where('first_name', 'LIKE', "%{$searchTerm}%")
+                        ->orWhere('last_name', 'LIKE', "%{$searchTerm}%")
+                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$searchTerm}%"]);
+                });
+            }
+
+            // Thêm điều kiện tìm kiếm theo trạng thái
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+            }
+
+            // Thêm điều kiện tìm kiếm theo khoảng thời gian
+            if ($request->filled('created_at_min')) {
+                $startDate = Carbon::parse($request->created_at_min)->startOfDay();
+                $query->where('created_at', '>=', $startDate);
+            }
+
+            if ($request->filled('created_at_max')) {
+                $endDate = Carbon::parse($request->created_at_max)->endOfDay();
+                $query->where('created_at', '<=', $endDate);
+            }
+
+            // Thêm điều kiện tìm kiếm theo warehouse
+            if ($request->filled('warehouse')) {
+                $query->where('warehouse', $request->warehouse);
+            }
+
+            // Thêm điều kiện tìm kiếm theo nguồn đơn hàng (API hoặc File upload)
+            if ($request->filled('order_source')) {
+                if ($request->order_source === 'api') {
+                    $query->whereNull('import_file_id');
+                } elseif ($request->order_source === 'file') {
+                    $query->whereNotNull('import_file_id');
+                }
+            }
+
+            // Sắp xếp và phân trang
+            $orders = $query->orderBy('created_at', 'desc')
+                ->paginate(20);
+
+            // Tính thống kê
+            $statistics = [
+                'total_orders' => $orders->total(),
+                'total_items' => $orders->sum(function ($order) {
+                    return $order->items->sum('quantity');
+                }),
+                'pending_orders' => $orders->where('status', 'pending')->count(),
+                'processed_orders' => $orders->where('status', 'processed')->count(),
+                'cancelled_orders' => $orders->where('status', 'cancelled')->count(),
+                'on_hold_orders' => $orders->where('status', 'on hold')->count(),
+                'api_orders' => $orders->where('import_file_id', null)->count(),
+                'file_orders' => $orders->where('import_file_id', '!=', null)->count(),
+                'total_amount' => $orders->sum(function ($order) {
+                    return $order->items->sum(function ($item) {
+                        return $item->print_price * $item->quantity;
+                    });
+                })
+            ];
+
+            // Lấy danh sách các warehouse có sẵn
+            $warehouses = ExcelOrder::distinct()->pluck('warehouse');
+
+            // Lấy danh sách các trạng thái có sẵn
+            $statuses = ExcelOrder::distinct()->pluck('status');
+
+            // Trả về view với dữ liệu
+            return view('admin.orders.all-order-list', [
+                'orders' => $orders,
+                'statistics' => $statistics,
+                'warehouses' => $warehouses,
+                'statuses' => $statuses,
+                'filters' => $request->only([
+                    'external_id',
+                    'customer_email',
+                    'customer_name',
+                    'status',
+                    'warehouse',
+                    'order_source',
+                    'created_at_min',
+                    'created_at_max'
+                ])
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error getting admin all orders list:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'admin_id' => Auth::id()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi khi tải danh sách đơn hàng: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
+     * Lấy danh sách đơn hàng được tạo qua API (import_file_id = null) dành cho admin
+     */
+    public function getAdminApiOrders(Request $request)
+    {
+        try {
+            // Khởi tạo query với điều kiện chỉ lấy đơn hàng từ API
+            $query = ExcelOrder::with(['items', 'creator', 'orderMapping'])
+                ->whereNull('import_file_id');
+
+            // Thêm điều kiện tìm kiếm theo external_id nếu có
+            if ($request->filled('external_id')) {
+                $searchTerm = trim($request->external_id);
+                $query->where('external_id', 'LIKE', "%{$searchTerm}%");
+            }
 
             // Thêm điều kiện tìm kiếm theo tên khách hàng
             if ($request->filled('customer_name')) {
@@ -2338,19 +2515,18 @@ class SupplierFulfillmentController extends Controller
                 })
             ];
 
-            // Lấy danh sách các warehouse có sẵn
+            // Lấy danh sách các warehouse có sẵn (chỉ từ đơn hàng API)
             $warehouses = ExcelOrder::whereNull('import_file_id')
                 ->distinct()
                 ->pluck('warehouse');
 
-            // Lấy danh sách các trạng thái có sẵn
+            // Lấy danh sách các trạng thái có sẵn (chỉ từ đơn hàng API)
             $statuses = ExcelOrder::whereNull('import_file_id')
                 ->distinct()
                 ->pluck('status');
 
             // Trả về view với dữ liệu
             return view('admin.orders.api-order-list', [
-
                 'orders' => $orders,
                 'statistics' => $statistics,
                 'warehouses' => $warehouses,
@@ -2374,7 +2550,7 @@ class SupplierFulfillmentController extends Controller
 
             return response()->json([
                 'success' => false,
-                'message' => 'Có lỗi khi tải danh sách đơn hàng: ' . $e->getMessage()
+                'message' => 'Có lỗi khi tải danh sách đơn hàng API: ' . $e->getMessage()
             ], 500);
         }
     }
@@ -2931,13 +3107,21 @@ class SupplierFulfillmentController extends Controller
             if (isset($validated['customer_phone'])) $updateData['phone1'] = $validated['customer_phone'];
             if (isset($validated['shipping_method'])) $updateData['shipping_method'] = $validated['shipping_method'];
 
-            if (isset($validated['order_note'])) {
-                $comment = $validated['order_note'];
-                if (($validated['shipping_method'] ?? $existingOrder->shipping_method) === 'tiktok_label') {
-                    $comment .= ' Shipping label: http://example.com/label.pdf';
+            // Validate shipping label link bắt buộc
+            if (($validated['shipping_method'] ?? ($existingOrder->shipping_method ?? null)) === 'tiktok_label') {
+                if (empty($validated['order_note'])) {
+                    return response()->json([
+                        'success' => false,
+                        'message' => 'Order note (shipping label link) is required when shipping_method is tiktok_label.'
+                    ], 400);
                 }
-                $updateData['comment'] = $comment;
             }
+
+            // Gán comment nếu có
+            if (isset($validated['order_note'])) {
+                $updateData['comment'] = $validated['order_note'];
+            }
+
 
             if (!empty($updateData)) {
                 $existingOrder->update($updateData);
@@ -3287,5 +3471,1104 @@ class SupplierFulfillmentController extends Controller
             return null;
         }
         return User::where('api_token', $token)->first();
+    }
+
+    /**
+     * Xây dựng dữ liệu đơn hàng để gửi qua API factory
+     */
+    private function buildOrderDataForFactory($order)
+    {
+        // Check for empty order items
+        if ($order->items->isEmpty()) {
+            Log::warning("Order {$order->external_id} has no items");
+            throw new \Exception("Order {$order->external_id} has no items");
+        }
+
+        // Validate items
+        foreach ($order->items as $item) {
+            if (!$item->quantity || $item->mockups->isEmpty() || $item->designs->isEmpty()) {
+                Log::warning("Invalid item in order {$order->external_id}", [
+                    'quantity' => $item->quantity,
+                    'mockups_count' => $item->mockups->count(),
+                    'designs_count' => $item->designs->count(),
+                ]);
+                throw new \Exception("Invalid item in order {$order->external_id}");
+            }
+
+            // Validate mockup URLs
+            foreach ($item->mockups as $mockup) {
+                if (!filter_var($mockup->url, FILTER_VALIDATE_URL)) {
+                    Log::warning("Invalid mockup URL in order {$order->external_id}", ['url' => $mockup->url]);
+                    throw new \Exception("Invalid mockup URL in order {$order->external_id}");
+                }
+            }
+            foreach ($item->designs as $design) {
+                if (!filter_var($design->url, FILTER_VALIDATE_URL)) {
+                    Log::warning("Invalid design URL in order {$order->external_id}", ['url' => $design->url]);
+                    throw new \Exception("Invalid design URL in order {$order->external_id}");
+                }
+            }
+        }
+
+        // Determine factory based on warehouse
+        $factory = strtoupper($order->warehouse) === 'US' ? 'dtf' : 'twofifteen';
+
+        if ($factory === 'dtf') {
+            $orderData = [
+                'external_id' => $order->external_id,
+                'brand' => !empty($order->brand) ? $order->brand : 'HM Fulfill',
+                'channel' => !empty($order->channel) ? $order->channel : 'tiktok',
+                'buyer_email' => !empty($order->buyer_email) ? $order->buyer_email : 'customer@example.com',
+                'shipping_address' => [
+                    'firstName' => $order->first_name,
+                    'lastName' => !empty($order->last_name) ? $order->last_name : '',
+                    'company' => !empty($order->company) ? $order->company : '',
+                    'address1' => !empty($order->address1) ? $order->address1 : '',
+                    'address2' => !empty($order->address2) ? $order->address2 : '',
+                    'city' => !empty($order->city) ? $order->city : '',
+                    'state' => !empty($order->county) ? $order->county : '', // Use county as state
+                    'postcode' => !empty($order->post_code) ? $order->post_code : '',
+                    'country' => 'US',
+                    'phone1' => !empty($order->phone1) ? $order->phone1 : '',
+                    'phone2' => !empty($order->phone2) ? $order->phone2 : ''
+                ],
+                'items' => $order->items->map(function ($item) {
+                    return [
+                        'product_name' => $item->part_number,
+                        'quantity' => (int) $item->quantity,
+                        'description' => $item->description,
+                        'mockups' => $item->mockups->map(function ($mockup) {
+                            return [
+                                'title' => $mockup->title,
+                                'src' => $mockup->url
+                            ];
+                        })->values()->toArray(),
+                        'designs' => $item->designs->map(function ($design) {
+                            return [
+                                'title' => $design->title,
+                                'src' => $design->url
+                            ];
+                        })->values()->toArray()
+                    ];
+                })->values()->toArray(),
+                'shipping' => [
+                    'shippingMethod' => !empty($order->shipping_method) ? $order->shipping_method : 'Standard',
+                ],
+                'label_url' => !empty($order->comment) ? $order->comment : '',
+                'comments' => ""
+            ];
+        } else {
+            // Twofifteen
+            $orderData = [
+                'external_id' => $order->external_id,
+                'brand' => $order->brand,
+                'channel' => $order->channel,
+                'buyer_email' => $order->buyer_email,
+                'shipping_address' => [
+                    'firstName' => $order->first_name,
+                    'lastName' => $order->last_name,
+                    'company' => $order->company,
+                    'address1' => $order->address1,
+                    'address2' => $order->address2,
+                    'city' => $order->city,
+                    'county' => $order->county,
+                    'postcode' => $order->post_code,
+                    'country' => $order->country,
+                    'phone1' => $order->phone1,
+                    'phone2' => $order->phone2
+                ],
+                'shipping' => [
+                    'shippingMethod' => $order->shipping_method ?? null,
+                ],
+                'items' => $order->items->map(function ($item) {
+                    return [
+                        'pn' => $item->part_number,
+                        'quantity' => (int) $item->quantity,
+                        'description' => $item->description,
+                        'mockups' => $item->mockups->map(function ($mockup) {
+                            return [
+                                'title' => $mockup->title,
+                                'src' => $mockup->url
+                            ];
+                        })->toArray(),
+                        'designs' => $item->designs->map(function ($design) {
+                            return [
+                                'title' => $design->title,
+                                'src' => $design->url
+                            ];
+                        })->toArray()
+                    ];
+                })->toArray(),
+                'comment' => $order->comment
+            ];
+        }
+
+        Log::debug("Order Data for {$order->external_id}:", $orderData);
+        return $orderData;
+    }
+
+    /**
+     * Xây dựng cấu hình API cho factory
+     */
+    private function buildApiConfigForFactory($factory, $data)
+    {
+        $config = $this->apiServices[$factory] ?? null;
+        if (!$config) {
+            Log::error("Invalid factory: {$factory}");
+            throw new \Exception("Invalid factory: {$factory}");
+        }
+
+        // Kiểm tra cấu hình
+        if (empty($config['apiUrl'])) {
+            Log::error("Incomplete API config for factory {$factory}", $config);
+            throw new \Exception("Cấu hình API không đầy đủ cho factory {$factory}");
+        }
+
+        $jsonBody = json_encode($data);
+        if (json_last_error() !== JSON_ERROR_NONE) {
+            Log::error("JSON encoding failed for factory {$factory}: " . json_last_error_msg());
+            throw new \Exception("Lỗi mã hóa JSON: " . json_last_error_msg());
+        }
+
+        // Cấu hình khác nhau cho từng factory
+        if ($factory === 'dtf') {
+            if (empty($config['bearerToken'])) {
+                Log::error("Missing bearer token for DTF API");
+                throw new \Exception("Thiếu bearer token cho DTF API");
+            }
+            return [
+                'config' => $config,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json',
+                    'Authorization' => 'Bearer ' . $config['bearerToken']
+                ],
+                'parameters' => []
+            ];
+        } else {
+            // Twofifteen
+            if (empty($config['appId']) || empty($config['secretKey'])) {
+                Log::error("Missing appId or secretKey for Twofifteen API");
+                throw new \Exception("Thiếu appId hoặc secretKey cho Twofifteen API");
+            }
+            $signature = sha1($jsonBody . $config['secretKey']);
+            return [
+                'config' => $config,
+                'headers' => [
+                    'Content-Type' => 'application/json',
+                    'Accept' => 'application/json'
+                ],
+                'parameters' => [
+                    'AppId' => $config['appId'],
+                    'Signature' => $signature
+                ]
+            ];
+        }
+    }
+
+    /**
+     * Xử lý response từ API factory
+     */
+    private function processFactoryOrderResponse($order, $response, $factory = null)
+    {
+        if ($response && $response->successful()) {
+            $apiResponse = $response->json();
+            $internalId = $apiResponse['order']['id'] ?? $apiResponse['id'] ?? null;
+
+            Log::debug("API Response for order {$order->external_id}:", $apiResponse);
+
+            // Cập nhật trạng thái đơn hàng với full response
+            $order->markAsProcessed($apiResponse, $internalId, $factory);
+
+            // Lưu mapping vào OrderMapping
+            if ($internalId && $factory) {
+                OrderMapping::createOrUpdate(
+                    $order->external_id,
+                    $internalId,
+                    $factory,
+                    $apiResponse
+                );
+
+                Log::info('Order mapping created:', [
+                    'external_id' => $order->external_id,
+                    'internal_id' => $internalId,
+                    'factory' => $factory
+                ]);
+            }
+
+            return [
+                'order_id' => $order->id,
+                'external_id' => $order->external_id,
+                'internal_id' => $internalId,
+                'factory' => $factory,
+                'success' => true,
+                'message' => 'Tải lên thành công'
+            ];
+        } else {
+            $errorMessage = $response ? ($response->json()['error'] ?? 'Lỗi không xác định') : 'Yêu cầu thất bại';
+            $fullApiResponse = $response ? $response->json() : null;
+
+            // Chỉ lưu thông tin lỗi, không lưu toàn bộ response
+            $errorResponse = [
+                'success' => false,
+                'error' => $errorMessage,
+                'status_code' => $response ? $response->status() : null,
+                'timestamp' => now()->toISOString()
+            ];
+
+            Log::error('API Error:', [
+                'order_id' => $order->id,
+                'external_id' => $order->external_id,
+                'factory' => $factory,
+                'status_code' => $response ? $response->status() : null,
+                'error_response' => $fullApiResponse
+            ]);
+
+            // Lưu chỉ error response, không lưu full response
+            $order->markAsFailed($errorMessage, $errorResponse);
+
+            return [
+                'order_id' => $order->id,
+                'external_id' => $order->external_id,
+                'success' => false,
+                'message' => $errorMessage
+            ];
+        }
+    }
+
+    /**
+     * Xuất file CSV thông tin đơn hàng
+     */
+
+
+    public function exportOrdersCSV(Request $request)
+    {
+        try {
+            // Validate request
+            $request->validate([
+                'order_ids' => 'nullable|array',
+                'order_ids.*' => 'integer|exists:excel_orders,id',
+                'order_ids_input' => 'nullable|string',
+                'date_from' => 'nullable|date',
+                'date_to' => 'nullable|date',
+                'status' => 'nullable|string',
+                'warehouse' => 'nullable|string',
+                'export_all' => 'nullable|boolean',
+                'export_format' => 'nullable|string|in:csv,tsv'
+            ]);
+
+            // Process order_ids from textarea input if provided
+            $orderIds = $request->input('order_ids', []);
+            if ($request->filled('order_ids_input')) {
+                $inputIds = explode(',', $request->input('order_ids_input'));
+                $inputIds = array_map('trim', $inputIds);
+                $inputIds = array_filter($inputIds, 'is_numeric');
+                $inputIds = array_map('intval', $inputIds);
+
+                if (!empty($inputIds)) {
+                    $orderIds = $inputIds;
+                }
+            }
+
+            // Validate and fix date range if needed
+            $dateFrom = $request->input('date_from');
+            $dateTo = $request->input('date_to');
+
+            if ($dateFrom && $dateTo && $dateFrom > $dateTo) {
+                // Swap dates if from > to
+                $temp = $dateFrom;
+                $dateFrom = $dateTo;
+                $dateTo = $temp;
+
+                Log::warning('CSV Export - Date range corrected', [
+                    'original_from' => $request->input('date_from'),
+                    'original_to' => $request->input('date_to'),
+                    'corrected_from' => $dateFrom,
+                    'corrected_to' => $dateTo
+                ]);
+
+                // Update request data
+                $request->merge([
+                    'date_from' => $dateFrom,
+                    'date_to' => $dateTo
+                ]);
+            }
+
+            // Xây dựng query - đơn giản hóa relationships
+            $query = ExcelOrder::with([
+                'items.mockups',
+                'items.designs'
+            ]);
+
+            // Debug: Log số lượng đơn hàng total
+            $totalOrders = ExcelOrder::count();
+            Log::info('CSV Export Debug - Total orders in database:', ['total' => $totalOrders]);
+
+            // Áp dụng filters
+            if (!empty($orderIds)) {
+                $query->whereIn('id', $orderIds);
+                Log::info('CSV Export - Filtering by order IDs:', ['order_ids' => $orderIds]);
+            }
+
+            // Chỉ áp dụng date filter nếu không chọn export_all
+            if (!$request->input('export_all')) {
+                if ($request->filled('date_from')) {
+                    $query->whereDate('created_at', '>=', $request->date_from);
+                    Log::info('CSV Export - Date from filter:', ['date_from' => $request->date_from]);
+                }
+
+                if ($request->filled('date_to')) {
+                    $query->whereDate('created_at', '<=', $request->date_to);
+                    Log::info('CSV Export - Date to filter:', ['date_to' => $request->date_to]);
+                }
+            } else {
+                Log::info('CSV Export - Export all orders selected, skipping date filters');
+            }
+
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+                Log::info('CSV Export - Status filter:', ['status' => $request->status]);
+            }
+
+            if ($request->filled('warehouse')) {
+                $query->where('warehouse', $request->warehouse);
+                Log::info('CSV Export - Warehouse filter:', ['warehouse' => $request->warehouse]);
+            }
+
+            // Debug: Log query trước khi execute
+            $queryCount = $query->count();
+            Log::info('CSV Export - Query result count:', ['count' => $queryCount]);
+
+            $orders = $query->orderBy('created_at', 'desc')->get();
+
+            if ($orders->isEmpty()) {
+                // Debug: Kiểm tra ngày tạo đơn hàng gần nhất và cũ nhất
+                $latestOrder = ExcelOrder::orderBy('created_at', 'desc')->first();
+                $earliestOrder = ExcelOrder::orderBy('created_at', 'asc')->first();
+
+                // Debug: Đếm đơn hàng theo ngày gần đây
+                $ordersByDate = ExcelOrder::selectRaw('DATE(created_at) as date, COUNT(*) as count')
+                    ->groupBy('date')
+                    ->orderBy('date', 'desc')
+                    ->limit(10)
+                    ->get();
+
+                $debugInfo = [
+                    'total_orders_in_database' => $totalOrders,
+                    'applied_filters' => $request->only(['date_from', 'date_to', 'status', 'warehouse', 'export_all']),
+                    'order_ids_filter' => $orderIds,
+                    'latest_order_date' => $latestOrder ? $latestOrder->created_at->format('Y-m-d H:i:s') : null,
+                    'earliest_order_date' => $earliestOrder ? $earliestOrder->created_at->format('Y-m-d H:i:s') : null,
+                    'recent_dates_with_orders' => $ordersByDate->map(function ($item) {
+                        return [
+                            'date' => $item->date,
+                            'count' => $item->count
+                        ];
+                    })->toArray(),
+                    'suggestions' => [
+                        'valid_date_range' => [
+                            'from' => $earliestOrder ? $earliestOrder->created_at->format('Y-m-d') : null,
+                            'to' => $latestOrder ? $latestOrder->created_at->format('Y-m-d') : null
+                        ],
+                        'message' => 'Vui lòng chọn khoảng thời gian từ ' .
+                            ($earliestOrder ? $earliestOrder->created_at->format('Y-m-d') : 'N/A') .
+                            ' đến ' .
+                            ($latestOrder ? $latestOrder->created_at->format('Y-m-d') : 'N/A') .
+                            ' hoặc tick "Export All Orders".'
+                    ]
+                ];
+
+                // Log thêm thông tin debug
+                Log::warning('CSV Export - No orders found', $debugInfo);
+
+                $message = 'Không có đơn hàng nào để xuất. ';
+
+                if ($request->filled('date_from') && $request->filled('date_to')) {
+                    $message .= 'Khoảng thời gian đã chọn (' . $request->date_from . ' - ' . $request->date_to . ') không có đơn hàng. ';
+                }
+
+                $message .= $debugInfo['suggestions']['message'];
+
+                return response()->json([
+                    'success' => false,
+                    'message' => $message,
+                    'debug' => $debugInfo
+                ], 400);
+            }
+
+            // Chuẩn bị dữ liệu CSV
+            $csvData = [];
+            $headers = [
+                'External_ID',
+                'Link_Label',
+                'Order_Status',
+                'SKU',
+                'Variant',
+                'Quantity',
+                'Price',
+                'Mockup_1',
+                'Design_1',
+                'Mockup_2',
+                'Design_2',
+                'Mockup_3',
+                'Design_3',
+                'Mockup_4',
+                'Design_4',
+                'Mockup_5',
+                'Design_5',
+                'Tracking_Number',
+                'Created_Date',
+                'Created_Time'
+            ];
+
+            $csvData[] = $headers;
+
+            // Xác định format trước khi process data
+            $exportFormat = $request->input('export_format', 'csv');
+
+            foreach ($orders as $order) {
+                foreach ($order->items as $item) {
+                    // Lấy thông tin variant
+                    $variantInfo = $this->getVariantInfo($item->part_number);
+
+                    // Chuẩn bị mockups và designs
+                    $mockups = $item->mockups->pluck('url')->toArray();
+                    $designs = $item->designs->pluck('url')->toArray();
+
+                    // Đảm bảo có đủ 5 slots cho mockup và design
+                    $mockups = array_pad($mockups, 5, '');
+                    $designs = array_pad($designs, 5, '');
+
+                    // Format External ID dựa trên export format
+                    $externalIdForExport = $this->formatExternalIdForExport($order->external_id, $exportFormat);
+
+                    $row = [
+                        $externalIdForExport,
+                        $order->comment ?? '',
+                        $order->status,
+                        $item->part_number,
+                        $variantInfo,
+                        $item->quantity,
+                        number_format($item->print_price, 2, '.', ''),
+                        $mockups[0],
+                        $designs[0],
+                        $mockups[1],
+                        $designs[1],
+                        $mockups[2],
+                        $designs[2],
+                        $mockups[3],
+                        $designs[3],
+                        $mockups[4],
+                        $designs[4],
+                        $order->tracking_number ?? '',
+                        $order->created_at->format('Y-m-d'),
+                        $order->created_at->format('H:i:s')
+                    ];
+
+                    $csvData[] = $row;
+                }
+            }
+
+            // Xác định extension và delimiter
+            $extension = $exportFormat === 'tsv' ? 'tsv' : 'csv';
+            $delimiter = $exportFormat === 'tsv' ? "\t" : ',';
+
+            // Tạo file
+            $filename = 'orders_export_' . date('Y-m-d_H-i-s') . '.' . $extension;
+            $filePath = storage_path('app/temp/' . $filename);
+
+            // Tạo thư mục temp nếu chưa tồn tại
+            if (!file_exists(storage_path('app/temp'))) {
+                mkdir(storage_path('app/temp'), 0755, true);
+            }
+
+            $file = fopen($filePath, 'w');
+
+            // Thêm BOM để Excel hiển thị UTF-8 đúng
+            fwrite($file, "\xEF\xBB\xBF");
+
+            foreach ($csvData as $row) {
+                if ($exportFormat === 'tsv') {
+                    // TSV: Tab-separated, không cần quote (tốt hơn cho external_id số lớn)
+                    fwrite($file, implode("\t", $row) . "\n");
+                } else {
+                    // CSV: Comma-separated với quotes
+                    fputcsv($file, $row, ',', '"', '\\');
+                }
+            }
+            fclose($file);
+
+            Log::info('Export completed', [
+                'filename' => $filename,
+                'format' => $exportFormat,
+                'orders_count' => $orders->count(),
+                'total_rows' => count($csvData) - 1, // Trừ header
+                'created_by' => Auth::id()
+            ]);
+
+            // Trả về file download
+            return response()->download($filePath, $filename)->deleteFileAfterSend(true);
+        } catch (\Exception $e) {
+            Log::error('Error exporting orders:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'created_by' => Auth::id(),
+                'format' => $request->input('export_format', 'csv')
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi xuất file: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+    public function exportCustomerOrdersCSV(Request $request)
+    {
+        try {
+            // Xác thực yêu cầu
+            $request->validate([
+                'date_from' => 'nullable|date',
+                'date_to' => 'nullable|date',
+                'status' => 'nullable|string',
+                'export_format' => 'nullable|string|in:csv,tsv',
+                'selected_orders' => 'nullable|string' // Cho chế độ xuất đơn hàng được chọn
+            ]);
+
+            // Kiểm tra và sửa khoảng thời gian nếu cần
+            $dateFrom = $request->input('date_from');
+            $dateTo = $request->input('date_to');
+
+            if ($dateFrom && $dateTo && $dateFrom > $dateTo) {
+                // Đổi chỗ ngày nếu date_from > date_to
+                [$dateFrom, $dateTo] = [$dateTo, $dateFrom];
+
+                Log::warning('Xuất CSV Khách hàng - Sửa khoảng thời gian', [
+                    'original_from' => $request->input('date_from'),
+                    'original_to' => $request->input('date_to'),
+                    'corrected_from' => $dateFrom,
+                    'corrected_to' => $dateTo,
+                    'created_by' => Auth::id()
+                ]);
+
+                $request->merge([
+                    'date_from' => $dateFrom,
+                    'date_to' => $dateTo
+                ]);
+            }
+
+            // Xây dựng truy vấn cho đơn hàng của người dùng đã xác thực
+            $query = ExcelOrder::where('created_by', Auth::id())
+                ->with(['items.mockups', 'items.designs']);
+
+            // Áp dụng bộ lọc cho chế độ "Export All"
+            if ($request->filled('date_from')) {
+                $query->whereDate('created_at', '>=', $request->date_from);
+                Log::info('Xuất CSV Khách hàng - Bộ lọc ngày bắt đầu:', [
+                    'date_from' => $request->date_from
+                ]);
+            }
+
+            if ($request->filled('date_to')) {
+                $query->whereDate('created_at', '<=', $request->date_to);
+                Log::info('Xuất CSV Khách hàng - Bộ lọc ngày kết thúc:', [
+                    'date_to' => $request->date_to
+                ]);
+            }
+
+            if ($request->filled('status')) {
+                $query->where('status', $request->status);
+                Log::info('Xuất CSV Khách hàng - Bộ lọc trạng thái:', [
+                    'status' => $request->status,
+                    'created_by' => Auth::id()
+                ]);
+            }
+
+            // Xử lý chế độ "Export Selected"
+            if ($request->filled('selected_orders')) {
+                $selectedOrderIds = array_filter(explode(',', $request->input('selected_orders')));
+                if (!empty($selectedOrderIds)) {
+                    $query->whereIn('id', $selectedOrderIds);
+                    Log::info('Xuất CSV Khách hàng - Bộ lọc đơn hàng được chọn:', [
+                        'selected_orders' => $selectedOrderIds,
+                        'created_by' => Auth::id()
+                    ]);
+                }
+            }
+
+            $orders = $query->orderBy('created_at', 'desc')->get();
+
+            // Log thông tin khi không có đơn hàng
+            if ($orders->isEmpty()) {
+                Log::info('Xuất CSV Khách hàng - Không tìm thấy đơn hàng, xuất file trống', [
+                    'applied_filters' => $request->only(['date_from', 'date_to', 'status', 'selected_orders']),
+                    'created_by' => Auth::id()
+                ]);
+            }
+
+            // Chuẩn bị dữ liệu CSV
+            $csvData = [];
+            $headers = [
+                'Order_ID',
+                'First_Name',
+                'Last_Name',
+                'Email',
+                'Address1',
+                'Address2',
+                'City',
+                'County',
+                'Postcode',
+                'Country',
+                'Phone1',
+                'Phone2',
+                'Label_Url',
+                'Order_Status',
+                'Shipping_Method',
+                'SKU',
+                'Variant',
+                'Quantity',
+                'Price',
+                'Mockup_1',
+                'Design_1',
+                'Tracking_Number',
+                'Created_Date',
+                'Created_Time'
+            ];
+
+            $csvData[] = $headers;
+
+            $exportFormat = $request->input('export_format', 'csv');
+
+            foreach ($orders as $order) {
+                foreach ($order->items as $item) {
+                    $variantInfo = $this->getVariantInfo($item->part_number); // Phương thức giả định
+                    $mockups = $item->mockups->pluck('url')->toArray();
+                    $designs = $item->designs->pluck('url')->toArray();
+                    $mockups = array_pad($mockups, 1, '');
+                    $designs = array_pad($designs, 1, '');
+
+                    $externalIdForExport = $this->formatExternalIdForExport($order->external_id, $exportFormat); // Phương thức giả định
+
+                    $row = [
+                        $externalIdForExport,
+                        $order->first_name ?? '',
+                        $order->last_name ?? '',
+                        $order->buyer_email ?? '',
+                        $order->address1 ?? '',
+                        $order->address2 ?? '',
+                        $order->city ?? '',
+                        $order->county ?? '',
+                        $order->post_code ?? '',
+                        $order->country ?? '',
+                        $order->phone1 ?? '',
+                        $order->phone2 ?? '',
+                        $order->label_url ?? '',
+                        $order->status,
+                        $order->shipping_method ?? '',
+                        $item->part_number,
+                        $variantInfo,
+                        $item->quantity,
+                        number_format($item->print_price, 2, '.', ''),
+                        $mockups[0],
+                        $designs[0],
+                        $order->tracking_number ?? '',
+                        $order->created_at->format('Y-m-d'),
+                        $order->created_at->format('H:i:s')
+                    ];
+
+                    $csvData[] = $row;
+                }
+            }
+
+            // Xác định phần mở rộng và ký tự phân tách
+            $extension = $exportFormat === 'tsv' ? 'tsv' : 'csv';
+            $delimiter = $exportFormat === 'tsv' ? "\t" : ',';
+
+            // Tạo file
+            $filename = 'my_orders_export_' . date('Y-m-d_H-i-s') . '.' . $extension;
+            $filePath = storage_path('app/temp/' . $filename);
+
+            if (!file_exists(storage_path('app/temp'))) {
+                mkdir(storage_path('app/temp'), 0755, true);
+            }
+
+            $file = fopen($filePath, 'w');
+            fwrite($file, "\xEF\xBB\xBF"); // BOM UTF-8 cho tương thích Excel
+
+            foreach ($csvData as $row) {
+                if ($exportFormat === 'tsv') {
+                    fwrite($file, implode("\t", $row) . "\n");
+                } else {
+                    fputcsv($file, $row, $delimiter, '"', '\\');
+                }
+            }
+            fclose($file);
+
+            Log::info('Hoàn tất xuất dữ liệu khách hàng', [
+                'filename' => $filename,
+                'format' => $exportFormat,
+                'orders_count' => $orders->count(),
+                'total_rows' => count($csvData) - 1,
+                'created_by' => Auth::id()
+            ]);
+
+            return response()->download($filePath, $filename, [
+                'Content-Type' => $exportFormat === 'tsv' ? 'text/tab-separated-values' : 'text/csv',
+                'Content-Disposition' => 'attachment; filename="' . $filename . '"'
+            ])->deleteFileAfterSend(true);
+        } catch (\Exception $e) {
+            Log::error('Lỗi khi xuất đơn hàng khách hàng:', [
+                'message' => $e->getMessage(),
+                'trace' => $e->getTraceAsString(),
+                'created_by' => Auth::id(),
+                'format' => $request->input('export_format', 'csv')
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Đã xảy ra lỗi khi xuất đơn hàng của bạn: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+
+
+    /**
+     * Format external_id cho export với cách xử lý đúng cho CSV và TSV
+     */
+    private function formatExternalIdForExport($externalId, $format)
+    {
+        // Ép external_id thành chuỗi
+        $formattedId = (string)$externalId;
+
+        if ($format === 'tsv') {
+            // TSV: Thêm apostrophe để force Excel hiểu là text
+            return "'" . $formattedId;
+        } else {
+            // CSV: Thêm apostrophe để force Excel hiểu là text (không convert thành scientific notation)
+            return "'" . $formattedId;
+        }
+    }
+
+
+    /**
+     * Lấy thông tin variant theo format: Size,Color,Sides
+     */
+    private function getVariantInfo($sku)
+    {
+        try {
+            // Tìm variant theo SKU - đơn giản hóa không dùng with('attributes')
+            $variant = ProductVariant::where('sku', $sku)
+                ->orWhere('twofifteen_sku', $sku)
+                ->orWhere('flashship_sku', $sku)
+                ->first();
+
+            if (!$variant) {
+                Log::debug('No variant found for SKU: ' . $sku);
+                return $sku; // Trả về SKU gốc nếu không tìm thấy variant
+            }
+
+            // Tìm attributes trực tiếp từ bảng variant_attributes
+            $attributes = VariantAttribute::where('variant_id', $variant->id)->get();
+
+            if ($attributes->isEmpty()) {
+                Log::debug('No attributes found for variant ID: ' . $variant->id);
+                return $sku; // Trả về SKU nếu không có attributes
+            }
+
+            $attributeData = $attributes->pluck('value', 'name')->toArray();
+
+            // Chuẩn bị thông tin variant theo format: Size,Color,Sides
+            // Support case variations
+            $size = $attributeData['Size'] ?? $attributeData['size'] ?? $attributeData['SIZE'] ?? '';
+            $color = $attributeData['Color'] ?? $attributeData['Colour'] ?? $attributeData['color'] ?? $attributeData['COLOR'] ?? '';
+            $sides = $attributeData['Sides'] ?? $attributeData['Side'] ?? $attributeData['sides'] ?? $attributeData['side'] ?? $attributeData['SIDES'] ?? '';
+
+            // Trả về format: S,White,1 side
+            $variantParts = array_filter([$size, $color, $sides]);
+            $result = !empty($variantParts) ? implode(',', $variantParts) : $sku;
+
+            Log::debug('Variant info extracted', [
+                'sku' => $sku,
+                'variant_id' => $variant->id,
+                'attributes' => $attributeData,
+                'result' => $result
+            ]);
+
+            return $result;
+        } catch (\Exception $e) {
+            Log::warning('Error getting variant info for SKU: ' . $sku, [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+            return $sku; // Fallback trả về SKU gốc
+        }
+    }
+
+    /**
+     * Đẩy đơn hàng qua xưởng (factory)
+     */
+    public function processOrdersToFactory(Request $request)
+    {
+        try {
+            $orderIds = $request->input('order_ids');
+
+            if (empty($orderIds)) {
+                Log::warning('No order IDs provided in request');
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không có đơn hàng nào được chọn'
+                ], 400);
+            }
+
+            Log::info('Processing orders to factory', ['order_ids' => $orderIds]);
+
+            $orders = ExcelOrder::with(['items.mockups', 'items.designs'])
+                ->whereIn('id', $orderIds)
+                ->get();
+
+            if ($orders->isEmpty()) {
+                Log::warning('No valid orders found for IDs:', $orderIds);
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy đơn hàng hợp lệ'
+                ], 400);
+            }
+
+            // Log chi tiết về các đơn hàng tìm thấy
+            Log::info('Found orders for processing', [
+                'orders_count' => $orders->count(),
+                'orders_summary' => $orders->map(function ($order) {
+                    return [
+                        'id' => $order->id,
+                        'external_id' => $order->external_id,
+                        'warehouse' => $order->warehouse,
+                        'items_count' => $order->items->count(),
+                        'items_loaded' => $order->relationLoaded('items'),
+                        'mockups_designs_loaded' => $order->items->every(function ($item) {
+                            return $item->relationLoaded('mockups') && $item->relationLoaded('designs');
+                        })
+                    ];
+                })->toArray()
+            ]);
+
+            // Kiểm tra dữ liệu quan hệ
+            foreach ($orders as $order) {
+                if (!$order->relationLoaded('items') || !$order->items->every->relationLoaded('mockups') || !$order->items->every->relationLoaded('designs')) {
+                    Log::warning("Incomplete data for order {$order->external_id}");
+                    return response()->json([
+                        'success' => false,
+                        'message' => "Dữ liệu không đầy đủ cho đơn hàng {$order->external_id}"
+                    ], 400);
+                }
+            }
+
+            $results = [];
+            $dtfOrders = [];
+            $twofifteenOrders = [];
+
+            // Phân loại đơn hàng theo warehouse
+            foreach ($orders as $order) {
+                try {
+                    $orderData = $this->buildOrderDataForFactory($order);
+                    if (strtoupper($order->warehouse) === 'US') {
+                        $dtfOrders[] = $orderData;
+                    } else {
+                        $twofifteenOrders[] = [
+                            'order' => $order,
+                            'data' => $orderData
+                        ];
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Error processing order {$order->external_id}:", [
+                        'message' => $e->getMessage()
+                    ]);
+                    $results[] = [
+                        'order_id' => $order->id,
+                        'external_id' => $order->external_id,
+                        'success' => false,
+                        'message' => "Lỗi xử lý đơn hàng {$order->external_id}: " . $e->getMessage()
+                    ];
+                }
+            }
+
+            // Xử lý đơn hàng DTF
+            if (!empty($dtfOrders)) {
+                try {
+                    $apiConfig = $this->buildApiConfigForFactory('dtf', $dtfOrders);
+                    $response = Http::withHeaders($apiConfig['headers'])
+                        ->withQueryParameters($apiConfig['parameters'])
+                        ->post($apiConfig['config']['apiUrl'] . '/api/orders/batch', $dtfOrders);
+
+                    if ($response->successful()) {
+                        $apiResponse = $response->json();
+
+                        // Log cấu trúc response để debug
+                        Log::info('DTF API Response structure:', [
+                            'response_keys' => array_keys($apiResponse),
+                            'orders_count' => isset($apiResponse['orders']) ? count($apiResponse['orders']) : 'no orders key',
+                            'first_order_keys' => isset($apiResponse['orders'][0]) ? array_keys($apiResponse['orders'][0]) : 'no first order'
+                        ]);
+
+                        foreach ($apiResponse['orders'] as $orderResponse) {
+                            $order = $orders->firstWhere('external_id', $orderResponse['external_id']);
+                            if ($order) {
+                                // Kiểm tra và lấy internal_id an toàn - DTF batch response sử dụng 'order_id'
+                                $internalId = $orderResponse['order_id'] ?? $orderResponse['id'] ?? $orderResponse['internal_id'] ?? null;
+
+                                if (!$internalId) {
+                                    Log::error('No internal_id found in DTF response:', [
+                                        'external_id' => $order->external_id,
+                                        'order_response_keys' => array_keys($orderResponse),
+                                        'order_response' => $orderResponse
+                                    ]);
+
+                                    $results[] = [
+                                        'order_id' => $order->id,
+                                        'external_id' => $order->external_id,
+                                        'success' => false,
+                                        'message' => 'Không tìm thấy internal_id trong response DTF'
+                                    ];
+                                    continue;
+                                }
+
+                                $results[] = [
+                                    'order_id' => $order->id,
+                                    'external_id' => $order->external_id,
+                                    'internal_id' => $internalId,
+                                    'factory' => 'dtf',
+                                    'success' => true,
+                                    'message' => 'Tải lên thành công'
+                                ];
+
+                                // Cập nhật trạng thái đơn hàng
+                                $order->markAsProcessed($apiResponse, $internalId, 'dtf');
+
+                                // Lưu mapping vào OrderMapping
+                                OrderMapping::createOrUpdate(
+                                    $order->external_id,
+                                    $internalId,
+                                    'dtf',
+                                    $apiResponse
+                                );
+
+                                Log::info('Order mapping created:', [
+                                    'external_id' => $order->external_id,
+                                    'internal_id' => $internalId,
+                                    'factory' => 'dtf'
+                                ]);
+                            }
+                        }
+                    } else {
+                        foreach ($dtfOrders as $orderData) {
+                            $order = $orders->firstWhere('external_id', $orderData['external_id']);
+                            if ($order) {
+                                $errorResponse = $response->json();
+                                $errorMessage = '';
+
+                                // Xử lý lỗi validation từ API
+                                if (isset($errorResponse['detail']) && is_array($errorResponse['detail'])) {
+                                    $errorMessages = [];
+                                    foreach ($errorResponse['detail'] as $error) {
+                                        $field = implode('.', $error['loc']);
+                                        $errorMessages[] = "{$field}: {$error['msg']}";
+                                    }
+                                    $errorMessage = implode(', ', $errorMessages);
+                                } else {
+                                    $errorMessage = $errorResponse['error'] ?? 'Lỗi không xác định';
+                                }
+
+                                $errorData = [
+                                    'success' => false,
+                                    'error' => $errorMessage,
+                                    'status_code' => $response->status(),
+                                    'timestamp' => now()->toISOString(),
+                                    'api_response' => $errorResponse
+                                ];
+
+                                $order->markAsFailed($errorMessage, $errorData);
+
+                                $results[] = [
+                                    'order_id' => $order->id,
+                                    'external_id' => $order->external_id,
+                                    'success' => false,
+                                    'message' => "Lỗi khi gửi đơn hàng đến DTF: " . $errorMessage
+                                ];
+
+                                Log::error('DTF API Error:', [
+                                    'order_id' => $order->id,
+                                    'external_id' => $order->external_id,
+                                    'error_response' => $errorResponse
+                                ]);
+                            }
+                        }
+                    }
+                } catch (\Exception $e) {
+                    Log::error("Error processing DTF batch:", [
+                        'message' => $e->getMessage()
+                    ]);
+                    foreach ($dtfOrders as $orderData) {
+                        $order = $orders->firstWhere('external_id', $orderData['external_id']);
+                        if ($order) {
+                            $errorResponse = [
+                                'success' => false,
+                                'error' => $e->getMessage(),
+                                'status_code' => null,
+                                'timestamp' => now()->toISOString()
+                            ];
+
+                            $order->markAsFailed($e->getMessage(), $errorResponse);
+
+                            $results[] = [
+                                'order_id' => $order->id,
+                                'external_id' => $order->external_id,
+                                'success' => false,
+                                'message' => "Lỗi xử lý đơn hàng {$order->external_id}: " . $e->getMessage()
+                            ];
+                        }
+                    }
+                }
+            }
+
+            // Xử lý đơn hàng Twofifteen
+            foreach ($twofifteenOrders as $orderInfo) {
+                try {
+                    $order = $orderInfo['order'];
+                    $orderData = $orderInfo['data'];
+                    $apiConfig = $this->buildApiConfigForFactory('twofifteen', $orderData);
+
+                    $response = Http::withHeaders($apiConfig['headers'])
+                        ->withQueryParameters($apiConfig['parameters'])
+                        ->post($apiConfig['config']['apiUrl'] . '/orders.php', $orderData);
+
+                    $results[] = $this->processFactoryOrderResponse($order, $response, 'twofifteen');
+                } catch (\Exception $e) {
+                    Log::error("Error processing order {$order->external_id}:", [
+                        'message' => $e->getMessage()
+                    ]);
+                    $results[] = [
+                        'order_id' => $order->id,
+                        'external_id' => $order->external_id,
+                        'success' => false,
+                        'message' => "Lỗi xử lý đơn hàng {$order->external_id}: " . $e->getMessage()
+                    ];
+                }
+            }
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Xử lý đơn hàng thành công',
+                'results' => $results
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Order process to factory error:', [
+                'message' => $e->getMessage(),
+                'order_ids' => $request->input('order_ids')
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Đã xảy ra lỗi khi xử lý đơn hàng: ' . $e->getMessage()
+            ], 500);
+        }
     }
 }

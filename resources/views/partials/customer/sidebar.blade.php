@@ -35,12 +35,11 @@
                     <!-- Menu Item Dashboard -->
                     <li>
                         <a
-                            href="#"
-                            @click.prevent="selectedCustomer = (selectedCustomer === 'Dashboard' ? '' : 'Dashboard')"
+                            href="{{ route('customer.dashboard') }}"
                             class="menu-item group"
-                            :class="(selectedCustomer === 'Dashboard') || (pageCustomer === 'ecommerce' || pageCustomer === 'analytics' || pageCustomer === 'marketing' || pageCustomer === 'crm' || pageCustomer === 'stocks') ? 'menu-item-active' : 'menu-item-inactive'">
+                            :class="(selectedCustomer === 'Dashboard') || (pageCustomer === 'dashboard') ? 'menu-item-active' : 'menu-item-inactive'">
                             <svg
-                                :class="(selectedCustomer === 'Dashboard') || (pageCustomer === 'ecommerce' || pageCustomer === 'analytics' || pageCustomer === 'marketing' || pageCustomer === 'crm' || pageCustomer === 'stocks') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                                :class="(selectedCustomer === 'Dashboard') || (pageCustomer === 'dashboard') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
                                 width="24"
                                 height="24"
                                 viewBox="0 0 24 24"
@@ -155,6 +154,31 @@
                         <!-- Dropdown Menu End -->
                     </li>
                     <!-- Menu Item Finance -->
+
+                    <!-- Menu Item Tier -->
+                    <li>
+                        <a
+                            href="{{ route('customer.tier') }}"
+                            @click="selectedCustomer = (selectedCustomer === 'Tier' ? '' : 'Tier')"
+                            class="menu-item group"
+                            :class="pageCustomer === 'tier' ? 'menu-item-active' : 'menu-item-inactive'">
+                            <svg
+                                :class="pageCustomer === 'tier' ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M12 2L15.09 8.26L22 9L17 14.14L18.18 21.02L12 17.77L5.82 21.02L7 14.14L2 9L8.91 8.26L12 2Z"
+                                    fill="" />
+                            </svg>
+                            <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">
+                                My Tier
+                            </span>
+                        </a>
+                    </li>
+                    <!-- Menu Item Tier -->
 
                     <!-- Menu Item Orders -->
                     <li>

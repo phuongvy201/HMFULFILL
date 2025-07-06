@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Facades\Log;
 use App\Models\Transaction;
 
 class Wallet extends Model
@@ -43,11 +44,39 @@ class Wallet extends Model
      */
     public function withdraw(float $amount): bool
     {
-        if ($amount <= 0 || $this->balance < $amount) {
+        if ($amount <= 0) {
+            Log::warning('[WALLET] Withdraw amount <= 0', ['amount' => $amount]);
             return false;
         }
 
-        $this->decrement('balance', $amount);
+        // Ép kiểu về float để so sánh chính xác
+        $currentBalance = (float) $this->balance;
+        $withdrawAmount = (float) $amount;
+
+        Log::info('[WALLET] Withdraw attempt', [
+            'wallet_id' => $this->id,
+            'user_id' => $this->user_id,
+            'current_balance' => $currentBalance,
+            'withdraw_amount' => $withdrawAmount,
+            'balance_after' => $currentBalance - $withdrawAmount
+        ]);
+
+        if ($currentBalance < $withdrawAmount) {
+            Log::warning('[WALLET] Insufficient balance for withdraw', [
+                'wallet_id' => $this->id,
+                'current_balance' => $currentBalance,
+                'withdraw_amount' => $withdrawAmount
+            ]);
+            return false;
+        }
+
+        $this->decrement('balance', $withdrawAmount);
+
+        Log::info('[WALLET] Withdraw successful', [
+            'wallet_id' => $this->id,
+            'new_balance' => $this->balance
+        ]);
+
         return true;
     }
 
@@ -56,7 +85,20 @@ class Wallet extends Model
      */
     public function hasEnoughBalance(float $amount): bool
     {
-        return $this->balance >= $amount;
+        // Ép kiểu về float để so sánh chính xác
+        $currentBalance = (float) $this->balance;
+        $requiredAmount = (float) $amount;
+
+        $hasEnough = $currentBalance >= $requiredAmount;
+
+        Log::info('[WALLET] Balance check', [
+            'wallet_id' => $this->id,
+            'current_balance' => $currentBalance,
+            'required_amount' => $requiredAmount,
+            'has_enough' => $hasEnough
+        ]);
+
+        return $hasEnough;
     }
 
     /**

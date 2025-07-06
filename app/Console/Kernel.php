@@ -3,6 +3,7 @@
 namespace App\Console;
 
 use Illuminate\Console\Scheduling\Schedule;
+use App\Console\Commands\AutoUpdateOrderStatus;
 use Illuminate\Foundation\Console\Kernel as ConsoleKernel;
 
 class Kernel extends ConsoleKernel
@@ -10,6 +11,11 @@ class Kernel extends ConsoleKernel
     /**
      * Register the commands for the application.
      */
+    protected $commands = [
+        \App\Console\Commands\AutoUpdateOrderStatus::class,
+        \App\Console\Commands\UpdateTrackingNumbers::class,
+        \App\Console\Commands\ScheduleTierCalculation::class,
+    ];
     protected function commands(): void
     {
         $this->load(__DIR__ . '/Commands');
@@ -24,7 +30,12 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('orders:update-status')->everyMinute();
         $schedule->command('orders:update-tracking-numbers')->dailyAt('01:00');
-        $schedule->command('orders:update-dtf-tracking-numbers')->dailyAt('02:00');
+
+        // Tính toán tier cho user vào ngày đầu tiên của mỗi tháng lúc 2:00 AM
+        $schedule->command('users:schedule-tier-calculation')
+            ->monthlyOn(1, '02:00')
+            ->withoutOverlapping()
+            ->runInBackground();
     }
 }
 //* * * * * cd /path-to-your-project && php artisan schedule:run >> /dev/null 2>&1

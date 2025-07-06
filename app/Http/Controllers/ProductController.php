@@ -212,7 +212,7 @@ class ProductController extends Controller
             });
         }
 
-        $products = $query->paginate(10);
+        $products = $query->paginate(16);
 
         foreach ($products as $product) {
             $mainImage = $product->images->first();
@@ -276,21 +276,40 @@ class ProductController extends Controller
         $priceVND = $product->price_vnd;
         $priceGBP = $product->price_gbp;
 
+        // Mặc định tất cả user lấy giá Wood tier
+        $currentUserTier = 'Wood';
+
         // Lấy giá cho từng variant (nếu cần dùng ở JS)
-        $variants = $product->variants->map(function ($variant) {
+        $variants = $product->variants->map(function ($variant) use ($currentUserTier) {
             return [
                 'id' => $variant->id,
                 'attributes' => $variant->attributes,
                 'price_usd' => $variant->price_usd,
                 'price_vnd' => $variant->price_vnd,
                 'price_gbp' => $variant->price_gbp,
-                'shipping_prices' => $variant->shippingPrices->map(function ($sp) {
-                    return [
-                        'method' => $sp->method,
-                        'price_usd' => $sp->price_usd,
-                        'price_vnd' => $sp->price_vnd,
-                        'price_gbp' => $sp->price_gbp,
-                    ];
+                'current_user_tier' => $currentUserTier,
+                'shipping_prices' => $variant->shippingPrices()
+                    ->where('tier_name', $currentUserTier)
+                    ->get()
+                    ->map(function ($sp) {
+                        return [
+                            'method' => $sp->method,
+                            'tier_name' => $sp->tier_name,
+                            'price_usd' => $sp->price_usd,
+                            'price_vnd' => $sp->price_vnd,
+                            'price_gbp' => $sp->price_gbp,
+                        ];
+                    }),
+                'all_tier_prices' => $variant->shippingPrices->groupBy('tier_name')->map(function ($prices, $tier) {
+                    return $prices->map(function ($sp) {
+                        return [
+                            'method' => $sp->method,
+                            'tier_name' => $sp->tier_name,
+                            'price_usd' => $sp->price_usd,
+                            'price_vnd' => $sp->price_vnd,
+                            'price_gbp' => $sp->price_gbp,
+                        ];
+                    });
                 }),
             ];
         });
@@ -302,59 +321,94 @@ class ProductController extends Controller
             'priceUSD',
             'priceVND',
             'priceGBP',
-            'variants'
+            'variants',
+            'currentUserTier'
         ));
     }
+    /**
+     * Import sản phẩm từ file Excel
+     * Cấu trúc cột Excel:
+     * - A-O: Thông tin sản phẩm
+     * - P-R: Thông tin variant (SKU)
+     * - S: Trống/Dự trữ
+     * - T-W: Wood tier prices (T=tiktok_1st, U=tiktok_next, V=seller_1st, W=seller_next)
+     * - X-AA: Silver tier prices (X=tiktok_1st, Y=tiktok_next, Z=seller_1st, AA=seller_next)
+     * - AB-AE: Gold tier prices (AB=tiktok_1st, AC=tiktok_next, AD=seller_1st, AE=seller_next)
+     * - AF-AI: Diamond tier prices (AF=tiktok_1st, AG=tiktok_next, AH=seller_1st, AI=seller_next)
+     * - AJ+: Variant attributes (name, value pairs)
+     */
     public function import(Request $request)
     {
         ini_set('memory_limit', '2048M');
-        ini_set('max_execution_time', 300);
+        ini_set('max_execution_time', 600); // Tăng lên 600 giây cho file lớn
 
         try {
             $currency = $request->input('currency', 'USD');
             $file = $request->file('excel_file');
-            $spreadsheet = IOFactory::load($file->getPathname());
+            $spreadsheet = \PhpOffice\PhpSpreadsheet\IOFactory::load($file->getPathname());
             $worksheet = $spreadsheet->getActiveSheet();
-            $rows = $worksheet->toArray();
 
-            $headers = array_shift($rows); // Bỏ dòng tiêu đề
+            // Lấy số dòng tối đa để kiểm tra
+            $highestRow = $worksheet->getHighestRow();
+            Log::info("Tổng số dòng trong file Excel: $highestRow");
+
+            // Sử dụng iterator để xử lý từng dòng
+            $rowIterator = $worksheet->getRowIterator(2); // Bỏ qua dòng tiêu đề
+            $processedRows = 0;
 
             DB::beginTransaction();
 
             $currentProductId = null;
             $currentProduct = null;
 
-            foreach ($rows as $rowIndex => $row) {
+            foreach ($rowIterator as $row) {
+                $processedRows++;
+                $rowIndex = $row->getRowIndex(); // Lấy số thứ tự dòng
+                Log::info("Đang xử lý dòng: $rowIndex");
+
                 try {
+                    // Lấy giá trị ô của dòng hiện tại
+                    $cells = [];
+                    foreach ($row->getCellIterator() as $cell) {
+                        $cells[] = $cell->getValue();
+                    }
+
+                    // Bỏ qua nếu dòng hoàn toàn trống
+                    if (empty(array_filter($cells))) {
+                        Log::warning("Dòng $rowIndex trống, bỏ qua.");
+                        continue;
+                    }
+
                     // Tạo sản phẩm mới nếu có tên
-                    if (!empty($row[0])) {
-                        $categoryId = $this->getCategoryId($row[1]);
+                    if (!empty($cells[0])) {
+                        $categoryId = $this->getCategoryId($cells[1] ?? null);
 
                         $currentProduct = Product::create([
-                            'name' => $row[0],
+                            'name' => $cells[0],
                             'category_id' => $categoryId,
-                            'base_price' => (float)$row[2],
+                            'base_price' => (float)($cells[2] ?? 0),
                             'currency' => $currency,
-                            'template_link' => $row[3] ?? null,
-                            'description' => $row[4] ?? null,
+                            'template_link' => $cells[3] ?? null,
+                            'description' => $cells[4] ?? null,
                             'status' => 1,
-                            'slug' => Str::slug($row[0])
+                            'slug' => Str::slug($cells[0])
                         ]);
 
                         $currentProductId = $currentProduct->id;
+                        Log::info("Tạo sản phẩm ID: $currentProductId cho dòng $rowIndex");
 
-                        if (!empty($row[5])) {
+                        if (!empty($cells[5])) {
                             FulfillmentLocation::create([
                                 'product_id' => $currentProductId,
-                                'country_code' => $row[5]
+                                'country_code' => $cells[5]
                             ]);
                         }
 
                         for ($i = 6; $i <= 15; $i++) {
-                            if (!empty($row[$i])) {
+                            if (!empty($cells[$i])) {
                                 ProductImage::create([
                                     'product_id' => $currentProductId,
-                                    'image_url' => $row[$i]
+                                    'image_url' => $cells[$i]
                                 ]);
                             }
                         }
@@ -364,33 +418,49 @@ class ProductController extends Controller
                     if ($currentProductId) {
                         $variant = ProductVariant::create([
                             'product_id' => $currentProductId,
-                            'sku' => $row[16] ?? null,
-                            'twofifteen_sku' => $row[17] ?? null,
-                            'flashship_sku' => $row[18] ?? null,
+                            'sku' => $cells[16] ?? null,
+                            'twofifteen_sku' => $cells[17] ?? null,
+                            'flashship_sku' => $cells[18] ?? null,
                         ]);
 
+                        // Cấu trúc cột Excel:
+                        // T-W: Wood tier (T=tiktok_1st, U=tiktok_next, V=seller_1st, W=seller_next)
+                        // X-AA: Silver tier (X=tiktok_1st, Y=tiktok_next, Z=seller_1st, AA=seller_next)
+                        // AB-AE: Gold tier (AB=tiktok_1st, AC=tiktok_next, AD=seller_1st, AE=seller_next)
+                        // AF-AI: Diamond tier (AF=tiktok_1st, AG=tiktok_next, AH=seller_1st, AI=seller_next)
                         $shippingMethods = [
-                            19 => ShippingPrice::METHOD_TIKTOK_1ST,
-                            20 => ShippingPrice::METHOD_TIKTOK_NEXT,
-                            21 => ShippingPrice::METHOD_SELLER_1ST,
-                            22 => ShippingPrice::METHOD_SELLER_NEXT
+                            ShippingPrice::METHOD_TIKTOK_1ST,
+                            ShippingPrice::METHOD_TIKTOK_NEXT,
+                            ShippingPrice::METHOD_SELLER_1ST,
+                            ShippingPrice::METHOD_SELLER_NEXT
                         ];
 
-                        foreach ($shippingMethods as $colIndex => $method) {
-                            if (!empty($row[$colIndex])) {
-                                ShippingPrice::create([
-                                    'variant_id' => $variant->id,
-                                    'method' => $method,
-                                    'price' => (float)$row[$colIndex],
-                                    'currency' => $currency
-                                ]);
+                        $tierConfigs = [
+                            'Wood' => ['start' => 19],      // Cột T-W (19-22 trong array)
+                            'Silver' => ['start' => 23],   // Cột X-AA (23-26 trong array)
+                            'Gold' => ['start' => 27],     // Cột AB-AE (27-30 trong array)
+                            'Diamond' => ['start' => 31]   // Cột AF-AI (31-34 trong array)
+                        ];
+
+                        foreach ($tierConfigs as $tierName => $config) {
+                            foreach ($shippingMethods as $methodIndex => $method) {
+                                $colIndex = $config['start'] + $methodIndex;
+                                if (!empty($cells[$colIndex])) {
+                                    ShippingPrice::create([
+                                        'variant_id' => $variant->id,
+                                        'method' => $method,
+                                        'tier_name' => $tierName,
+                                        'price' => (float)($cells[$colIndex] ?? 0),
+                                        'currency' => $currency
+                                    ]);
+                                }
                             }
                         }
 
-                        $attributeStartColumn = 23;
-                        while (isset($row[$attributeStartColumn]) && isset($row[$attributeStartColumn + 1])) {
-                            $attrName = $row[$attributeStartColumn];
-                            $attrValue = $row[$attributeStartColumn + 1];
+                        $attributeStartColumn = 35; // Cột AJ trở đi là Variant Attributes
+                        while (isset($cells[$attributeStartColumn]) && isset($cells[$attributeStartColumn + 1])) {
+                            $attrName = $cells[$attributeStartColumn];
+                            $attrValue = $cells[$attributeStartColumn + 1];
 
                             if (!empty($attrName) && !empty($attrValue)) {
                                 VariantAttribute::create([
@@ -404,18 +474,18 @@ class ProductController extends Controller
                         }
                     }
                 } catch (\Exception $e) {
-                    Log::error("Dòng $rowIndex bị lỗi: " . $e->getMessage());
-                    // Không rollback toàn bộ, tiếp tục dòng sau
-                    continue;
+                    Log::error("Lỗi khi xử lý dòng $rowIndex: " . $e->getMessage());
+                    continue; // Tiếp tục dòng tiếp theo
                 }
             }
 
             DB::commit();
-            return redirect()->back()->with('success', 'Import dữ liệu thành công');
+            Log::info("Tổng số dòng đã xử lý: $processedRows");
+            return redirect()->back()->with('success', "Nhập dữ liệu thành công. Đã xử lý $processedRows/$highestRow dòng.");
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Lỗi khi xử lý file Excel: ' . $e->getMessage());
-            return redirect()->back()->with('error', 'Có lỗi xảy ra khi import: ' . $e->getMessage());
+            return redirect()->back()->with('error', 'Lỗi khi nhập dữ liệu: ' . $e->getMessage());
         }
     }
 

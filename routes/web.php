@@ -6,6 +6,7 @@ use App\Http\Controllers\Auth\RegisterController;
 use App\Http\Controllers\Auth\LoginController;
 use App\Http\Controllers\CategoryController;
 use App\Http\Controllers\DashboardController;
+use App\Http\Controllers\CustomerDashboardController;
 use App\Http\Controllers\FinanceController;
 use App\Http\Controllers\ProductController;
 use App\Http\Controllers\SupplierFulfillmentController;
@@ -17,9 +18,9 @@ use App\Http\Middleware\AdminMiddleware;
 Route::get('/', function () {
     return app()->make(ProductController::class)->index(request());
 })->name('home');
-
 // Nhóm các trang tĩnh của khách hàng
 Route::prefix('pages')->group(function () {
+
     Route::view('/contact-us', 'customer.pages.contact-us');
     Route::view('/catalog-uk', 'customer.pages.catalog-uk');
     Route::view('/catalog-us', 'customer.pages.catalog-us');
@@ -38,7 +39,10 @@ Route::get('/product/{slug}', [ProductController::class, 'show'])->name('product
 
 // Nhóm route admin
 Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(function () {
-    Route::get('/dashboard', [DashboardController::class, 'index'])->name('admin.dashboard');
+
+    // Main admin dashboard route (alias for statistics dashboard)
+    Route::get('/', [App\Http\Controllers\Admin\OrderStatisticsController::class, 'dashboard'])->name('admin.dashboard');
+
     Route::view('/products', 'admin.products.product-list')->name('admin.products');
 
     Route::get('/categories/data', [CategoryController::class, 'index'])->name('admin.categories.data');
@@ -92,6 +96,25 @@ Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(func
     Route::put('/dtf/orders/{orderId}', [OrderUploadController::class, 'updateDtfOrder'])
         ->name('api.dtf.orders.update');
 
+    // User Tier routes
+    Route::get('/user-tiers', [App\Http\Controllers\Admin\UserTierController::class, 'index'])->name('admin.user-tiers.index');
+    Route::get('/user-tiers/{user}', [App\Http\Controllers\Admin\UserTierController::class, 'show'])->name('admin.user-tiers.show');
+    Route::post('/user-tiers/calculate', [App\Http\Controllers\Admin\UserTierController::class, 'calculateTiers'])->name('admin.user-tiers.calculate');
+    Route::post('/user-tiers/{user}/calculate', [App\Http\Controllers\Admin\UserTierController::class, 'calculateTierForUser'])->name('admin.user-tiers.calculate-user');
+    Route::get('/user-tiers/statistics', [App\Http\Controllers\Admin\UserTierController::class, 'getStatistics'])->name('admin.user-tiers.statistics');
+    Route::put('/user-tiers/{user}', [App\Http\Controllers\Admin\UserTierController::class, 'updateTier'])->name('admin.user-tiers.update');
+
+    // Statistics routes
+    Route::get('/dashboard', [App\Http\Controllers\Admin\OrderStatisticsController::class, 'dashboard'])->name('admin.statistics.dashboard');
+    Route::get('/statistics/detailed', [App\Http\Controllers\Admin\OrderStatisticsController::class, 'detailedStats'])->name('admin.statistics.detailed');
+    Route::get('/statistics/reports', [App\Http\Controllers\Admin\OrderStatisticsController::class, 'reports'])->name('admin.statistics.reports');
+
+    // Topup Statistics routes
+    Route::get('/statistics/topup', [App\Http\Controllers\Admin\TopupStatisticsController::class, 'dashboard'])->name('admin.statistics.topup-dashboard');
+
+    // Tier Statistics routes
+    Route::get('/statistics/tier', [App\Http\Controllers\Admin\TierStatisticsController::class, 'dashboard'])->name('admin.statistics.tier-dashboard');
+
     // Route cho admin đổi status
     Route::post('/admin/orders/change-status/{id}', [SupplierFulfillmentController::class, 'changeStatus'])
         ->middleware(['auth', 'admin'])
@@ -99,6 +122,24 @@ Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(func
 
     Route::get('/api-orders', [SupplierFulfillmentController::class, 'getAdminApiOrders'])
         ->name('admin.api-orders')
+        ->middleware(['auth', 'admin']);
+
+    Route::get('/all-orders', [SupplierFulfillmentController::class, 'getAdminAllOrders'])
+        ->name('admin.all-orders')
+        ->middleware(['auth', 'admin']);
+
+    // Route để đẩy đơn hàng qua xưởng
+    Route::post('/api-orders/process', [SupplierFulfillmentController::class, 'processOrdersToFactory'])
+        ->name('admin.api-orders.process')
+        ->middleware(['auth', 'admin']);
+
+    // Export Orders CSV
+    Route::get('/orders/export-csv', function () {
+        return view('admin.orders.export-csv');
+    })->name('admin.orders.export-csv.form')->middleware(['auth', 'admin']);
+
+    Route::post('/orders/export-csv', [SupplierFulfillmentController::class, 'exportOrdersCSV'])
+        ->name('admin.orders.export-csv')
         ->middleware(['auth', 'admin']);
 
     // DTF Orders routes
@@ -115,20 +156,31 @@ Route::middleware(['auth', 'admin'])->group(function () {
 });
 
 Route::prefix('customer')->middleware('auth')->group(function () {
-    Route::get('/', [DashboardController::class, 'index'])->name('customer.index');
+    Route::get('/', [CustomerDashboardController::class, 'index'])->name('customer.index');
+    Route::get('/dashboard', [CustomerDashboardController::class, 'index'])->name('customer.dashboard');
 
     Route::get('/wallet', [FinanceController::class, 'index'])->name('customer.wallet');
     Route::post('/wallet/topup', [FinanceController::class, 'topup'])->name('customer.finance.topup');
 
+    // Tier routes
+    Route::get('/tier', [App\Http\Controllers\Customer\TierController::class, 'index'])->name('customer.tier');
+    Route::get('/tier/api', [App\Http\Controllers\Customer\TierController::class, 'apiGetTierInfo'])->name('customer.tier.api');
+
     Route::post('/order-upload', [SupplierFulfillmentController::class, 'uploadCustomerFulfillmentFile'])->name('customer.order-upload');
     Route::get('/order-list', [SupplierFulfillmentController::class, 'getCustomerUploadedFiles'])->name('customer.order-list');
     Route::post('/delete-files', [SupplierFulfillmentController::class, 'deleteFiles'])->name('customer.delete-files');
-    Route::get('/order-customer', [SupplierFulfillmentController::class, 'getCustomerOrders'])->name('customer.order-customer');
+
     Route::get('/orders/{externalId}', [SupplierFulfillmentController::class, 'getCustomerOrderDetail'])
+        ->where('externalId', '[A-Za-z0-9\-_]+')
         ->name('customer.orders.detail');
+
+    Route::get('/order-customer', [SupplierFulfillmentController::class, 'getCustomerOrders'])->name('customer.order-customer');
     Route::get('/order-create', [SupplierFulfillmentController::class, 'orderCreate'])->name('customer.order-create');
     Route::get('/file-detail/{id}', [SupplierFulfillmentController::class, 'fileDetail'])->name('customer.file-detail');
     Route::get('/debug-orders', [SupplierFulfillmentController::class, 'debugCustomerOrders'])->name('customer.debug-orders');
+
+    // Customer Export Orders
+    Route::post('/orders/export', [SupplierFulfillmentController::class, 'exportCustomerOrdersCSV'])->name('customer.orders.export');
 });
 
 // Nhóm route authentication

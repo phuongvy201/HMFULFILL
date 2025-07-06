@@ -141,22 +141,24 @@ class UpdateTrackingNumbers extends Command
     {
         $this->info('Bắt đầu xử lý đơn hàng US (DTF)...');
 
-        // Lấy các đơn hàng US thiếu mã vận đơn hoặc có trạng thái processed và có ánh xạ trong orders_mapping
+        // Lấy tất cả đơn hàng US có trạng thái processed hoặc shipped nhưng chưa có tracking number và có ánh xạ trong orders_mapping
         $orders = ExcelOrder::query()
             ->where('warehouse', 'US')
             ->where(function ($query) {
-                $query->whereNull('tracking_number')
-                    ->orWhere('status', ExcelOrder::STATUS_PROCESSED);
+                $query->where('status', ExcelOrder::STATUS_PROCESSED)
+                    ->orWhere(function ($subQuery) {
+                        $subQuery->where('status', 'Shipped')
+                            ->whereNull('tracking_number');
+                    });
             })
-            ->where('status', ExcelOrder::STATUS_PROCESSED)
             ->join('orders_mapping', 'excel_orders.external_id', '=', 'orders_mapping.external_id')
-            ->where('orders_mapping.factory', 'dtf') // Chỉ lấy ánh xạ của DTF
+            ->where('orders_mapping.factory', 'dtf')
             ->select('excel_orders.id', 'excel_orders.external_id', 'orders_mapping.internal_id')
             ->get();
 
         if ($orders->isEmpty()) {
             $this->info('Không có đơn hàng US nào cần cập nhật mã vận đơn hoặc trạng thái.');
-            Log::info('Không tìm thấy đơn hàng US nào thiếu mã vận đơn hoặc có trạng thái processed, warehouse=US, và có ánh xạ DTF trong orders_mapping');
+            Log::info('Không tìm thấy đơn hàng US nào có trạng thái processed hoặc shipped nhưng chưa có tracking number, warehouse=US, và có ánh xạ DTF trong orders_mapping');
             return;
         }
 
@@ -172,38 +174,17 @@ class UpdateTrackingNumbers extends Command
         foreach ($batches as $batchIndex => $batchOrders) {
             $this->info("Xử lý lô US " . ($batchIndex + 1) . "...");
             try {
-                // Lấy trạng thái từ API DTF
-                $statusOrders = $dtfService->getOrdersStatus($batchOrders);
+                // Lấy tracking number và status từ API DTF
+                $apiOrders = $dtfService->getOrdersTracking($batchOrders);
 
-                // Lấy tracking number từ API DTF
-                $trackingOrders = $dtfService->getOrdersTracking($batchOrders);
-
-                // Kết hợp dữ liệu từ cả hai API
-                $combinedOrders = [];
-
-                // Tạo mapping từ internal_id sang dữ liệu tracking
-                $trackingMap = collect($trackingOrders)->keyBy('internal_id')->toArray();
-
-                foreach ($statusOrders as $statusOrder) {
-                    $internalId = $statusOrder['internal_id'];
-                    $trackingData = $trackingMap[$internalId] ?? [];
-
-                    $combinedOrders[] = [
-                        'internal_id' => $internalId,
-                        'external_id' => $statusOrder['external_id'],
-                        'status' => $statusOrder['status'],
-                        'tracking_number' => $trackingData['tracking_number'] ?? null,
-                    ];
-                }
-
-                if (empty($combinedOrders)) {
+                if (empty($apiOrders)) {
                     $this->warn("Không có dữ liệu từ DTF cho lô " . ($batchIndex + 1));
                     Log::warning("Không có dữ liệu từ API DTF cho lô " . ($batchIndex + 1));
                     continue;
                 }
 
                 // Cập nhật bảng excel_orders
-                foreach ($combinedOrders as $apiOrder) {
+                foreach ($apiOrders as $apiOrder) {
                     if (!$apiOrder['internal_id']) {
                         continue;
                     }
@@ -211,34 +192,25 @@ class UpdateTrackingNumbers extends Command
                     try {
                         $order = ExcelOrder::where('external_id', $apiOrder['external_id'])->first();
                         if ($order) {
-                            $orderId = $order->id;
                             $externalId = $apiOrder['external_id'];
 
-                            // Chỉ cập nhật trạng thái thành 'Shipped' nếu API trả về 'completed'
+                            // Cập nhật trạng thái thành 'Shipped' nếu API trả về status 'completed'
                             $status = ($apiOrder['status'] === 'completed') ? 'Shipped' : $order->status;
                             $trackingNumber = $apiOrder['tracking_number'];
 
-                            // Cập nhật mã vận đơn nếu có, hoặc chỉ cập nhật trạng thái
-                            if ($trackingNumber && $trackingNumber !== 'No shipment') {
-                                $order->updateTrackingAndStatus($trackingNumber, $status);
+                            // Cập nhật tracking number và status từ API
+                            $order->updateTrackingAndStatus($trackingNumber, $status);
 
-                                $this->info("Cập nhật mã vận đơn {$trackingNumber} cho đơn hàng US {$externalId}");
-                                Log::info("Cập nhật mã vận đơn cho đơn hàng US {$externalId}", [
+                            if ($trackingNumber) {
+                                $this->info("📦 Cập nhật tracking number: '{$trackingNumber}' cho đơn hàng US {$externalId}");
+                                Log::info("Cập nhật tracking number cho đơn hàng US {$externalId}", [
                                     'tracking_number' => $trackingNumber,
-                                    'status' => $status
-                                ]);
-                            } else {
-                                // Chỉ cập nhật trạng thái nếu không có tracking number
-                                $order->updateTrackingAndStatus(null, $status);
-
-                                $this->info("Không có mã vận đơn, chỉ cập nhật trạng thái cho đơn hàng US {$externalId}");
-                                Log::info("Không có mã vận đơn, cập nhật trạng thái cho đơn hàng US {$externalId}", [
                                     'status' => $status
                                 ]);
                             }
 
-                            if ($status === 'Shipped') {
-                                $this->info("Cập nhật trạng thái Đã giao hàng cho đơn hàng US {$externalId}");
+                            if ($status === 'Shipped' && $order->status !== 'Shipped') {
+                                $this->info("🚚 Cập nhật trạng thái Đã giao hàng cho đơn hàng US {$externalId}");
                             }
                         }
                     } catch (\Exception $e) {
