@@ -94,6 +94,8 @@ class RegisterController extends Controller
                 return redirect()->route('admin.statistics.dashboard');
             } elseif ($user->role === 'customer') {
                 return redirect()->route('customer.index');
+            } elseif ($user->role === 'design') {
+                return redirect()->route('designer.tasks.index');
             }
         }
 

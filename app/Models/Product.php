@@ -34,7 +34,32 @@ class Product extends Model
      */
     public function images()
     {
-        return $this->hasMany(ProductImage::class);
+        return $this->hasMany(ProductImage::class)->orderBy('created_at', 'asc');
+    }
+
+    /**
+     * Lấy ảnh chính của sản phẩm (ảnh được tạo sớm nhất)
+     */
+    public function getMainImageUrl()
+    {
+        $mainImage = $this->images()->first();
+
+        if (!$mainImage || empty($mainImage->image_url)) {
+            return null;
+        }
+
+        // Trả về URL đầy đủ
+        return str_starts_with($mainImage->image_url, 'http')
+            ? $mainImage->image_url
+            : asset($mainImage->image_url);
+    }
+
+    /**
+     * Kiểm tra xem sản phẩm có ảnh không
+     */
+    public function hasImages()
+    {
+        return $this->images()->exists();
     }
 
     public function variants()

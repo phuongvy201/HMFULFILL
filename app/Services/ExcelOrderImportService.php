@@ -134,7 +134,7 @@ class ExcelOrderImportService
                 // Xác định shipping method dựa trên shipping_method và position
                 $shippingMethod = $this->determineShippingMethod($row['W'] ?? '', $order->id);
 
-                // Lấy giá shipping theo tier và method
+                // 1. Lấy giá shipping theo tier cụ thể
                 $shippingPrice = ShippingPrice::where('variant_id', $variant->id)
                     ->where('tier_name', $currentTier)
                     ->where('method', $shippingMethod)
@@ -145,14 +145,6 @@ class ExcelOrderImportService
                     $orderItem->update([
                         'print_price' => $shippingPrice->price_usd,
                         'product_id' => $variant->product_id
-                    ]);
-
-                    Log::info("Applied tier pricing", [
-                        'user_id' => $importFile->user_id,
-                        'tier' => $currentTier,
-                        'variant_id' => $variant->id,
-                        'method' => $shippingMethod,
-                        'price' => $shippingPrice->price_usd
                     ]);
                 } else {
                     // Fallback: Lấy giá Wood tier nếu không tìm thấy giá cho tier hiện tại
@@ -268,6 +260,11 @@ class ExcelOrderImportService
             'tier' => $currentTier,
             'tier_data' => $userTier
         ]);
+
+        // Logic tính giá sẽ áp dụng thứ tự ưu tiên:
+        // 1. Giá theo tier của user (tier_name = $currentTier)
+        // 2. Giá mặc định (tier_name = null)
+        // 3. Giá Wood tier (tier_name = 'Wood') làm fallback cuối cùng
 
         $rowsByExternalId = [];
         foreach ($rows as $row) {
@@ -391,6 +388,7 @@ class ExcelOrderImportService
                                 'average_price' => $averagePrice,
                                 'tier_price' => $priceInfo1['tier_price'] ?? false,
                                 'tier' => $priceInfo1['tier'] ?? null,
+                                'price_source' => $priceInfo1['tier_price'] ? 'tier_specific' : 'default_or_fallback',
                                 'breakdown' => $priceBreakdown['breakdown']
                             ]);
                         }
@@ -412,18 +410,6 @@ class ExcelOrderImportService
                                 'tier' => $priceInfo['tier'] ?? null,
                                 'breakdown' => $quantity . "x" . $unitPrice . ($specialPriceAdjustment > 0 ? " + {$quantity}x2 (Special)" : "")
                             ];
-                            Log::info('[IMPORT] Tính giá (' . $logType . ')', [
-                                'external_id' => $externalId,
-                                'part_number' => $partNumber,
-                                'quantity' => $quantity,
-                                'unit_price' => $unitPrice,
-                                'special_price_adjustment' => $specialPriceAdjustment,
-                                'item_total' => $itemTotal,
-                                'average_price' => $averagePrice,
-                                'tier_price' => $priceInfo['tier_price'] ?? false,
-                                'tier' => $priceInfo['tier'] ?? null,
-                                'breakdown' => $priceBreakdown['breakdown']
-                            ]);
                         }
                     }
 
@@ -451,7 +437,7 @@ class ExcelOrderImportService
 
         $transaction = Transaction::create([
             'user_id' => $importFile->user_id,
-            'transaction_code' => 'ORDER-' . time(),
+            'transaction_code' => 'ORDER-' . \Illuminate\Support\Str::ulid(),
             'type' => Transaction::TYPE_DEDUCT,
             'method' => Transaction::METHOD_VND,
             'amount' => $totalAmount,
@@ -498,7 +484,7 @@ class ExcelOrderImportService
                         'phone2' => trim($row['O'] ?? ''),
                         'comment' => trim($row['P'] ?? ''),
                         'shipping_method' => trim($row['W'] ?? ''),
-                        'status' => 'pending',
+                        'status' => 'on hold',
                         'import_file_id' => $importFile->id,
                         'created_by' => Auth::user()->id,
                         'warehouse' => $warehouse
@@ -594,14 +580,6 @@ class ExcelOrderImportService
             $orderTotalQuantities[$externalId] = $orderTotalQuantity;
             $orderTotalPrices[$externalId] = $orderPriceBreakdowns[$externalId] ?? 0;
         }
-
-        Log::info('[IMPORT] Hoàn thành import đơn hàng với tier pricing', [
-            'import_file_id' => $importFile->id,
-            'user_id' => $importFile->user_id,
-            'tier' => $currentTier,
-            'total_amount' => $totalAmount,
-            'warehouse' => $warehouse
-        ]);
 
         return true;
     }

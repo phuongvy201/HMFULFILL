@@ -2,6 +2,117 @@
 
 @section('title', 'Customer Tier')
 
+@section('head')
+<meta name="csrf-token" content="{{ csrf_token() }}">
+<style>
+    .modal-open {
+        overflow: hidden;
+    }
+</style>
+<script>
+    function openEditModal(userId, currentTier, currentOrderCount, currentRevenue) {
+        // Set form values
+        const editTierModal = document.getElementById('editTierModal');
+        const editTierForm = document.getElementById('editTierForm');
+        const editTierSelect = document.getElementById('edit_tier');
+        const editOrderCount = document.getElementById('edit_order_count');
+        const editRevenue = document.getElementById('edit_revenue');
+        const editMonth = document.getElementById('edit_month');
+        const specialTierNote = document.getElementById('special_tier_note');
+        const notesField = document.getElementById('edit_notes');
+
+        editTierSelect.value = currentTier;
+        editOrderCount.value = currentOrderCount;
+        editRevenue.value = currentRevenue;
+        editMonth.value = new Date().toISOString().slice(0, 7);
+        editTierForm.action = `/admin/user-tiers/${userId}/update-tier`;
+
+        // Toggle special tier note and notes requirement
+        if (currentTier === 'Special') {
+            specialTierNote.classList.remove('hidden');
+            notesField.setAttribute('required', 'required');
+        } else {
+            specialTierNote.classList.add('hidden');
+            notesField.removeAttribute('required');
+        }
+
+        // Show modal and prevent body scroll
+        editTierModal.classList.remove('hidden');
+        document.body.classList.add('modal-open');
+    }
+
+    function closeEditModal() {
+        const editTierModal = document.getElementById('editTierModal');
+        editTierModal.classList.add('hidden');
+        document.body.classList.remove('modal-open');
+    }
+
+    // Wait for DOM to load
+    document.addEventListener('DOMContentLoaded', function() {
+        // Handle tier selection change
+        document.getElementById('edit_tier').addEventListener('change', function(e) {
+            const specialTierNote = document.getElementById('special_tier_note');
+            const notesField = document.getElementById('edit_notes');
+            if (e.target.value === 'Special') {
+                specialTierNote.classList.remove('hidden');
+                notesField.setAttribute('required', 'required');
+            } else {
+                specialTierNote.classList.add('hidden');
+                notesField.removeAttribute('required');
+            }
+        });
+
+        // Close modal when clicking outside
+        document.getElementById('editTierModal').addEventListener('click', function(e) {
+            if (e.target === this) {
+                closeEditModal();
+            }
+        });
+
+        // Handle form submission
+        document.getElementById('editTierForm').addEventListener('submit', function(e) {
+            e.preventDefault();
+
+            const formData = new FormData(this);
+            const url = this.action;
+
+            // Validate notes for Special tier
+            if (formData.get('tier') === 'Special' && !formData.get('notes').trim()) {
+                alert('Vui lòng nhập ghi chú khi set tier Special');
+                return;
+            }
+
+            fetch(url, {
+                    method: 'POST',
+                    body: formData,
+                    headers: {
+                        'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                        'Accept': 'application/json'
+                    }
+                })
+                .then(response => {
+                    if (!response.ok) {
+                        throw new Error('Network response was not ok');
+                    }
+                    return response.json();
+                })
+                .then(data => {
+                    if (data.success) {
+                        closeEditModal();
+                        location.reload();
+                    } else {
+                        alert('Có lỗi xảy ra: ' + (data.message || 'Unknown error'));
+                    }
+                })
+                .catch(error => {
+                    console.error('Error:', error);
+                    alert('Có lỗi xảy ra khi cập nhật tier');
+                });
+        });
+    });
+</script>
+@endsection
+
 @section('content-admin')
 <div class="p-6">
     <!-- Header -->
@@ -141,7 +252,6 @@
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Current Tier
                         </th>
-
                         <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">
                             Revenue
                         </th>
@@ -188,7 +298,8 @@
                             'Diamond' => 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200',
                             'Gold' => 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200',
                             'Silver' => 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-200',
-                            'Wood' => 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200'
+                            'Wood' => 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-200',
+                            'Special' => 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200'
                             ];
                             $tierColor = $tierColors[$customer['current_tier']] ?? 'bg-gray-100 text-gray-800';
                             @endphp
@@ -199,6 +310,8 @@
                                 <i class="fas fa-star mr-1"></i>
                                 @elseif($customer['current_tier'] == 'Silver')
                                 <i class="fas fa-medal mr-1"></i>
+                                @elseif($customer['current_tier'] == 'Special')
+                                <i class="fas fa-gem mr-1"></i>
                                 @else
                                 <i class="fas fa-tree mr-1"></i>
                                 @endif
@@ -208,7 +321,6 @@
                                 {{ $customer['current_tier_order_count'] }} đơn hàng
                             </div>
                         </td>
-
                         <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-white">
                             ${{ number_format($customer['revenue'], 2) }}
                         </td>
@@ -224,10 +336,11 @@
                                     class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
                                     <i class="fas fa-eye mr-1"></i>Detail
                                 </a>
-                                <a href="{{ route('admin.user-tiers.update', $customer['id']) }}"
-                                    class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300">
+                                <button type="button"
+                                    onclick="openEditModal({{ $customer['id'] }}, '{{ $customer['current_tier'] }}', {{ $customer['current_tier_order_count'] }}, {{ $customer['revenue'] }})"
+                                    class="text-green-600 hover:text-green-900 dark:text-green-400 dark:hover:text-green-300 bg-transparent border-none cursor-pointer">
                                     <i class="fas fa-edit mr-1"></i>Edit
-                                </a>
+                                </button>
                             </div>
                         </td>
                     </tr>
@@ -270,6 +383,7 @@
                         <option value="Silver">Silver</option>
                         <option value="Gold">Gold</option>
                         <option value="Diamond">Diamond</option>
+                        <option value="Special">Special</option>
                     </select>
                 </div>
 
@@ -282,6 +396,14 @@
                 </div>
 
                 <div class="mb-4">
+                    <label for="edit_revenue" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                        Doanh Thu ($)
+                    </label>
+                    <input type="number" id="edit_revenue" name="revenue" min="0" step="0.01" required
+                        class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
+                </div>
+
+                <div class="mb-4">
                     <label for="edit_month" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                         Tháng Hiệu Lực
                     </label>
@@ -289,9 +411,16 @@
                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white">
                 </div>
 
+                <div id="special_tier_note" class="mb-4 p-3 bg-yellow-50 dark:bg-yellow-900 rounded-md hidden">
+                    <p class="text-sm text-yellow-800 dark:text-yellow-200">
+                        <i class="fas fa-info-circle mr-1"></i>
+                        Tier Special là tier đặc biệt được set thủ công. Khách hàng sẽ được giữ tier này cho đến khi được thay đổi bởi admin.
+                    </p>
+                </div>
+
                 <div class="mb-4">
                     <label for="edit_notes" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                        Ghi Chú (tùy chọn)
+                        Ghi Chú (bắt buộc cho Tier Special)
                     </label>
                     <textarea id="edit_notes" name="notes" rows="3"
                         class="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:text-white"
@@ -314,55 +443,3 @@
 </div>
 
 @endsection
-
-@push('scripts')
-<script>
-    function openEditModal(userId, currentTier, currentOrderCount) {
-        document.getElementById('edit_tier').value = currentTier;
-        document.getElementById('edit_order_count').value = currentOrderCount;
-        document.getElementById('edit_month').value = new Date().toISOString().slice(0, 7);
-        document.getElementById('editTierForm').action = `/admin/user-tiers/${userId}/update-tier`;
-        document.getElementById('editTierModal').classList.remove('hidden');
-    }
-
-    function closeEditModal() {
-        document.getElementById('editTierModal').classList.add('hidden');
-    }
-
-    // Đóng modal khi click bên ngoài
-    document.getElementById('editTierModal').addEventListener('click', function(e) {
-        if (e.target === this) {
-            closeEditModal();
-        }
-    });
-
-    // Xử lý form submit
-    document.getElementById('editTierForm').addEventListener('submit', function(e) {
-        e.preventDefault();
-
-        const formData = new FormData(this);
-        const url = this.action;
-
-        fetch(url, {
-                method: 'POST',
-                body: formData,
-                headers: {
-                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content')
-                }
-            })
-            .then(response => response.json())
-            .then(data => {
-                if (data.success) {
-                    closeEditModal();
-                    location.reload();
-                } else {
-                    alert('Có lỗi xảy ra: ' + data.message);
-                }
-            })
-            .catch(error => {
-                console.error('Error:', error);
-                alert('Có lỗi xảy ra khi cập nhật tier');
-            });
-    });
-</script>
-@endpush

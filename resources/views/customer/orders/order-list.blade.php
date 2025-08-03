@@ -4,6 +4,17 @@
 
 @section('content-customer')
 <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
+    <!-- VAT Warning Start -->
+    <div class="mb-6">
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <strong class="font-bold">Notice:</strong>
+            <span class="block sm:inline">
+                A 20% VAT will be applied to all FF UK orders in accordance with UK government regulations.
+            </span>
+        </div>
+
+    </div>
+    <!-- VAT Warning End -->
     <!-- Breadcrumb Start -->
     <div x-data="{ pageName: `File Import`}">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -56,7 +67,8 @@
                     </div>
                 </button>
                 <div class="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                    * Only files with "failed" status can be deleted
+                    * Files with "failed" and "on hold" status can be deleted<br>
+                    * "On hold" files will be refunded (excluding already cancelled orders)
                 </div>
                 <!-- Modal -->
                 <div x-show="isModalOpen" x-cloak class="fixed inset-0 flex items-center justify-center p-5 overflow-y-auto modal z-99999">
@@ -269,7 +281,7 @@
                         <tr>
                             <td class="px-6 py-3 whitespace-nowrap">
                                 <div class="flex items-center">
-                                    @if($file->status === 'failed')
+                                    @if(in_array($file->status, ['failed', 'on hold']))
                                     <input type="checkbox" class="file-checkbox h-5 w-5 rounded-lg border-gray-300 cursor-pointer" value="{{ $file->id }}">
                                     @else
                                     <input type="checkbox" class="h-5 w-5 rounded-lg border-gray-300 cursor-not-allowed opacity-50" disabled>
@@ -304,6 +316,11 @@
                             <td class="px-6 py-3 whitespace-nowrap">
                                 <div style="text-transform: capitalize;" class="flex items-center">
                                     @switch($file->status)
+                                    @case('on hold')
+                                    <p class="bg-sky-50 text-theme-xs text-sky-600 dark:bg-sky-500/15 dark:text-sky-400 rounded-full px-2 py-0.5 font-medium">
+                                        {{ $file->status }}
+                                    </p>
+                                    @break
                                     @case('pending')
                                     <p class="bg-warning-50 text-theme-xs text-warning-600 dark:bg-warning-500/15 dark:text-warning-400 rounded-full px-2 py-0.5 font-medium">
                                         {{ $file->status }}
@@ -497,7 +514,7 @@
             if (selectedFiles.length === 0) {
                 Swal.fire({
                     title: 'Notification',
-                    text: 'Please select at least one file with "failed" status to delete',
+                    text: 'Please select at least one file with "failed" or "on hold" status to delete',
                     icon: 'warning'
                 });
                 return;
@@ -505,7 +522,7 @@
 
             Swal.fire({
                 title: 'Are you sure you want to delete the selected files?',
-                text: `Are you sure you want to delete ${selectedFiles.length} selected files? Only files with "failed" status can be deleted.`,
+                text: `Are you sure you want to delete ${selectedFiles.length} selected files? Files with "on hold" status will be refunded (excluding already cancelled orders).`,
                 icon: 'warning',
                 showCancelButton: true,
                 confirmButtonColor: '#d33',
@@ -563,10 +580,10 @@
             const statusCell = fileRow.querySelector('td:nth-child(3)');
             const status = statusCell.textContent.trim().toLowerCase();
 
-            if (status !== 'failed') {
+            if (!['failed', 'on hold'].includes(status)) {
                 Swal.fire({
                     title: 'Cannot Delete',
-                    text: 'Only files with "failed" status can be deleted',
+                    text: 'Only files with "failed" or "on hold" status can be deleted',
                     icon: 'warning'
                 });
                 return;

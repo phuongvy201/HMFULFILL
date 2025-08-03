@@ -15,6 +15,7 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\AutoUpdateOrderStatus::class,
         \App\Console\Commands\UpdateTrackingNumbers::class,
         \App\Console\Commands\ScheduleTierCalculation::class,
+        \App\Console\Commands\ReleaseOnHoldOrders::class,
     ];
     protected function commands(): void
     {
@@ -30,6 +31,7 @@ class Kernel extends ConsoleKernel
     {
         $schedule->command('orders:update-status')->everyMinute();
         $schedule->command('orders:update-tracking-numbers')->dailyAt('01:00');
+        $schedule->command('orders:release-on-hold')->everyMinute();
 
         // Tính toán tier cho user vào ngày đầu tiên của mỗi tháng lúc 2:00 AM
         $schedule->command('users:schedule-tier-calculation')

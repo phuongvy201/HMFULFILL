@@ -20,6 +20,9 @@ class DatabaseSeeder extends Seeder
     public function run(): void
     {
 
-        $this->call(RefundTransactionSeeder::class);
+        $this->call([
+            RefundTransactionSeeder::class,
+            DesignerSeeder::class,
+        ]);
     }
 }

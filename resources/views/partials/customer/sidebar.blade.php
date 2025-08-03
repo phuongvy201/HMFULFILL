@@ -239,6 +239,14 @@
                                         Uploaded Order
                                     </a>
                                 </li>
+                                <li>
+                                    <a
+                                        href="{{ route('customer.order-create') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="pageCustomer === 'orderCreate' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Tạo Đơn Thủ Công
+                                    </a>
+                                </li>
 
                             </ul>
                         </div>

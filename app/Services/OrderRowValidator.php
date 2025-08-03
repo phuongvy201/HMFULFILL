@@ -20,8 +20,10 @@ class OrderRowValidator
         'Diecut-Magnet' => ['2x2', '3x3', '4x4', '5x5', '6x6'],
         'UV Sticker' => ['2x2', '3x3', '4x4', '5x5', '6x6', '7x7', '8x8', '9x9', '10x10', '12x12', '15x15', '18x18', '20x20'],
         'Vinyl Sticker' => ['3x4', '6x8', '8x10'],
-        'Phone Case' => ['15', '15 Pro', '15 Pro Max', '15 Plus', '16', '16 Plus', '16 Pro'],
-        'Default' => ['S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+        'Phone Case' => ['15', '15 Pro', '15 Pro Max', '15 Plus', '16', '16 Plus', '16 Pro', '16 Pro Max'],
+        'Tote Bag' => ['Tote Bag'],
+        'Mug' => ['Mug'],
+        'Default' => ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
     ];
 
     private array $validPositionsByProductType = [
@@ -31,6 +33,8 @@ class OrderRowValidator
         'UV Sticker' => ['Front'],
         'Vinyl Sticker' => ['Front'],
         'Phone Case' => ['Front'],
+        'Tote Bag' => ['Front', 'Back'],
+        'Mug' => ['Front'],
         'Default' => ['Front', 'Back', 'Right Sleeve', 'Left Sleeve']
     ];
 
@@ -84,8 +88,13 @@ class OrderRowValidator
         if (empty($externalId)) {
             $rowErrors[] = "Row $excelRow: Missing order code (External_ID).";
         } else {
-            if (ExcelOrder::where('external_id', $externalId)->exists()) {
-                $rowErrors[] = "Row $excelRow: External_ID '$externalId' already exists in the database.";
+            // Kiểm tra xem external_id đã tồn tại với status khác "cancelled"
+            $existingOrder = ExcelOrder::where('external_id', $externalId)
+                ->where('status', '!=', 'cancelled')
+                ->first();
+
+            if ($existingOrder) {
+                $rowErrors[] = "Row $excelRow: External_ID '$externalId' already exists in the database with status '{$existingOrder->status}'.";
             }
         }
 
@@ -163,10 +172,17 @@ class OrderRowValidator
             $rowErrors[] = $skuError;
         }
 
-        $variant = ProductVariant::where('sku', $sku)
-            ->orWhere('twofifteen_sku', $sku)
-            ->orWhere('flashship_sku', $sku)
-            ->first();
+        // Kiểm tra xem SKU được nhập có phải là twofifteen_sku hay flashship_sku không
+        $variantWithTwofifteen = ProductVariant::where('twofifteen_sku', $sku)->first();
+        $variantWithFlashship = ProductVariant::where('flashship_sku', $sku)->first();
+
+        if ($variantWithTwofifteen || $variantWithFlashship) {
+            $rowErrors[] = "Row $excelRow: Product code (SKU) does not exist in the system: '$sku'.";
+            return;
+        }
+
+        // Chỉ cho phép SKU chính
+        $variant = ProductVariant::where('sku', $sku)->first();
         if (!$variant) {
             $rowErrors[] = "Row $excelRow: Product code (SKU) does not exist in the system: '$sku'.";
         }
@@ -346,6 +362,10 @@ class OrderRowValidator
             return 'Vinyl Sticker';
         } elseif (str_starts_with($sku, 'CASE-IPHONE')) {
             return 'Phone Case';
+        } elseif (str_starts_with($sku, 'TOTEBAG') || str_starts_with($sku, 'MUG')) {
+            return 'Tote Bag';
+        } elseif (str_starts_with($sku, 'MUG')) {
+            return 'Mug';
         }
         return 'Default';
     }

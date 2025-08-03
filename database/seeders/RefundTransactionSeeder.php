@@ -14,7 +14,7 @@ class RefundTransactionSeeder extends Seeder
     // public function run(): void
     // {
     //     // ID của giao dịch cần hoàn tiền (bạn có thể thay đổi ID này)
-    //     $transactionId = 710;
+    //     $transactionId = 1126;
 
     //     // ID của admin hoặc người thực hiện refund
     //     $refundedBy = 1;
@@ -35,7 +35,7 @@ class RefundTransactionSeeder extends Seeder
     //     DB::beginTransaction();
     //     try {
     //         // Thực hiện refund
-    //         $refund = $transaction->refund($refundedBy, 'Refund transaction 710');
+    //         $refund = $transaction->refund($refundedBy, 'Refund transaction 1126');
 
     //         echo "Refund thành công! Mã giao dịch hoàn tiền: {$refund->transaction_code}\n";
     //         DB::commit();
@@ -46,9 +46,9 @@ class RefundTransactionSeeder extends Seeder
     // }
     public function run()
     {
-        $userId = 123; // ID người dùng
-        $amount = 7.63; // Số tiền trừ
-        $note = "Refund external_id: 576753766007412834";
+        $userId = 129; // ID người dùng
+        $amount = 11.11; // Số tiền trừ
+        $note = "Refund external_id: 576762671741442197";
 
         $wallet = Wallet::where('user_id', $userId)->first();
 
@@ -75,4 +75,5 @@ class RefundTransactionSeeder extends Seeder
 
         $this->command->info("Manual deduct created for user ID: {$userId}");
     }
+    
 }

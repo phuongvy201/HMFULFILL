@@ -127,8 +127,18 @@ class TierController extends Controller
             'Wood' => ['next' => 'Silver', 'threshold' => 1500],
             'Silver' => ['next' => 'Gold', 'threshold' => 4500],
             'Gold' => ['next' => 'Diamond', 'threshold' => 9000],
-            'Diamond' => ['next' => null, 'threshold' => null]
+            'Diamond' => ['next' => null, 'threshold' => null],
+            'Special' => ['next' => null, 'threshold' => null] // Thêm xử lý cho Special tier
         ];
+
+        // Xử lý đặc biệt cho Special tier
+        if ($currentTier === 'Special') {
+            return [
+                'next_tier' => null,
+                'orders_needed' => 0,
+                'message' => 'Bạn đang ở tier đặc biệt được set bởi admin!'
+            ];
+        }
 
         if ($currentTier === 'Diamond') {
             return [
@@ -169,6 +179,9 @@ class TierController extends Controller
             ],
             'Diamond' => [
                 'Exclusive benefits for Diamond members – enjoy special discounted prices on all products'
+            ],
+            'Special' => [
+                'Exclusive benefits for Special members – enjoy special discounted prices on all products (set by admin)'
             ]
         ];
 

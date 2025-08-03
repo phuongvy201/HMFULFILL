@@ -55,13 +55,23 @@ class TierStatisticsController extends Controller
     }
 
     /**
+     * Kiểm tra database driver hiện tại
+     */
+    private function isSQLite()
+    {
+        $driver = config('database.default');
+        return config("database.connections.{$driver}.driver") === 'sqlite';
+    }
+
+    /**
      * Lấy thống kê theo tier
      */
     private function getTierStatistics($startDate)
     {
         $currentMonth = Carbon::now()->startOfMonth();
+        $isSQLite = $this->isSQLite();
 
-        return User::where('role', 'customer')
+        $query = User::where('role', 'customer')
             ->leftJoin('user_tiers', function ($join) use ($currentMonth) {
                 $join->on('users.id', '=', 'user_tiers.user_id')
                     ->where('user_tiers.month', '=', $currentMonth);
@@ -69,12 +79,25 @@ class TierStatisticsController extends Controller
             ->leftJoin('wallets', 'users.id', '=', 'wallets.user_id')
             ->select(
                 DB::raw('COALESCE(user_tiers.tier, "Wood") as tier'),
-                DB::raw('CAST(COUNT(DISTINCT users.id) AS UNSIGNED) as customer_count'),
-                DB::raw('CAST(SUM(COALESCE(wallets.balance, 0)) AS DECIMAL(15,2)) as total_balance')
+                DB::raw('COUNT(DISTINCT users.id) as customer_count'),
+                DB::raw('SUM(COALESCE(wallets.balance, 0)) as total_balance')
             )
-            ->groupBy('tier')
-            ->orderByRaw("FIELD(tier, 'Diamond', 'Gold', 'Silver', 'Wood')")
-            ->get();
+            ->groupBy('tier');
+
+        if ($isSQLite) {
+            // SQLite sử dụng CASE WHEN thay vì FIELD()
+            $query->orderByRaw("CASE 
+                WHEN tier = 'Diamond' THEN 1
+                WHEN tier = 'Gold' THEN 2
+                WHEN tier = 'Silver' THEN 3
+                WHEN tier = 'Special' THEN 4
+                ELSE 5
+            END");
+        } else {
+            $query->orderByRaw("FIELD(tier, 'Diamond', 'Gold', 'Silver', 'Wood', 'Special')");
+        }
+
+        return $query->get();
     }
 
     /**
@@ -95,8 +118,9 @@ class TierStatisticsController extends Controller
     private function getTopTierCustomers($startDate, $limit = 10)
     {
         $currentMonth = Carbon::now()->startOfMonth();
+        $isSQLite = $this->isSQLite();
 
-        return User::where('role', 'customer')
+        $query = User::where('role', 'customer')
             ->leftJoin('user_tiers', function ($join) use ($currentMonth) {
                 $join->on('users.id', '=', 'user_tiers.user_id')
                     ->where('user_tiers.month', '=', $currentMonth);
@@ -112,12 +136,23 @@ class TierStatisticsController extends Controller
                 'users.last_name',
                 'users.email',
                 DB::raw('COALESCE(user_tiers.tier, "Wood") as tier'),
-                DB::raw('CAST(COALESCE(wallets.balance, 0) AS DECIMAL(15,2)) as balance'),
+                DB::raw('COALESCE(wallets.balance, 0) as balance'),
                 DB::raw("(SELECT COUNT(*) FROM excel_orders WHERE excel_orders.created_by = users.id AND excel_orders.created_at >= '{$startDate}') as order_count"),
                 DB::raw("(SELECT SUM(eoi.print_price * eoi.quantity) FROM excel_orders eo JOIN excel_order_items eoi ON eo.id = eoi.excel_order_id WHERE eo.created_by = users.id AND eo.created_at >= '{$startDate}') as total_revenue")
-            )
-            ->orderByRaw("FIELD(tier, 'Diamond', 'Gold', 'Silver', 'Wood')")
-            ->orderBy('total_revenue', 'desc')
+            );
+
+        if ($isSQLite) {
+            $query->orderByRaw("CASE 
+                WHEN tier = 'Diamond' THEN 1
+                WHEN tier = 'Gold' THEN 2
+                WHEN tier = 'Silver' THEN 3
+                ELSE 4
+            END");
+        } else {
+            $query->orderByRaw("FIELD(tier, 'Diamond', 'Gold', 'Silver', 'Wood', 'Special')");
+        }
+
+        return $query->orderBy('total_revenue', 'desc')
             ->limit($limit)
             ->get();
     }
@@ -128,8 +163,9 @@ class TierStatisticsController extends Controller
     private function getTierRevenueStatistics($startDate)
     {
         $currentMonth = Carbon::now()->startOfMonth();
+        $isSQLite = $this->isSQLite();
 
-        return ExcelOrder::join('users', 'excel_orders.created_by', '=', 'users.id')
+        $query = ExcelOrder::join('users', 'excel_orders.created_by', '=', 'users.id')
             ->join('excel_order_items', 'excel_orders.id', '=', 'excel_order_items.excel_order_id')
             ->leftJoin('user_tiers', function ($join) use ($currentMonth) {
                 $join->on('users.id', '=', 'user_tiers.user_id')
@@ -139,13 +175,25 @@ class TierStatisticsController extends Controller
             ->where('users.role', 'customer')
             ->select(
                 DB::raw('COALESCE(user_tiers.tier, "Wood") as tier'),
-                DB::raw('CAST(SUM(excel_order_items.print_price * excel_order_items.quantity) AS DECIMAL(15,2)) as total_revenue'),
-                DB::raw('CAST(COUNT(DISTINCT excel_orders.id) AS UNSIGNED) as order_count'),
-                DB::raw('CAST(COUNT(DISTINCT users.id) AS UNSIGNED) as customer_count')
+                DB::raw('SUM(excel_order_items.print_price * excel_order_items.quantity) as total_revenue'),
+                DB::raw('COUNT(DISTINCT excel_orders.id) as order_count'),
+                DB::raw('COUNT(DISTINCT users.id) as customer_count')
             )
-            ->groupBy('tier')
-            ->orderByRaw("FIELD(tier, 'Diamond', 'Gold', 'Silver', 'Wood')")
-            ->get();
+            ->groupBy('tier');
+
+        if ($isSQLite) {
+            $query->orderByRaw("CASE 
+                WHEN tier = 'Diamond' THEN 1
+                WHEN tier = 'Gold' THEN 2
+                WHEN tier = 'Silver' THEN 3
+                WHEN tier = 'Special' THEN 4
+                ELSE 5
+            END");
+        } else {
+            $query->orderByRaw("FIELD(tier, 'Diamond', 'Gold', 'Silver', 'Wood', 'Special')");
+        }
+
+        return $query->get();
     }
 
     /**
@@ -154,8 +202,9 @@ class TierStatisticsController extends Controller
     private function getTierOrderStatistics($startDate)
     {
         $currentMonth = Carbon::now()->startOfMonth();
+        $isSQLite = $this->isSQLite();
 
-        return ExcelOrder::join('users', 'excel_orders.created_by', '=', 'users.id')
+        $query = ExcelOrder::join('users', 'excel_orders.created_by', '=', 'users.id')
             ->leftJoin('user_tiers', function ($join) use ($currentMonth) {
                 $join->on('users.id', '=', 'user_tiers.user_id')
                     ->where('user_tiers.month', '=', $currentMonth);
@@ -164,17 +213,29 @@ class TierStatisticsController extends Controller
             ->where('users.role', 'customer')
             ->select(
                 DB::raw('COALESCE(user_tiers.tier, "Wood") as tier'),
-                DB::raw('CAST(COUNT(*) AS UNSIGNED) as order_count'),
-                DB::raw('CAST(COUNT(DISTINCT users.id) AS UNSIGNED) as customer_count'),
-                DB::raw('CAST(AVG(
+                DB::raw('COUNT(*) as order_count'),
+                DB::raw('COUNT(DISTINCT users.id) as customer_count'),
+                DB::raw('AVG(
                     (SELECT SUM(eoi.print_price * eoi.quantity) 
                      FROM excel_order_items eoi 
                      WHERE eoi.excel_order_id = excel_orders.id)
-                ) AS DECIMAL(15,2)) as avg_order_value')
+                ) as avg_order_value')
             )
-            ->groupBy('tier')
-            ->orderByRaw("FIELD(tier, 'Diamond', 'Gold', 'Silver', 'Wood')")
-            ->get();
+            ->groupBy('tier');
+
+        if ($isSQLite) {
+            $query->orderByRaw("CASE 
+                WHEN tier = 'Diamond' THEN 1
+                WHEN tier = 'Gold' THEN 2
+                WHEN tier = 'Silver' THEN 3
+                WHEN tier = 'Special' THEN 4
+                    ELSE 5
+            END");
+        } else {
+            $query->orderByRaw("FIELD(tier, 'Diamond', 'Gold', 'Silver', 'Wood', 'Special')");
+        }
+
+        return $query->get();
     }
 
     /**

@@ -28,36 +28,26 @@ class UpdateTrackingNumbers extends Command
     {
         $this->info('Bắt đầu xử lý đơn hàng UK (Twofifteen)...');
 
-        // Lấy các đơn hàng thiếu mã vận đơn hoặc có phương thức vận chuyển là tiktok_label với trạng thái processing và có ánh xạ trong orders_mapping
-        $orders = ExcelOrder::query()
+        // Lấy đơn hàng UK từ 1 tuần trở lại đây, có trạng thái processed và tracking_number là null
+        $query = ExcelOrder::query()
             ->where('warehouse', 'UK')
-            ->where(function ($query) {
-                $query->whereNull('tracking_number')
-                    ->orWhere(function ($subQuery) {
-                        $subQuery->where('shipping_method', 'tiktok_label')
-                            ->where('status', ExcelOrder::STATUS_PROCESSED);
-                    });
-            })
-            ->where(function ($query) {
-                $query->where('status', ExcelOrder::STATUS_PROCESSED)
-                    ->orWhere(function ($subQuery) {
-                        $subQuery->where('shipping_method', 'tiktok_label')
-                            ->where('status', ExcelOrder::STATUS_PROCESSED);
-                    });
-            })
+            ->where('status', ExcelOrder::STATUS_PROCESSED)
+            ->whereNull('tracking_number')
+            ->where('excel_orders.created_at', '>=', now()->subWeek()) // Chỉ định rõ bảng cho created_at
             ->join('orders_mapping', 'excel_orders.external_id', '=', 'orders_mapping.external_id')
             ->where('orders_mapping.factory', 'twofifteen') // Chỉ lấy ánh xạ của Twofifteen
-            ->select('excel_orders.id', 'excel_orders.external_id', 'orders_mapping.internal_id')
-            ->pluck('internal_id', 'excel_orders.id');
+            ->select('excel_orders.id', 'excel_orders.external_id', 'orders_mapping.internal_id');
+
+        $orders = $query->pluck('internal_id', 'excel_orders.id');
 
         if ($orders->isEmpty()) {
-            $this->info('Không có đơn hàng UK nào cần cập nhật mã vận đơn hoặc trạng thái.');
-            Log::info('Không tìm thấy đơn hàng UK nào thiếu mã vận đơn hoặc có phương thức tiktok_label với trạng thái processing, warehouse=UK, và có ánh xạ Twofifteen trong orders_mapping');
+            $this->info('Không có đơn hàng UK nào cần cập nhật mã vận đơn.');
+            Log::info('Không tìm thấy đơn hàng UK nào có trạng thái processed, tracking_number null, từ 1 tuần trở lại đây, warehouse=UK, và có ánh xạ Twofifteen trong orders_mapping');
             return;
         }
 
-        $this->info("Tìm thấy {$orders->count()} đơn hàng UK cần cập nhật. Bắt đầu xử lý...");
-        Log::info("Tìm thấy {$orders->count()} đơn hàng UK để xử lý", ['internal_ids' => $orders->values()->toArray()]);
+        $this->info("Tìm thấy {$orders->count()} đơn hàng UK cần cập nhật tracking number. Bắt đầu xử lý...");
+        Log::info("Tìm thấy {$orders->count()} đơn hàng UK để cập nhật tracking number", ['internal_ids' => $orders->values()->toArray()]);
 
         $twofifteenService = app(TwofifteenService::class);
         $internalIds = $orders->values()->toArray();
@@ -96,33 +86,29 @@ class UpdateTrackingNumbers extends Command
                     try {
                         $order = ExcelOrder::find($orderId);
                         if ($order) {
-                            // Chỉ cập nhật trạng thái thành 'Đã giao hàng' nếu API trả về 'Shipped'
-                            $status = ($apiOrder['status'] === 'Shipped') ? 'Shipped' : $order->status;
                             $trackingNumber = $apiOrder['trackingNumber'] ?? null;
+                            $apiStatus = $apiOrder['status'] ?? null;
 
-                            // Cập nhật mã vận đơn nếu có, hoặc chỉ cập nhật trạng thái nếu là tiktok_label
-                            if ($trackingNumber || $order->shipping_method === 'tiktok_label') {
-                                $order->updateTrackingAndStatus($trackingNumber, $status);
+                            // Xác định status mới dựa trên API response
+                            $newStatus = $order->status; // Mặc định giữ nguyên status hiện tại
 
-                                if ($trackingNumber) {
-                                    $this->info("Cập nhật mã vận đơn {$trackingNumber} cho đơn hàng UK {$externalId}");
-                                    Log::info("Cập nhật mã vận đơn cho đơn hàng UK {$externalId}", [
-                                        'tracking_number' => $trackingNumber,
-                                        'status' => $status
-                                    ]);
-                                } else {
-                                    $this->info("Không có mã vận đơn, chỉ cập nhật trạng thái cho đơn hàng UK {$externalId} (tiktok_label)");
-                                    Log::info("Không có mã vận đơn, cập nhật trạng thái cho đơn hàng UK {$externalId} (tiktok_label)", [
-                                        'status' => $status
-                                    ]);
-                                }
+                            // Chỉ cập nhật status khi API trả về "Shipped"
+                            if ($apiStatus === 'Shipped') {
+                                $newStatus = 'Shipped';
+                            }
 
-                                if ($status === 'Shipped') {
-                                    $this->info("Cập nhật trạng thái Đã giao hàng cho đơn hàng UK {$externalId}");
-                                }
-                            } else {
-                                $this->warn("Không có mã vận đơn và không phải tiktok_label cho đơn hàng UK {$externalId}");
-                                Log::warning("Không có mã vận đơn và không phải tiktok_label cho đơn hàng UK {$externalId}");
+                            // Cập nhật tracking number và status
+                            if ($trackingNumber) {
+                                $order->updateTrackingAndStatus($trackingNumber, $newStatus);
+
+                                $statusMessage = $newStatus !== $order->status ? " và cập nhật status thành '{$newStatus}'" : "";
+                                $this->info("📦 Cập nhật tracking number: '{$trackingNumber}' cho đơn hàng UK {$externalId}{$statusMessage}");
+                                Log::info("Cập nhật tracking number cho đơn hàng UK {$externalId}", [
+                                    'tracking_number' => $trackingNumber,
+                                    'old_status' => $order->status,
+                                    'new_status' => $newStatus,
+                                    'api_status' => $apiStatus
+                                ]);
                             }
                         }
                     } catch (\Exception $e) {
@@ -141,29 +127,25 @@ class UpdateTrackingNumbers extends Command
     {
         $this->info('Bắt đầu xử lý đơn hàng US (DTF)...');
 
-        // Lấy tất cả đơn hàng US có trạng thái processed hoặc shipped nhưng chưa có tracking number và có ánh xạ trong orders_mapping
+        // Lấy đơn hàng US từ 1 tuần trở lại đây, có trạng thái processed và tracking_number là null
         $orders = ExcelOrder::query()
             ->where('warehouse', 'US')
-            ->where(function ($query) {
-                $query->where('status', ExcelOrder::STATUS_PROCESSED)
-                    ->orWhere(function ($subQuery) {
-                        $subQuery->where('status', 'Shipped')
-                            ->whereNull('tracking_number');
-                    });
-            })
+            ->where('status', ExcelOrder::STATUS_PROCESSED)
+            ->whereNull('tracking_number')
+            ->where('excel_orders.created_at', '>=', now()->subWeek()) // Chỉ định rõ bảng cho created_at
             ->join('orders_mapping', 'excel_orders.external_id', '=', 'orders_mapping.external_id')
             ->where('orders_mapping.factory', 'dtf')
             ->select('excel_orders.id', 'excel_orders.external_id', 'orders_mapping.internal_id')
             ->get();
 
         if ($orders->isEmpty()) {
-            $this->info('Không có đơn hàng US nào cần cập nhật mã vận đơn hoặc trạng thái.');
-            Log::info('Không tìm thấy đơn hàng US nào có trạng thái processed hoặc shipped nhưng chưa có tracking number, warehouse=US, và có ánh xạ DTF trong orders_mapping');
+            $this->info('Không có đơn hàng US nào cần cập nhật mã vận đơn.');
+            Log::info('Không tìm thấy đơn hàng US nào có trạng thái processed, tracking_number null, từ 1 tuần trở lại đây, warehouse=US, và có ánh xạ DTF trong orders_mapping');
             return;
         }
 
-        $this->info("Tìm thấy {$orders->count()} đơn hàng US cần cập nhật. Bắt đầu xử lý...");
-        Log::info("Tìm thấy {$orders->count()} đơn hàng US để xử lý", ['orders' => $orders->toArray()]);
+        $this->info("Tìm thấy {$orders->count()} đơn hàng US cần cập nhật tracking number. Bắt đầu xử lý...");
+        Log::info("Tìm thấy {$orders->count()} đơn hàng US để cập nhật tracking number", ['orders' => $orders->toArray()]);
 
         $dtfService = app(DtfService::class);
 
@@ -193,24 +175,29 @@ class UpdateTrackingNumbers extends Command
                         $order = ExcelOrder::where('external_id', $apiOrder['external_id'])->first();
                         if ($order) {
                             $externalId = $apiOrder['external_id'];
+                            $trackingNumber = $apiOrder['tracking_number'] ?? null;
+                            $apiStatus = $apiOrder['status'] ?? null;
 
-                            // Cập nhật trạng thái thành 'Shipped' nếu API trả về status 'completed'
-                            $status = ($apiOrder['status'] === 'completed') ? 'Shipped' : $order->status;
-                            $trackingNumber = $apiOrder['tracking_number'];
+                            // Xác định status mới dựa trên API response
+                            $newStatus = $order->status; // Mặc định giữ nguyên status hiện tại
 
-                            // Cập nhật tracking number và status từ API
-                            $order->updateTrackingAndStatus($trackingNumber, $status);
-
-                            if ($trackingNumber) {
-                                $this->info("📦 Cập nhật tracking number: '{$trackingNumber}' cho đơn hàng US {$externalId}");
-                                Log::info("Cập nhật tracking number cho đơn hàng US {$externalId}", [
-                                    'tracking_number' => $trackingNumber,
-                                    'status' => $status
-                                ]);
+                            // Nếu API trả về "complete" thì đổi thành "Shipped"
+                            if ($apiStatus === 'complete') {
+                                $newStatus = 'Shipped';
                             }
 
-                            if ($status === 'Shipped' && $order->status !== 'Shipped') {
-                                $this->info("🚚 Cập nhật trạng thái Đã giao hàng cho đơn hàng US {$externalId}");
+                            // Cập nhật tracking number và status
+                            if ($trackingNumber) {
+                                $order->updateTrackingAndStatus($trackingNumber, $newStatus);
+
+                                $statusMessage = $newStatus !== $order->status ? " và cập nhật status thành '{$newStatus}'" : "";
+                                $this->info("📦 Cập nhật tracking number: '{$trackingNumber}' cho đơn hàng US {$externalId}{$statusMessage}");
+                                Log::info("Cập nhật tracking number cho đơn hàng US {$externalId}", [
+                                    'tracking_number' => $trackingNumber,
+                                    'old_status' => $order->status,
+                                    'new_status' => $newStatus,
+                                    'api_status' => $apiStatus
+                                ]);
                             }
                         }
                     } catch (\Exception $e) {

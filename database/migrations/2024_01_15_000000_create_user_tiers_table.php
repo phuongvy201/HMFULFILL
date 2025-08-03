@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('user_tiers', function (Blueprint $table) {
             $table->id();
             $table->foreignId('user_id')->constrained()->onDelete('cascade');
-            $table->enum('tier', ['Diamond', 'Gold', 'Silver', 'Wood']);
+            $table->enum('tier', ['Diamond', 'Gold', 'Silver', 'Wood',]);
             $table->integer('order_count'); // Số đơn hàng trong tháng
             $table->date('effective_month'); // Tháng có hiệu lực (YYYY-MM-01)
             $table->timestamps();

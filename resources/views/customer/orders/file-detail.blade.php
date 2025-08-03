@@ -207,6 +207,11 @@
                                     <tr class="hover:bg-gray-50 transition-colors duration-200" data-order-id="{{ $excelOrder->id }}">
                                         <td class="border-r px-6 py-4">
                                             @switch($excelOrder->status)
+                                            @case('on hold')
+                                            <span class="rounded-full bg-sky-50 px-2 py-0.5 text-theme-xs font-medium text-sky-700">
+                                                {{ $excelOrder->status }}
+                                            </span>
+                                            @break
                                             @case('pending')
                                             <span class="rounded-full bg-warning-50 px-2 py-0.5 text-theme-xs font-medium text-warning-700">
                                                 {{ $excelOrder->status }}

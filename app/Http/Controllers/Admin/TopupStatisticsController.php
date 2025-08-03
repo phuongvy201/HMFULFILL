@@ -106,18 +106,39 @@ class TopupStatisticsController extends Controller
     }
 
     /**
+     * Kiểm tra database driver hiện tại
+     */
+    private function isSQLite()
+    {
+        $driver = config('database.default');
+        return config("database.connections.{$driver}.driver") === 'sqlite';
+    }
+
+    /**
      * Lấy thống kê nạp tiền theo tháng
      */
     private function getMonthlyTopupStats()
     {
-        return Transaction::where('type', Transaction::TYPE_TOPUP)
-            ->where('status', Transaction::STATUS_APPROVED)
-            ->select(
+        $isSQLite = $this->isSQLite();
+
+        $query = Transaction::where('type', Transaction::TYPE_TOPUP)
+            ->where('status', Transaction::STATUS_APPROVED);
+
+        if ($isSQLite) {
+            $query->select(
+                DB::raw('strftime("%Y-%m", created_at) as month'),
+                DB::raw('SUM(amount) as total_amount'),
+                DB::raw('COUNT(*) as count')
+            );
+        } else {
+            $query->select(
                 DB::raw('DATE_FORMAT(created_at, "%Y-%m") as month'),
                 DB::raw('SUM(amount) as total_amount'),
                 DB::raw('COUNT(*) as count')
-            )
-            ->groupBy('month')
+            );
+        }
+
+        return $query->groupBy('month')
             ->orderBy('month', 'desc')
             ->limit(12)
             ->get();

@@ -78,6 +78,9 @@ Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(func
     Route::post('/products', [ProductController::class, 'store'])->name('admin.products.store');
     Route::delete('/products/{id}', [ProductController::class, 'destroy'])->name('admin.products.destroy');
 
+    // Product Images management routes
+    Route::post('/products/{productId}/images', [SupplierFulfillmentController::class, 'addProductImage'])->name('admin.products.add-image');
+
     // Topup routes
     Route::get('/topup-requests', [FinanceController::class, 'topupRequests'])->name('admin.topup.requests');
     Route::get('/topup/approve/{id}', [FinanceController::class, 'approveTopup'])->name('admin.topup.approve');
@@ -89,6 +92,13 @@ Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(func
     Route::post('/finance/adjust-balance/{userId}', [FinanceController::class, 'adjustBalance'])->name('admin.finance.adjust-balance');
     Route::get('/finance/refundable-transactions', [FinanceController::class, 'refundableTransactions'])->name('admin.finance.refundable-transactions');
     Route::post('/finance/refund-transaction/{transactionId}', [FinanceController::class, 'refundTransaction'])->name('admin.finance.refund-transaction');
+
+    // Refund routes
+    Route::get('/refund', [App\Http\Controllers\Admin\RefundController::class, 'index'])->name('admin.refund.index');
+    Route::post('/refund/transaction/{transactionId}', [App\Http\Controllers\Admin\RefundController::class, 'refundTransaction'])->name('admin.refund.transaction');
+    Route::post('/refund/custom', [App\Http\Controllers\Admin\RefundController::class, 'refundCustomAmount'])->name('admin.refund.custom');
+    Route::get('/refund/user/{userId}', [App\Http\Controllers\Admin\RefundController::class, 'getUserInfo'])->name('admin.refund.user');
+    Route::get('/refund/history', [App\Http\Controllers\Admin\RefundController::class, 'getRefundHistory'])->name('admin.refund.history');
 
     Route::post('/admin/import-tracking', [SupplierFulfillmentController::class, 'importTrackingNumbers'])->name('admin.import-tracking');
     Route::post('/fulfillment/files/{id}/update-status', [SupplierFulfillmentController::class, 'updateStatus'])->name('fulfillment.files.update-status');
@@ -145,6 +155,11 @@ Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(func
     // DTF Orders routes
     Route::put('/api/dtf/orders/{orderId}', [OrderUploadController::class, 'updateDtfOrder'])
         ->name('dtf.orders.update');
+
+    // Update tracking numbers route
+    Route::post('/orders/update-tracking', [SupplierFulfillmentController::class, 'updateTrackingNumbers'])
+        ->name('admin.orders.update-tracking')
+        ->middleware(['auth', 'admin']);
 });
 
 Route::middleware(['auth', 'admin'])->group(function () {
@@ -171,16 +186,43 @@ Route::prefix('customer')->middleware('auth')->group(function () {
     Route::post('/delete-files', [SupplierFulfillmentController::class, 'deleteFiles'])->name('customer.delete-files');
 
     Route::get('/orders/{externalId}', [SupplierFulfillmentController::class, 'getCustomerOrderDetail'])
-        ->where('externalId', '[A-Za-z0-9\-_]+')
+        ->where('externalId', '.*')
         ->name('customer.orders.detail');
 
     Route::get('/order-customer', [SupplierFulfillmentController::class, 'getCustomerOrders'])->name('customer.order-customer');
     Route::get('/order-create', [SupplierFulfillmentController::class, 'orderCreate'])->name('customer.order-create');
+    Route::post('/order-create', [SupplierFulfillmentController::class, 'storeCustomerManualOrder'])->name('customer.order-store');
+    Route::get('/api/customer-products-with-variants', [SupplierFulfillmentController::class, 'getCustomerProductsWithVariants'])->name('customer.api.products-with-variants');
     Route::get('/file-detail/{id}', [SupplierFulfillmentController::class, 'fileDetail'])->name('customer.file-detail');
     Route::get('/debug-orders', [SupplierFulfillmentController::class, 'debugCustomerOrders'])->name('customer.debug-orders');
 
+    // Product Images routes
+    Route::get('/api/products-with-images', [SupplierFulfillmentController::class, 'getProductsWithImages'])->name('customer.api.products-with-images');
+
+    // USPS Tracking routes
+    Route::get('/tracking', [App\Http\Controllers\UspsTrackingController::class, 'showTrackingForm'])->name('customer.tracking.form');
+    Route::post('/tracking/single', [App\Http\Controllers\UspsTrackingController::class, 'trackSingle'])->name('customer.tracking.single');
+    Route::post('/tracking/multiple', [App\Http\Controllers\UspsTrackingController::class, 'trackMultiple'])->name('customer.tracking.multiple');
+    Route::post('/tracking/status', [App\Http\Controllers\UspsTrackingController::class, 'checkDeliveryStatus'])->name('customer.tracking.status');
+    Route::post('/tracking/cache', [App\Http\Controllers\UspsTrackingController::class, 'trackWithCache'])->name('customer.tracking.cache');
+    Route::post('/tracking/clear-cache', [App\Http\Controllers\UspsTrackingController::class, 'clearCache'])->name('customer.tracking.clear-cache');
+    Route::get('/api/product/{productId}/images', [SupplierFulfillmentController::class, 'getProductImages'])->name('customer.api.product-images');
+
     // Customer Export Orders
     Route::post('/orders/export', [SupplierFulfillmentController::class, 'exportCustomerOrdersCSV'])->name('customer.orders.export');
+
+    // Customer Cancel Order
+    Route::post('/orders/{orderId}/cancel', [SupplierFulfillmentController::class, 'cancelCustomerOrder'])->name('customer.orders.cancel');
+
+    // Design routes
+    Route::prefix('design')->group(function () {
+        Route::get('/create', [App\Http\Controllers\DesignController::class, 'create'])->name('customer.design.create');
+        Route::post('/store', [App\Http\Controllers\DesignController::class, 'store'])->name('customer.design.store');
+        Route::get('/my-tasks', [App\Http\Controllers\DesignController::class, 'myTasks'])->name('customer.design.my-tasks');
+        Route::get('/tasks/{taskId}', [App\Http\Controllers\DesignController::class, 'show'])->name('customer.design.show');
+        Route::post('/tasks/{taskId}/review', [App\Http\Controllers\DesignController::class, 'review'])->name('customer.design.review');
+        Route::post('/tasks/{taskId}/cancel', [App\Http\Controllers\DesignController::class, 'cancel'])->name('customer.design.cancel');
+    });
 });
 
 // Nhóm route authentication
@@ -214,4 +256,20 @@ Route::get('login', function () {
 Route::middleware(['auth'])->group(function () {
     Route::get('/profile/api-token', [App\Http\Controllers\ApiTokenController::class, 'show'])->name('api-token.show');
     Route::post('/profile/api-token/regenerate', [App\Http\Controllers\ApiTokenController::class, 'regenerate'])->name('api-token.regenerate');
+});
+
+// User Tiers Management
+Route::prefix('admin/user-tiers')->name('admin.user-tiers.')->middleware(['auth', 'admin'])->group(function () {
+    Route::get('/', [App\Http\Controllers\Admin\UserTierController::class, 'index'])->name('index');
+    Route::get('/{userId}', [App\Http\Controllers\Admin\UserTierController::class, 'show'])->name('show');
+    Route::put('/{userId}/update-tier', [App\Http\Controllers\Admin\UserTierController::class, 'updateTier'])->name('update-tier');
+});
+
+// Designer routes
+Route::prefix('designer')->middleware(['auth'])->group(function () {
+    Route::get('/dashboard', [App\Http\Controllers\DesignController::class, 'dashboard'])->name('designer.dashboard');
+    Route::get('/tasks', [App\Http\Controllers\DesignController::class, 'designerTasks'])->name('designer.tasks.index');
+    Route::post('/tasks/{taskId}/join', [App\Http\Controllers\DesignController::class, 'joinTask'])->name('designer.tasks.join');
+    Route::post('/tasks/{taskId}/submit', [App\Http\Controllers\DesignController::class, 'submitDesign'])->name('designer.tasks.submit');
+    Route::get('/tasks/{taskId}', [App\Http\Controllers\DesignController::class, 'show'])->name('designer.tasks.show');
 });

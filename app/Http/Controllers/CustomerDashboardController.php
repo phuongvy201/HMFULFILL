@@ -155,12 +155,6 @@ class CustomerDashboardController extends Controller
      */
     private function calculateTotalSpending($userId, $startDate, $endDate = null)
     {
-        Log::info('calculateTotalSpending - Start:', [
-            'userId' => $userId,
-            'startDate' => $startDate->format('Y-m-d H:i:s'),
-            'endDate' => $endDate ? $endDate->format('Y-m-d H:i:s') : null
-        ]);
-
         $query = ExcelOrder::join('excel_order_items', 'excel_orders.id', '=', 'excel_order_items.excel_order_id')
             ->where('excel_orders.created_by', $userId);
 
@@ -172,12 +166,6 @@ class CustomerDashboardController extends Controller
 
         $totalSpending = $query->sum(DB::raw('excel_order_items.print_price * excel_order_items.quantity'));
 
-        Log::info('calculateTotalSpending - Result:', [
-            'totalSpending' => $totalSpending,
-            'rawQuery' => $query->toSql(),
-            'queryBindings' => $query->getBindings()
-        ]);
-
         return $totalSpending;
     }
 
@@ -186,12 +174,6 @@ class CustomerDashboardController extends Controller
      */
     private function calculateTotalItems($userId, $startDate, $endDate = null)
     {
-        Log::info('calculateTotalItems - Start:', [
-            'userId' => $userId,
-            'startDate' => $startDate->format('Y-m-d H:i:s'),
-            'endDate' => $endDate ? $endDate->format('Y-m-d H:i:s') : null
-        ]);
-
         $query = ExcelOrder::join('excel_order_items', 'excel_orders.id', '=', 'excel_order_items.excel_order_id')
             ->where('excel_orders.created_by', $userId);
 
@@ -203,12 +185,6 @@ class CustomerDashboardController extends Controller
 
         $totalItems = $query->sum('excel_order_items.quantity');
 
-        Log::info('calculateTotalItems - Result:', [
-            'totalItems' => $totalItems,
-            'rawQuery' => $query->toSql(),
-            'queryBindings' => $query->getBindings()
-        ]);
-
         return $totalItems;
     }
 
@@ -217,12 +193,6 @@ class CustomerDashboardController extends Controller
      */
     private function getOrderStatusStats($userId, $startDate, $endDate = null)
     {
-        Log::info('getOrderStatusStats - Start:', [
-            'userId' => $userId,
-            'startDate' => $startDate->format('Y-m-d H:i:s'),
-            'endDate' => $endDate ? $endDate->format('Y-m-d H:i:s') : null
-        ]);
-
         $query = ExcelOrder::where('created_by', $userId);
 
         if ($endDate) {
@@ -237,12 +207,6 @@ class CustomerDashboardController extends Controller
             ->mapWithKeys(function ($item) {
                 return [$item->status => $item->count];
             });
-
-        Log::info('getOrderStatusStats - Result:', [
-            'statusStats' => $statusStats->toArray(),
-            'rawQuery' => $query->toSql(),
-            'queryBindings' => $query->getBindings()
-        ]);
 
         return $statusStats;
     }
@@ -300,39 +264,17 @@ class CustomerDashboardController extends Controller
      */
     private function getCustomPeriodSpending($userId, $startDate, $endDate)
     {
-        Log::info('getCustomPeriodSpending - Start:', [
-            'userId' => $userId,
-            'startDate' => $startDate->format('Y-m-d H:i:s'),
-            'endDate' => $endDate->format('Y-m-d H:i:s'),
-            'startDate_timezone' => $startDate->timezone->getName(),
-            'endDate_timezone' => $endDate->timezone->getName()
-        ]);
-
         $stats = [];
         $current = $startDate->copy();
         $daysDiff = $startDate->diffInDays($endDate);
-
-        Log::info('getCustomPeriodSpending - Time calculation:', [
-            'daysDiff' => $daysDiff,
-            'will_group_by_week' => $daysDiff > 30
-        ]);
 
         // Kiểm tra có đơn hàng nào của user trong khoảng thời gian này không
         $totalOrdersInRange = ExcelOrder::where('created_by', $userId)
             ->whereBetween('created_at', [$startDate, $endDate])
             ->count();
 
-        Log::info('getCustomPeriodSpending - Total orders in range:', [
-            'totalOrdersInRange' => $totalOrdersInRange,
-            'query_startDate' => $startDate->format('Y-m-d H:i:s'),
-            'query_endDate' => $endDate->format('Y-m-d H:i:s')
-        ]);
-
         // Nếu khoảng thời gian quá dài (hơn 30 ngày), nhóm theo tuần
         if ($daysDiff > 30) {
-            Log::info('getCustomPeriodSpending - Using weekly grouping');
-            $weekCount = 0;
-
             while ($current <= $endDate) {
                 $weekStart = $current->copy()->startOfWeek();
                 $weekEnd = $current->copy()->endOfWeek();
@@ -341,12 +283,6 @@ class CustomerDashboardController extends Controller
                 if ($weekEnd > $endDate) {
                     $weekEnd = $endDate->copy()->endOfDay();
                 }
-
-                Log::info('getCustomPeriodSpending - Processing week:', [
-                    'weekCount' => $weekCount,
-                    'weekStart' => $weekStart->format('Y-m-d H:i:s'),
-                    'weekEnd' => $weekEnd->format('Y-m-d H:i:s')
-                ]);
 
                 $orderCount = ExcelOrder::where('created_by', $userId)
                     ->whereBetween('created_at', [$weekStart, $weekEnd])
@@ -357,12 +293,6 @@ class CustomerDashboardController extends Controller
                     ->whereBetween('excel_orders.created_at', [$weekStart, $weekEnd])
                     ->sum(DB::raw('excel_order_items.print_price * excel_order_items.quantity'));
 
-                Log::info('getCustomPeriodSpending - Week results:', [
-                    'weekCount' => $weekCount,
-                    'orderCount' => $orderCount,
-                    'spending' => $spending
-                ]);
-
                 $stats[] = [
                     'date' => $weekStart->format('Y-m-d') . ' - ' . $weekEnd->format('Y-m-d'),
                     'orders' => $orderCount,
@@ -370,22 +300,12 @@ class CustomerDashboardController extends Controller
                 ];
 
                 $current->addWeek();
-                $weekCount++;
             }
         } else {
-            Log::info('getCustomPeriodSpending - Using daily grouping');
-            $dayCount = 0;
-
             // Nếu khoảng thời gian ngắn (30 ngày hoặc ít hơn), hiển thị theo ngày
             while ($current <= $endDate) {
                 $dayStart = $current->copy()->startOfDay();
                 $dayEnd = $current->copy()->endOfDay();
-
-                Log::info('getCustomPeriodSpending - Processing day:', [
-                    'dayCount' => $dayCount,
-                    'dayStart' => $dayStart->format('Y-m-d H:i:s'),
-                    'dayEnd' => $dayEnd->format('Y-m-d H:i:s')
-                ]);
 
                 $orderCount = ExcelOrder::where('created_by', $userId)
                     ->whereBetween('created_at', [$dayStart, $dayEnd])
@@ -396,13 +316,6 @@ class CustomerDashboardController extends Controller
                     ->whereBetween('excel_orders.created_at', [$dayStart, $dayEnd])
                     ->sum(DB::raw('excel_order_items.print_price * excel_order_items.quantity'));
 
-                Log::info('getCustomPeriodSpending - Day results:', [
-                    'dayCount' => $dayCount,
-                    'date' => $current->format('Y-m-d'),
-                    'orderCount' => $orderCount,
-                    'spending' => $spending
-                ]);
-
                 $stats[] = [
                     'date' => $current->format('Y-m-d'),
                     'orders' => $orderCount,
@@ -410,16 +323,8 @@ class CustomerDashboardController extends Controller
                 ];
 
                 $current->addDay();
-                $dayCount++;
             }
         }
-
-        Log::info('getCustomPeriodSpending - Final results:', [
-            'totalStatsCount' => count($stats),
-            'totalOrdersSum' => array_sum(array_column($stats, 'orders')),
-            'totalSpendingSum' => array_sum(array_column($stats, 'spending')),
-            'stats' => $stats
-        ]);
 
         return $stats;
     }
@@ -429,13 +334,6 @@ class CustomerDashboardController extends Controller
      */
     private function getTopProducts($userId, $startDate, $endDate = null, $limit = 5)
     {
-        Log::info('getTopProducts - Start:', [
-            'userId' => $userId,
-            'startDate' => $startDate->format('Y-m-d H:i:s'),
-            'endDate' => $endDate ? $endDate->format('Y-m-d H:i:s') : null,
-            'limit' => $limit
-        ]);
-
         $query = ExcelOrderItem::join('excel_orders', 'excel_order_items.excel_order_id', '=', 'excel_orders.id')
             ->where('excel_orders.created_by', $userId);
 
@@ -455,13 +353,6 @@ class CustomerDashboardController extends Controller
             ->orderBy('total_quantity', 'desc')
             ->limit($limit)
             ->get();
-
-        Log::info('getTopProducts - Result:', [
-            'topProductsCount' => $topProducts->count(),
-            'topProducts' => $topProducts->toArray(),
-            'rawQuery' => $query->toSql(),
-            'queryBindings' => $query->getBindings()
-        ]);
 
         return $topProducts;
     }

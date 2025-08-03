@@ -31,7 +31,9 @@ use App\Rules\ValidPartNumber;
 use App\Rules\ValidPrintSpace;
 use App\Models\Wallet;
 use App\Models\Transaction;
+use App\Models\UserTier;
 use App\Services\OrderRowValidator;
+use Illuminate\Support\Facades\Artisan;
 
 /**
  * @OA\Info(
@@ -227,20 +229,12 @@ class SupplierFulfillmentController extends Controller
             // Giữ lại các tham số filter trong pagination
             $files->appends($request->query());
 
-            // Ghi log để debug
-            Log::info('Order Fulfillment Files with filters:', [
-                'filters' => $request->only(['file_id', 'warehouse', 'status', 'date']),
-                'count' => $files->count(),
-                'total' => $files->total()
-            ]);
+
 
             // Trả về view với biến $files
             return view('admin.orders.order-fulfillment-list', compact('files'));
         } catch (\Exception $e) {
-            Log::error('Order Fulfillment List Error: ' . $e->getMessage(), [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+
 
             return back()->with('error', 'An error occurred while fetching the file list: ' . $e->getMessage());
         }
@@ -256,17 +250,18 @@ class SupplierFulfillmentController extends Controller
             $file = $request->file('file');
             $fileName = date('Y-m-d') . '-' . $file->getClientOriginalName();
 
-            // Tạo thư mục nếu chưa tồn tại
-            $uploadPath = public_path('uploads/fulfillment');
-            if (!file_exists($uploadPath)) {
-                mkdir($uploadPath, 0755, true);
-            }
+            // Upload file lên AWS S3
+            $filePath = $file->storeAs('fulfillment', $fileName, 's3');
 
-            // Lưu file vào thư mục public
-            $file->move($uploadPath, $fileName);
+            // Lấy URL public từ AWS S3
+            $fileUrl = 'https://' . env('AWS_BUCKET') . '.s3.' . env('AWS_DEFAULT_REGION') . '.amazonaws.com/' . $filePath;
 
-            // Đọc file Excel
-            $spreadsheet = IOFactory::load($uploadPath . '/' . $fileName);
+            // Tạo file tạm để đọc Excel (vì IOFactory cần file local)
+            $tempFile = tempnam(sys_get_temp_dir(), 'excel_');
+            $file->move(dirname($tempFile), basename($tempFile));
+
+            // Đọc file Excel từ file tạm
+            $spreadsheet = IOFactory::load($tempFile);
             $worksheet = $spreadsheet->getActiveSheet();
             $highestRow = $worksheet->getHighestRow();
 
@@ -277,16 +272,13 @@ class SupplierFulfillmentController extends Controller
                 ], 422);
             }
 
-            // Lấy đường dẫn file
-            $fileUrl = asset('uploads/fulfillment/' . $fileName);
-
             // Lấy user_id từ người dùng đang đăng nhập
             $userId = Auth::id();
 
             // Lưu thông tin file vào database, bao gồm user_id
             $importedFile = ImportFile::create([
                 'file_name' => $fileName,
-                'file_path' => $fileUrl,
+                'file_path' => $fileUrl, // URL từ AWS S3
                 'status' => 'pending',
                 'error_logs' => [],
                 'user_id' => $userId,
@@ -306,8 +298,12 @@ class SupplierFulfillmentController extends Controller
             // Xử lý dữ liệu sử dụng ExcelOrderImportService
             $this->excelOrderImportService->process($importedFile, $rows);
 
-            // Cập nhật trạng thái file
+            // Xóa file tạm
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+            }
 
+            // Cập nhật trạng thái file
             return response()->json([
                 'success' => true,
                 'message' => 'File downloaded successfully',
@@ -319,10 +315,10 @@ class SupplierFulfillmentController extends Controller
                 ]
             ]);
         } catch (\Exception $e) {
-            Log::error('Lỗi xử lý file: ' . $e->getMessage(), [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+            // Xóa file tạm nếu có lỗi
+            if (isset($tempFile) && file_exists($tempFile)) {
+                unlink($tempFile);
+            }
 
             // Nếu có lỗi, cập nhật trạng thái file và lưu log lỗi
             if (isset($importedFile)) {
@@ -348,8 +344,7 @@ class SupplierFulfillmentController extends Controller
         try {
             $ids = $request->input('ids', []);
 
-            // Log để debug
-            Log::info('IDs to delete:', $ids);
+
 
             // Lấy thông tin các file trước khi xóa
             $files = ImportFile::whereIn('id', $ids)->get();
@@ -361,7 +356,6 @@ class SupplierFulfillmentController extends Controller
                 // Kiểm tra và xóa file vật lý nếu tồn tại
                 if (file_exists($filePath)) {
                     unlink($filePath);
-                    Log::info('Deleted physical file: ' . $filePath);
                 }
 
                 // Xóa các bản ghi liên quan trong bảng excel_orders
@@ -376,10 +370,7 @@ class SupplierFulfillmentController extends Controller
                 'message' => 'Files deleted successfully'
             ]);
         } catch (\Exception $e) {
-            Log::error('Error deleting files: ' . $e->getMessage(), [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+
 
             return response()->json([
                 'success' => false,
@@ -407,17 +398,18 @@ class SupplierFulfillmentController extends Controller
             $fileExtension = $file->getClientOriginalExtension();
             $fileName = $originalFileName . '_' . $timestamp . '_' . $randomString . '.' . $fileExtension;
 
-            // Tạo thư mục nếu chưa tồn tại
-            $uploadPath = public_path('uploads/customer_fulfillment');
-            if (!file_exists($uploadPath)) {
-                mkdir($uploadPath, 0755, true);
-            }
+            // Upload file lên AWS S3
+            $filePath = $file->storeAs('customer_fulfillment', $fileName, 's3');
 
-            // Lưu file vào thư mục public
-            $file->move($uploadPath, $fileName);
+            // Lấy URL public từ AWS S3
+            $fileUrl = 'https://' . env('AWS_BUCKET') . '.s3.' . env('AWS_DEFAULT_REGION') . '.amazonaws.com/' . $filePath;
 
-            // Đọc file Excel
-            $spreadsheet = IOFactory::load($uploadPath . '/' . $fileName);
+            // Tạo file tạm để đọc Excel (vì IOFactory cần file local)
+            $tempFile = tempnam(sys_get_temp_dir(), 'excel_');
+            $file->move(dirname($tempFile), basename($tempFile));
+
+            // Đọc file Excel từ file tạm
+            $spreadsheet = IOFactory::load($tempFile);
             $worksheet = $spreadsheet->getActiveSheet();
             $highestRow = $worksheet->getHighestRow();
 
@@ -428,16 +420,13 @@ class SupplierFulfillmentController extends Controller
                 ], 422);
             }
 
-            // Lấy đường dẫn file
-            $fileUrl = asset('uploads/customer_fulfillment/' . $fileName);
-
             // Lấy user_id từ người dùng đang đăng nhập
             $userId = Auth::id();
 
             // Lưu thông tin file vào database với status pending
             $importedFile = ImportFile::create([
                 'file_name' => $fileName,
-                'file_path' => $fileUrl,
+                'file_path' => $fileUrl, // URL từ AWS S3
                 'status' => 'pending', // Luôn set status là pending khi khách hàng upload
                 'error_logs' => [],
                 'user_id' => $userId,
@@ -462,27 +451,29 @@ class SupplierFulfillmentController extends Controller
                 return back()->with('error', 'Have error in file. Click to see detail.');
             }
 
-            // Đảm bảo status vẫn là pending sau khi xử lý thành công
+            // Cập nhật status thành "on hold" sau khi xử lý thành công (đã trừ tiền)
             $importedFile->update([
-                'status' => 'pending', // Giữ status là pending cho đến khi admin duyệts
+                'status' => 'on hold', // Status "on hold" vì đã trừ tiền và tạo orders
                 'total_rows' => $highestRow - 1,
                 'processed_rows' => $highestRow - 1
             ]);
 
-            // Log để theo dõi
-            Log::info('File imported successfully with pending status', [
-                'import_file_id' => $importedFile->id,
-                'status' => 'pending',
-                'warehouse' => $request->input('warehouse'),
-                'user_id' => $userId
-            ]);
+            // Xóa file tạm
+            if (file_exists($tempFile)) {
+                unlink($tempFile);
+            }
 
-            return back()->with('success', 'File uploaded successfully. Status is pending and waiting for approval.');
+            return back()->with('success', 'File uploaded successfully. Status is on hold and orders are ready for processing.');
         } catch (\Exception $e) {
             Log::error('Error processing customer file: ' . $e->getMessage(), [
                 'error' => $e->getMessage(),
                 'trace' => $e->getTraceAsString()
             ]);
+
+            // Xóa file tạm nếu có lỗi
+            if (isset($tempFile) && file_exists($tempFile)) {
+                unlink($tempFile);
+            }
 
             // Nếu có lỗi, cập nhật trạng thái file và lưu log lỗi
             if ($importedFile) {
@@ -514,10 +505,7 @@ class SupplierFulfillmentController extends Controller
             // Trả về view với danh sách file
             return view('customer.orders.order-list', compact('files'));
         } catch (\Exception $e) {
-            Log::error('Have error when get file list: ' . $e->getMessage(), [
-                'error' => $e->getMessage(),
-                'trace' => $e->getTraceAsString()
-            ]);
+
 
             return back()->with('error', 'Have error when get file list: ' . $e->getMessage());
         }
@@ -535,41 +523,97 @@ class SupplierFulfillmentController extends Controller
                 ], 400);
             }
 
-            // Lấy thông tin các file trước khi xóa
-            $files = ImportFile::whereIn('id', $ids)->get();
+            // Lấy thông tin các file trước khi xóa với relationships
+            $files = ImportFile::with(['excelOrders.items'])
+                ->whereIn('id', $ids)
+                ->get();
 
-            // Kiểm tra xem tất cả file có trạng thái "failed" không
-            $nonFailedFiles = $files->where('status', '!=', 'failed');
-            if ($nonFailedFiles->count() > 0) {
-                $nonFailedFileIds = $nonFailedFiles->pluck('id')->toArray();
+            // Kiểm tra xem tất cả file có trạng thái "failed" hoặc "on hold" không
+            $nonDeletableFiles = $files->whereNotIn('status', ['failed', 'on hold']);
+            if ($nonDeletableFiles->count() > 0) {
+                $nonDeletableFileIds = $nonDeletableFiles->pluck('id')->toArray();
                 return response()->json([
                     'success' => false,
-                    'message' => 'Only files with "failed" status can be deleted. Files with IDs: ' . implode(', ', $nonFailedFileIds) . ' cannot be deleted.'
+                    'message' => 'Only files with "failed" or "on hold" status can be deleted. Files with IDs: ' . implode(', ', $nonDeletableFileIds) . ' cannot be deleted.'
                 ], 400);
             }
 
-            foreach ($files as $file) {
-                // Lấy đường dẫn vật lý của file
-                $filePath = public_path('uploads/customer_fulfillment/' . basename($file->file_name));
+            DB::beginTransaction();
 
-                // Kiểm tra và xóa file vật lý nếu tồn tại
-                if (file_exists($filePath)) {
-                    unlink($filePath);
+            try {
+                foreach ($files as $file) {
+                    // Nếu file có status "on hold", thực hiện refund
+                    if ($file->status === 'on hold') {
+                        // Lấy danh sách orders để kiểm tra
+                        $allOrders = $file->excelOrders;
+                        $cancelledOrders = $allOrders->whereIn('status', ['cancelled', 'refunded']);
+                        $refundableOrders = $allOrders->whereNotIn('status', ['cancelled', 'refunded']);
+
+                        // Tính tổng tiền của file từ các orders CHƯA BỊ CANCEL
+                        $totalAmount = $refundableOrders->sum(function ($order) {
+                            return $order->items->sum(function ($item) {
+                                return $item->print_price * $item->quantity;
+                            });
+                        });
+
+                        // Log chi tiết đã xóa để tối ưu hóa
+
+                        if ($totalAmount > 0) {
+                            // Tạo transaction refund
+                            $refundTransaction = Transaction::create([
+                                'user_id' => $file->user_id,
+                                'type' => Transaction::TYPE_REFUND,
+                                'method' => Transaction::METHOD_VND,
+                                'amount' => $totalAmount,
+                                'status' => Transaction::STATUS_APPROVED,
+                                'transaction_code' => 'REFUND_FILE_' . $file->id . '_' . time(),
+                                'note' => "Hoàn tiền do xóa file on hold: {$file->file_name} (chỉ các đơn chưa cancel)",
+                                'created_at' => now(),
+                                'updated_at' => now()
+                            ]);
+
+                            // Cập nhật balance của user qua Wallet
+                            $user = User::find($file->user_id);
+                            $wallet = $user->wallet;
+
+                            if (!$wallet) {
+                                throw new \Exception("Không tìm thấy ví của người dùng cho file {$file->id}");
+                            }
+
+                            if (!$wallet->deposit($totalAmount)) {
+                                throw new \Exception("Không thể thêm tiền vào ví cho file {$file->id}");
+                            }
+                        } else {
+                        }
+                    }
+
+                    // Lấy đường dẫn vật lý của file
+                    $filePath = public_path('uploads/customer_fulfillment/' . basename($file->file_name));
+
+                    // Kiểm tra và xóa file vật lý nếu tồn tại
+                    if (file_exists($filePath)) {
+                        unlink($filePath);
+                    }
+
+                    // Xóa các bản ghi liên quan
+                    $file->excelOrders()->delete();
                 }
 
-                // Xóa các bản ghi liên quan
-                $file->excelOrders()->delete();
-            }
+                // Xóa records trong database
+                ImportFile::whereIn('id', $ids)->delete();
 
-            // Xóa records trong database
-            ImportFile::whereIn('id', $ids)->delete();
+                DB::commit();
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
 
             return response()->json([
                 'success' => true,
                 'message' => 'Files deleted successfully'
             ]);
         } catch (\Exception $e) {
-            Log::error('Error deleting files: ' . $e->getMessage());
+
 
             return response()->json([
                 'success' => false,
@@ -644,6 +688,9 @@ class SupplierFulfillmentController extends Controller
         try {
             $userId = Auth::id();
 
+            // Decode external_id từ URL
+            $externalId = urldecode($externalId);
+
             // Lấy chi tiết đơn hàng cụ thể với các relationships cần thiết
             // Thêm điều kiện kiểm tra user_id để đảm bảo bảo mật
             $order = ExcelOrder::with([
@@ -671,7 +718,7 @@ class SupplierFulfillmentController extends Controller
                 $item->total_price = round($item->print_price * $item->quantity, 2);
             }
 
-            Log::info('Order detail:', ['order' => $order]);
+
             return view('customer.orders.order-uploaded-detail', compact('order', 'orderStatistics'));
         } catch (\Exception $e) {
             Log::error('Error in getCustomerOrderDetail:', [
@@ -706,7 +753,7 @@ class SupplierFulfillmentController extends Controller
                         $q->where('users.first_name', 'like', '%' . $customerSearch . '%')
                             ->orWhere('users.last_name', 'like', '%' . $customerSearch . '%')
                             ->orWhere('users.email', 'like', '%' . $customerSearch . '%')
-                            ->orWhereRaw("CONCAT(users.first_name, ' ', users.last_name) like ?", ['%' . $customerSearch . '%']);
+                            ->orWhereRaw("users.first_name || ' ' || users.last_name like ?", ['%' . $customerSearch . '%']);
                     })
                     ->select('import_files.*'); // Chỉ select các cột từ import_files
             }
@@ -729,11 +776,7 @@ class SupplierFulfillmentController extends Controller
             // Giữ lại các tham số filter trong pagination
             $files->appends($request->query());
 
-            // Ghi log để debug
-            Log::info('Customer Uploaded Files with filters:', [
-                'filters' => $request->only(['file_id', 'customer', 'warehouse', 'status', 'date']),
-                'count' => $files->count()
-            ]);
+
 
             // Trả về view với biến $files
             return view('admin.orders.order-customer-received', compact('files'));
@@ -753,7 +796,573 @@ class SupplierFulfillmentController extends Controller
     }
     public function orderCreate()
     {
-        return view('customer.orders.order-create');
+        $categories = \App\Models\Category::all();
+        $products = Product::with(['variants.attributes'])->get();
+        $result = [];
+        foreach ($products as $product) {
+            $variants = [];
+            foreach ($product->variants as $variant) {
+                $attributes = $variant->attributes->pluck('value', 'name')->toArray();
+                $variants[] = [
+                    'id' => $variant->id,
+                    'sku' => $variant->sku,
+                    'twofifteen_sku' => $variant->twofifteen_sku,
+                    'flashship_sku' => $variant->flashship_sku,
+                    'attributes' => $attributes,
+                    'attribute_text' => implode(', ', array_map(function ($name, $value) {
+                        return "$name: $value";
+                    }, array_keys($attributes), array_values($attributes)))
+                ];
+            }
+
+            $result[] = [
+                'id' => $product->id,
+
+                'name' => $product->name,
+                'category' => $product->category->name ?? 'Uncategorized',
+                'variants' => $variants
+            ];
+        }
+
+        return view('customer.orders.order-create', compact('categories'));
+    }
+
+    /**
+     * Lấy danh sách products với variants cho customer
+     */
+    public function getCustomerProductsWithVariants()
+    {
+        $products = Product::with([
+            'variants.attributes',
+            'images' => function ($query) {
+                // Lấy ảnh được tạo sớm nhất (oldest first)
+                $query->orderBy('created_at', 'asc');
+            },
+            'category'
+        ])->get();
+
+        $result = [];
+        foreach ($products as $product) {
+            $variants = [];
+            foreach ($product->variants as $variant) {
+                $attributes = $variant->attributes->pluck('value', 'name')->toArray();
+                $variants[] = [
+                    'id' => $variant->id,
+                    'sku' => $variant->sku,
+                    'twofifteen_sku' => $variant->twofifteen_sku,
+                    'flashship_sku' => $variant->flashship_sku,
+                    'attributes' => $attributes,
+                    'attribute_text' => implode(', ', array_map(function ($name, $value) {
+                        return "$name: $value";
+                    }, array_keys($attributes), array_values($attributes)))
+                ];
+            }
+
+            // Lấy hình ảnh từ bảng ProductImage - ảnh chính là ảnh được tạo sớm nhất
+            $mainImageUrl = $product->getMainImageUrl();
+
+            // Lấy tất cả ảnh của sản phẩm với thông tin chi tiết
+            $images = $product->images->map(function ($image) {
+                return [
+                    'id' => $image->id,
+                    'url' => str_starts_with($image->image_url, 'http')
+                        ? $image->image_url
+                        : asset($image->image_url),
+                    'created_at' => $image->created_at ? $image->created_at->toISOString() : null
+                ];
+            })->toArray();
+
+            Log::info("Product ID {$product->id}: Found " . $product->images->count() . " images, Main image URL: " . ($mainImageUrl ?? 'null'));
+
+            $result[] = [
+                'id' => $product->id,
+                'name' => $product->name,
+                'description' => $product->description,
+                'base_price' => $product->base_price,
+                'currency' => $product->currency,
+                'category' => $product->category->name ?? 'Uncategorized',
+                'image_url' => $mainImageUrl, // Ảnh chính (ảnh được tạo sớm nhất)
+                'images' => $images, // Tất cả ảnh của sản phẩm
+                'image_count' => $product->images->count(), // Số lượng ảnh
+                'variants' => $variants
+            ];
+        }
+
+        return response()->json($result);
+    }
+
+    /**
+     * Xử lý tạo đơn hàng thủ công của customer
+     */
+    public function storeCustomerManualOrder(Request $request)
+    {
+        try {
+            // Validate dữ liệu cơ bản
+            $validated = $request->validate([
+                'order_number' => 'required|string|max:255|unique:excel_orders,external_id',
+                'store_name' => 'nullable|string|max:255',
+                'channel' => 'nullable|string|max:255',
+                'customer_name' => 'required|string|max:255',
+                'customer_email' => 'required|email|max:255',
+                'customer_phone' => 'nullable|string|max:20',
+                'address' => 'required|string|max:500',
+                'address_2' => 'nullable|string|max:500',
+                'city' => 'required|string|max:255',
+                'state' => 'nullable|string|max:255',
+                'postcode' => 'required|string|max:20',
+                'country' => 'required|string|max:2',
+                'shipping_method' => 'nullable|string|max:100',
+                'order_note' => 'nullable|string|max:1000',
+                'warehouse' => 'required|in:US,UK',
+                'products' => 'required|array|min:1',
+                'products.*.variant_id' => 'required|exists:product_variants,id',
+                'products.*.quantity' => 'required|integer|min:1',
+                'products.*.title' => 'nullable|string|max:255',
+                'products.*.designs' => 'required|array|min:1',
+                'products.*.designs.*.file_url' => 'required|url',
+                'products.*.designs.*.print_space' => 'required|string',
+                'products.*.mockups' => 'nullable|array',
+                'products.*.mockups.*.file_url' => 'required_with:products.*.mockups|url',
+                'products.*.mockups.*.print_space' => 'required_with:products.*.mockups|string',
+            ]);
+
+            // Custom validation logic dựa trên OrderRowValidator
+            $validationErrors = $this->validateCustomerManualOrder($validated);
+            if (!empty($validationErrors)) {
+                return redirect()->back()
+                    ->withInput()
+                    ->withErrors($validationErrors);
+            }
+
+            DB::beginTransaction();
+
+            // Tính toán giá
+            $user = Auth::user();
+            $wallet = $user->wallet;
+
+            $totalAmount = 0;
+            $itemPrices = [];
+
+            foreach ($validated['products'] as $index => $product) {
+                $variant = ProductVariant::findOrFail($product['variant_id']);
+
+                // Tính giá cho item này
+                $priceInfo = $variant->getOrderPriceInfo(
+                    $validated['shipping_method'],
+                    1, // position - có thể cần logic phức tạp hơn
+                    $user->id
+                );
+
+                $itemPrice = $priceInfo['print_price'] * $product['quantity'];
+                $itemPrices[$index] = $priceInfo['print_price'];
+                $totalAmount += $itemPrice;
+            }
+
+            // Kiểm tra số dư ví
+            if (!$wallet || !$wallet->hasEnoughBalance($totalAmount)) {
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Insufficient wallet balance. Required: ' . number_format($totalAmount, 2) . ' USD. Current: ' . number_format($wallet ? $wallet->balance : 0, 2) . ' USD');
+            }
+
+            // Tạo giao dịch trừ tiền
+            $transaction = Transaction::create([
+                'user_id' => $user->id,
+                'transaction_code' => 'CUSTOMER-MANUAL-' . time(),
+                'type' => Transaction::TYPE_DEDUCT,
+                'method' => Transaction::METHOD_VND,
+                'amount' => $totalAmount,
+                'status' => Transaction::STATUS_APPROVED,
+                'note' => 'Trừ tiền cho đơn hàng thủ công: ' . $validated['order_number'],
+                'approved_at' => now(),
+            ]);
+
+            // Trừ tiền từ ví
+            if (!$wallet->withdraw($totalAmount)) {
+                $transaction->reject('Unable to deduct from wallet');
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Unable to process payment');
+            }
+
+            // Tạo đơn hàng
+            $customerNameParts = explode(' ', trim($validated['customer_name']), 2);
+            $firstName = $customerNameParts[0] ?? '';
+            $lastName = $customerNameParts[1] ?? '';
+
+            $order = ExcelOrder::create([
+                'external_id' => $validated['order_number'],
+                'brand' => $validated['store_name'] ?? '',
+                'channel' => $validated['channel'] ?? 'customer-manual',
+                'buyer_email' => $validated['customer_email'],
+                'first_name' => $firstName,
+                'last_name' => $lastName,
+                'company' => $validated['store_name'] ?? '',
+                'address1' => $validated['address'],
+                'address2' => $validated['address_2'],
+                'city' => $validated['city'],
+                'county' => $validated['state'],
+                'post_code' => $validated['postcode'],
+                'country' => $validated['country'],
+                'phone1' => $validated['customer_phone'],
+                'phone2' => null,
+                'comment' => $validated['order_note'] ?? '',
+                'shipping_method' => $validated['shipping_method'] ?? null,
+                'status' => 'on hold',
+                'warehouse' => $validated['warehouse'],
+                'created_by' => $user->id,
+                'import_file_id' => null,
+            ]);
+
+            // Tạo order items
+            foreach ($validated['products'] as $index => $product) {
+                $variant = ProductVariant::findOrFail($product['variant_id']);
+
+                $orderItem = ExcelOrderItem::create([
+                    'excel_order_id' => $order->id,
+                    'part_number' => $variant->twofifteen_sku ?? $variant->sku,
+                    'title' => $product['title'] ?? 'Customer Manual Order Item',
+                    'quantity' => $product['quantity'],
+                    'print_price' => $itemPrices[$index],
+                    'product_id' => $variant->product_id,
+                    'description' => '',
+                ]);
+
+                // Tạo designs
+                foreach ($product['designs'] as $design) {
+                    ExcelOrderDesign::create([
+                        'excel_order_item_id' => $orderItem->id,
+                        'title' => $design['print_space'],
+                        'url' => $design['file_url']
+                    ]);
+                }
+
+                // Tạo mockups (nếu có)
+                if (!empty($product['mockups'])) {
+                    foreach ($product['mockups'] as $mockup) {
+                        ExcelOrderMockup::create([
+                            'excel_order_item_id' => $orderItem->id,
+                            'title' => $mockup['print_space'],
+                            'url' => $mockup['file_url']
+                        ]);
+                    }
+                }
+            }
+
+            DB::commit();
+
+            return redirect()->route('customer.order-customer')
+                ->with('success', 'Manual order created successfully! Order number: ' . $validated['order_number'])
+                ->with('success_redirect', true);
+        } catch (\Exception $e) {
+            DB::rollback();
+            Log::error('Error creating customer manual order: ' . $e->getMessage());
+            return redirect()->back()
+                ->withInput()
+                ->with('error', 'An error occurred while creating the order: ' . $e->getMessage());
+        }
+    }
+
+    /**
+     * Validate customer manual order dựa trên OrderRowValidator logic
+     */
+    private function validateCustomerManualOrder(array $validated): array
+    {
+        $errors = [];
+        $warehouse = $validated['warehouse'];
+        $shippingMethod = $validated['shipping_method'] ?? '';
+        $orderNote = $validated['order_note'] ?? '';
+
+        // Validate shipping method và comment
+        $this->validateShippingMethodAndComment($shippingMethod, $orderNote, $errors);
+
+        // Validate từng product
+        foreach ($validated['products'] as $productIndex => $product) {
+            $variant = ProductVariant::find($product['variant_id']);
+            if (!$variant) {
+                $errors[] = "Product #" . ($productIndex + 1) . ": Variant không tồn tại.";
+                continue;
+            }
+
+            $sku = $variant->sku;
+
+            // Validate SKU và warehouse
+            $this->validateSkuAndWarehouse($sku, $warehouse, $productIndex, $errors);
+
+            // Validate print data (designs và mockups)
+            $this->validatePrintData($product, $sku, $warehouse, $productIndex, $errors);
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Validate shipping method và comment
+     */
+    private function validateShippingMethodAndComment(string $shippingMethod, string $orderNote, array &$errors): void
+    {
+        $shippingMethodLower = strtolower($shippingMethod);
+
+        // Kiểm tra shipping method chỉ được phép là 'tiktok_label' hoặc 'Tiktok_label'
+        if (!empty($shippingMethod) && !in_array($shippingMethod, ['tiktok_label', 'Tiktok_label'])) {
+            $errors[] = "Shipping method must be 'tiktok_label' or 'Tiktok_label', but got '$shippingMethod'.";
+            return;
+        }
+
+        if ($shippingMethodLower === 'tiktok_label') {
+            if (empty($orderNote)) {
+                $errors[] = "Shipping method is '$shippingMethod' but no label link found in comment.";
+            } else {
+                // Kiểm tra xem comment có phải là link hợp lệ hay không
+                if (!filter_var($orderNote, FILTER_VALIDATE_URL)) {
+                    $errors[] = "Comment must contain a valid URL for shipping method '$shippingMethod'.";
+                } else {
+                    // Kiểm tra xem link có chứa các domain không được phép
+                    if (
+                        str_contains(strtolower($orderNote), 'seller-uk.tiktok.com') ||
+                        str_contains(strtolower($orderNote), 'seller-us.tiktok.com') ||
+                        str_contains(strtolower($orderNote), 'seller.tiktok.com')
+                    ) {
+                        $errors[] = "TikTok Seller links are not allowed in comment.";
+                    }
+                }
+            }
+        } else {
+            // Nếu shipping method không phải 'tiktok_label', comment phải để trống
+            if (!empty($orderNote)) {
+                $errors[] = "Comment must be empty unless shipping method is 'tiktok_label' or 'Tiktok_label'.";
+            }
+        }
+    }
+
+    /**
+     * Validate SKU và warehouse
+     */
+    private function validateSkuAndWarehouse(string $sku, string $warehouse, int $productIndex, array &$errors): void
+    {
+        $skuParts = explode('-', $sku);
+        $skuSuffix = end($skuParts);
+
+        if ($skuSuffix === 'UK' && $warehouse !== 'UK') {
+            $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' is for UK warehouse but selected warehouse is $warehouse";
+        }
+        if ($skuSuffix === 'US' && $warehouse !== 'US') {
+            $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' is for US warehouse but selected warehouse is $warehouse";
+        }
+
+        // Kiểm tra xem SKU được nhập có phải là twofifteen_sku hay flashship_sku không
+        $variantWithTwofifteen = ProductVariant::where('twofifteen_sku', $sku)->first();
+        $variantWithFlashship = ProductVariant::where('flashship_sku', $sku)->first();
+
+        if ($variantWithTwofifteen || $variantWithFlashship) {
+            $errors[] = "Product #" . ($productIndex + 1) . ": Product code (SKU) does not exist in the system: '$sku'.";
+        }
+    }
+
+    /**
+     * Validate print data (designs và mockups)
+     */
+    private function validatePrintData(array $product, string $sku, string $warehouse, int $productIndex, array &$errors): void
+    {
+        $productType = $this->getProductTypeFromSku($sku);
+        $requiredPrintCount = $this->getRequiredPrintCount($sku);
+
+        $designs = $product['designs'] ?? [];
+        $mockups = $product['mockups'] ?? [];
+
+        // Validate số lượng designs và mockups
+        if ($requiredPrintCount !== null) {
+            // SKU có 1S, 2S, 3S, 4S, 5S
+            if (count($designs) !== $requiredPrintCount) {
+                $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' requires exactly $requiredPrintCount design(s), but provided " . count($designs) . ".";
+            }
+            if (count($mockups) !== $requiredPrintCount) {
+                $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' requires exactly $requiredPrintCount mockup(s), but provided " . count($mockups) . ".";
+            }
+        } else {
+            // Logic mặc định cho các sản phẩm khác
+            if (count($designs) > 0 && count($mockups) > 0) {
+                if (count($designs) !== count($mockups)) {
+                    $errors[] = "Product #" . ($productIndex + 1) . ": Number of designs (" . count($designs) . ") and mockups (" . count($mockups) . ") must be equal.";
+                }
+            }
+
+            if (empty($designs)) {
+                $errors[] = "Product #" . ($productIndex + 1) . ": At least one design URL is required.";
+            }
+            if (empty($mockups)) {
+                $errors[] = "Product #" . ($productIndex + 1) . ": At least one mockup URL is required.";
+            }
+        }
+
+        // Validate từng design và mockup
+        foreach ($designs as $designIndex => $design) {
+            $this->validateImageUrl($design['file_url'], $productIndex, $designIndex, 'design', $errors);
+            $this->validatePrintSpace($design['print_space'], $warehouse, $productType, $productIndex, $designIndex, $errors);
+        }
+
+        foreach ($mockups as $mockupIndex => $mockup) {
+            $this->validateImageUrl($mockup['file_url'], $productIndex, $mockupIndex, 'mockup', $errors);
+            $this->validatePrintSpace($mockup['print_space'], $warehouse, $productType, $productIndex, $mockupIndex, $errors);
+        }
+    }
+
+    /**
+     * Validate image URL
+     */
+    private function validateImageUrl(string $url, int $productIndex, int $itemIndex, string $type, array &$errors): void
+    {
+        if (str_contains($url, 'drive.google.com')) {
+            if (!str_contains($url, '/file/d/')) {
+                $errors[] = "Product #" . ($productIndex + 1) . " $type #" . ($itemIndex + 1) . ": Google Drive link must be a sharing link.";
+            }
+        } else {
+            if (!$this->isValidImageMime($url)) {
+                $errors[] = "Product #" . ($productIndex + 1) . " $type #" . ($itemIndex + 1) . ": File is not a valid image (JPG, JPEG, PNG).";
+            }
+        }
+    }
+
+    /**
+     * Validate print space
+     */
+    private function validatePrintSpace(string $printSpace, string $warehouse, string $productType, int $productIndex, int $itemIndex, array &$errors): void
+    {
+        $validPositions = $this->getValidPositionsByProductType($productType);
+        $validSizes = $this->getValidSizesByProductType($productType);
+
+        if ($warehouse === 'UK') {
+            if (!in_array($printSpace, $validPositions)) {
+                $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Print space '$printSpace' is invalid. Valid values for $productType in UK warehouse are: " . implode(', ', $validPositions);
+            }
+        } elseif ($warehouse === 'US') {
+            if (str_contains($printSpace, '(Special)')) {
+                if ($productType !== 'Default') {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Special position format is not allowed for $productType.";
+                }
+                $parts = explode('-', str_replace(' (Special)', '', $printSpace));
+                if (count($parts) !== 2 || trim($parts[1]) !== 'Front') {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Print space format is invalid: '$printSpace'. For $productType in US warehouse, Special position must be in format 'size-Front (Special)'.";
+                }
+                $size = trim($parts[0]);
+                if (!in_array($size, $validSizes)) {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Size '$size' is invalid. Valid sizes for $productType are: " . implode(', ', $validSizes);
+                }
+            } else {
+                $parts = explode('-', $printSpace);
+                if (count($parts) !== 2) {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Print space format is invalid: '$printSpace'. For $productType in US warehouse, position must be in format 'size-side'.";
+                }
+
+                $size = trim($parts[0]);
+                $side = trim($parts[1]);
+
+                if (!in_array($size, $validSizes)) {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Size '$size' is invalid. Valid sizes for $productType are: " . implode(', ', $validSizes);
+                }
+
+                if (!in_array($side, $validPositions)) {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Side '$side' is invalid. Valid sides for $productType in US warehouse are: " . implode(', ', $validPositions);
+                }
+            }
+        }
+    }
+
+    /**
+     * Validate image MIME type
+     */
+    private function isValidImageMime(string $url): bool
+    {
+        $validImageMimeTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+        $headers = @get_headers($url, 1);
+        if (!$headers) return false;
+        $mime = isset($headers['Content-Type']) ? (is_array($headers['Content-Type']) ? $headers['Content-Type'][0] : $headers['Content-Type']) : '';
+        return in_array(strtolower($mime), $validImageMimeTypes);
+    }
+
+    /**
+     * Get product type from SKU
+     */
+    private function getProductTypeFromSku(string $sku): string
+    {
+        if (str_starts_with($sku, 'OS01')) {
+            return 'BabyOnesie';
+        } elseif (str_starts_with($sku, 'DIECUT-MAGNET')) {
+            return 'Diecut-Magnet';
+        } elseif (str_starts_with($sku, 'MAGNET')) {
+            return 'Magnet';
+        } elseif (str_starts_with($sku, 'UV-STICKER')) {
+            return 'UV Sticker';
+        } elseif (str_starts_with($sku, 'VINYL-STICKER')) {
+            return 'Vinyl Sticker';
+        } elseif (str_starts_with($sku, 'CASE-IPHONE')) {
+            return 'Phone Case';
+        } elseif (str_starts_with($sku, 'TOTEBAG') || str_starts_with($sku, 'TOTEBAG')) {
+            return 'Tote Bag';
+        }
+        return 'Default';
+    }
+
+    /**
+     * Get required print count from SKU
+     */
+    private function getRequiredPrintCount(string $sku): ?int
+    {
+        $skuParts = explode('-', $sku);
+        $printCountIndicator = $skuParts[count($skuParts) - 2] ?? '';
+        if ($printCountIndicator === '1S') {
+            return 1;
+        } elseif ($printCountIndicator === '2S') {
+            return 2;
+        }
+        if ($printCountIndicator === '3S') {
+            return 3;
+        }
+        if ($printCountIndicator === '4S') {
+            return 4;
+        }
+        if ($printCountIndicator === '5S') {
+            return 5;
+        }
+        return null; // Không có yêu cầu cụ thể
+    }
+
+    /**
+     * Get valid positions by product type
+     */
+    private function getValidPositionsByProductType(string $productType): array
+    {
+        $validPositionsByProductType = [
+            'BabyOnesie' => ['Front', 'Back'],
+            'Magnet' => ['Front'],
+            'Diecut-Magnet' => ['Front'],
+            'UV Sticker' => ['Front'],
+            'Vinyl Sticker' => ['Front'],
+            'Phone Case' => ['Front'],
+            'Tote Bag' => ['Front', 'Back'],
+            'Default' => ['Front', 'Back', 'Right Sleeve', 'Left Sleeve', 'Hem']
+        ];
+
+        return $validPositionsByProductType[$productType] ?? $validPositionsByProductType['Default'];
+    }
+
+    /**
+     * Get valid sizes by product type
+     */
+    private function getValidSizesByProductType(string $productType): array
+    {
+        $validSizesByProductType = [
+            'BabyOnesie' => ['0-6', '6-12', '12-18', '18-24'],
+            'Magnet' => ['5x5', '7.5x4.5', '10x3'],
+            'Diecut-Magnet' => ['2x2', '3x3', '4x4', '5x5', '6x6'],
+            'UV Sticker' => ['2x2', '3x3', '4x4', '5x5', '6x6', '7x7', '8x8', '9x9', '10x10', '12x12', '15x15', '18x18', '20x20'],
+            'Vinyl Sticker' => ['3x4', '6x8', '8x10'],
+            'Phone Case' => ['15', '15 Pro', '15 Pro Max', '15 Plus', '16', '16 Plus', '16 Pro', '16 Pro Max'],
+            'Tote Bag' => ['Tote Bag'],
+            'Default' => ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+        ];
+
+        return $validSizesByProductType[$productType] ?? $validSizesByProductType['Default'];
     }
 
     /**
@@ -844,17 +1453,14 @@ class SupplierFulfillmentController extends Controller
     private function handleProcessedStatus(ImportFile $importFile)
     {
         try {
-            // Cập nhật status của các ExcelOrder liên quan nếu cần
-            $importFile->excelOrders()->update([
-                'status' => 'processed'
-            ]);
+            // Đã bỏ cập nhật status của các ExcelOrder liên quan
 
             // Có thể thêm logic gửi email thông báo cho khách hàng
             // $this->sendProcessedNotification($importFile);
 
             Log::info('Processed status logic completed', [
                 'file_id' => $importFile->id,
-                'excel_orders_updated' => $importFile->excelOrders()->count()
+                'excel_orders_updated' => 0 // Không còn cập nhật đơn hàng
             ]);
         } catch (\Exception $e) {
             Log::error('Error in handleProcessedStatus', [
@@ -1474,13 +2080,11 @@ class SupplierFulfillmentController extends Controller
                 'order_number' => 'required|string|max:255', // Bỏ unique constraint
                 'store_name' => 'nullable|string|max:255',
                 'channel' => 'nullable|string|max:255',
-                'customer_name' => 'required|string|max:255',
-                'customer_email' => 'required|email|max:255',
+                'customer_name' => 'nullable|string|max:255',
+                'customer_email' => 'nullable|email|max:255',
                 'customer_phone' => 'nullable|string|max:20',
                 'address' => 'required|string|max:500',
                 'address_2' => 'nullable|string|max:500',
-                'house_number' => 'nullable|string|max:50',
-                'mailbox_number' => 'nullable|string|max:50',
                 'city' => 'required|string|max:255',
                 'state' => 'nullable|string|max:255',
                 'postcode' => 'required|string|max:20',
@@ -1492,10 +2096,10 @@ class SupplierFulfillmentController extends Controller
                 'products.*.quantity' => 'required|integer|min:1',
                 'products.*.part_number' => ['required', 'string', 'max:255', new ValidPartNumber],
                 'products.*.designs' => 'required|array|min:1',
-                'products.*.designs.*.file_url' => 'required_with:products.*.designs|url',
+                'products.*.designs.*.file_url' => 'required_with:products.*.designs|string|regex:/^https?:\/\/.+/',
                 'products.*.designs.*.print_space' => ['required', 'string', new ValidPrintSpace],
                 'products.*.mockups' => 'nullable|array',
-                'products.*.mockups.*.file_url' => 'required_with:products.*.mockups|url',
+                'products.*.mockups.*.file_url' => 'required_with:products.*.mockups|string|regex:/^https?:\/\/.+/',
                 'products.*.mockups.*.print_space' => ['required', 'string', new ValidPrintSpace],
             ]);
 
@@ -1516,6 +2120,10 @@ class SupplierFulfillmentController extends Controller
                 }
             }
 
+            // Lấy tier hiện tại của user
+            $userTier = \App\Models\UserTier::getCurrentTier($user->id);
+            $currentTier = $userTier ? $userTier->tier : 'Wood';
+
             // Chuẩn bị danh sách tất cả items với thông tin cần thiết
             $allItems = [];
             foreach ($validated['products'] as $productIndex => $product) {
@@ -1523,7 +2131,6 @@ class SupplierFulfillmentController extends Controller
                     ->orWhere('twofifteen_sku', $product['part_number'])
                     ->orWhere('flashship_sku', $product['part_number'])
                     ->first();
-
                 if ($variant) {
                     // Chuyển đổi part_number sang twofifteen_sku
                     $twofifteenSku = $variant->twofifteen_sku;
@@ -1533,7 +2140,7 @@ class SupplierFulfillmentController extends Controller
                         'quantity' => $product['quantity'],
                         'product' => $product,
                         'original_index' => $productIndex,
-                        'first_item_price' => $variant->getFirstItemPrice($validated['shipping_method'] ?? null),
+                        'first_item_price' => $variant->getFirstItemPrice($validated['shipping_method'] ?? null, $user->id),
                         'part_number' => $twofifteenSku // Sử dụng twofifteen_sku thay vì part_number gốc
                     ];
                 }
@@ -1591,8 +2198,8 @@ class SupplierFulfillmentController extends Controller
                     if ($isFirstItem && $quantity > 1) {
                         // Trường hợp đặc biệt: item có giá cao nhất và quantity > 1
                         // 1 item tính giá position 1, các item còn lại tính giá position 2
-                        $priceInfo1 = $variant->getOrderPriceInfo($validated['shipping_method'] ?? null, 1);
-                        $priceInfo2 = $variant->getOrderPriceInfo($validated['shipping_method'] ?? null, 2);
+                        $priceInfo1 = $variant->getOrderPriceInfo($validated['shipping_method'] ?? null, 1, $user->id);
+                        $priceInfo2 = $variant->getOrderPriceInfo($validated['shipping_method'] ?? null, 2, $user->id);
 
                         if ($priceInfo1['shipping_price_found'] && $priceInfo2['shipping_price_found']) {
                             $firstPrice = round($priceInfo1['print_price'], 2);
@@ -1606,13 +2213,15 @@ class SupplierFulfillmentController extends Controller
                                 'first_item_price' => $firstPrice,
                                 'additional_item_price' => $secondPrice,
                                 'quantity' => $quantity,
+                                'tier_price' => $priceInfo1['tier_price'] ?? false,
+                                'tier' => $priceInfo1['tier'] ?? null,
                                 'breakdown' => "1x{$firstPrice} + " . ($quantity - 1) . "x{$secondPrice}"
                             ];
                         }
                     } else {
                         // Trường hợp thông thường: tất cả items tính cùng 1 giá
                         $position = $isFirstItem ? 1 : 2;
-                        $priceInfo = $variant->getOrderPriceInfo($validated['shipping_method'] ?? null, $position);
+                        $priceInfo = $variant->getOrderPriceInfo($validated['shipping_method'] ?? null, $position, $user->id);
 
                         if ($priceInfo['shipping_price_found']) {
                             $unitPrice = round($priceInfo['print_price'], 2);
@@ -1625,6 +2234,8 @@ class SupplierFulfillmentController extends Controller
                                 'unit_price' => $unitPrice,
                                 'quantity' => $quantity,
                                 'is_first_item' => $isFirstItem,
+                                'tier_price' => $priceInfo['tier_price'] ?? false,
+                                'tier' => $priceInfo['tier'] ?? null,
                                 'breakdown' => $quantity . "x" . $unitPrice
                             ];
                         }
@@ -1699,19 +2310,18 @@ class SupplierFulfillmentController extends Controller
 
             $order = ExcelOrder::create([
                 'external_id' => $validated['order_number'],
-                'brand' => $validated['store_name'],
+                'brand' => $validated['store_name'] ?? '',
                 'channel' => $validated['channel'] ?? 'api',
-                'buyer_email' => $validated['customer_email'],
-                'first_name' => explode(' ', $validated['customer_name'])[0],
+                'buyer_email' => $validated['customer_email'] ?? '',
+                'first_name' => explode(' ', $validated['customer_name'])[0] ?? '',
                 'last_name' => substr($validated['customer_name'], strpos($validated['customer_name'], ' ') + 1) ?: '',
-                'company' => $validated['store_name'],
                 'address1' => $validated['address'],
-                'address2' => $validated['address_2'],
-                'city' => $validated['city'],
-                'county' => $validated['state'],
-                'post_code' => $validated['postcode'],
-                'country' => $validated['country'],
-                'phone1' => $validated['customer_phone'],
+                'address2' => $validated['address_2'] ?? null,
+                'city' => $validated['city'] ?? '',
+                'county' => $validated['state'] ?? '',
+                'post_code' => $validated['postcode'] ?? '',
+                'country' => $validated['country'] ?? '',
+                'phone1' => $validated['customer_phone'] ?? '',
                 'phone2' => null,
                 'comment' => $comment,
                 'shipping_method' => $validated['shipping_method'] ?? null,
@@ -1773,13 +2383,6 @@ class SupplierFulfillmentController extends Controller
             // 7. Load order với tất cả relationships để trả về
             $order->load(['items.designs', 'items.mockups', 'creator']);
 
-            Log::info('Order created successfully via API:', [
-                'order_id' => $order->id,
-                'external_id' => $order->external_id,
-                'user_id' => $user->id,
-                'products_count' => count($validated['products']),
-                'total_amount' => $totalAmount
-            ]);
 
             return response()->json([
                 'success' => true,
@@ -1942,6 +2545,119 @@ class SupplierFulfillmentController extends Controller
      * )
      */
     public function cancelOrder(Request $request, $orderId)
+    {
+        try {
+            // Kiểm tra xem request có phải từ admin hay không
+            $isAdmin = Auth::check() && Auth::user()->role === 'admin';
+
+            if ($isAdmin) {
+                // Xử lý admin cancel order
+                return $this->adminCancelOrder($request, $orderId);
+            } else {
+                // Xử lý customer cancel order (logic cũ)
+                return $this->customerCancelOrder($request, $orderId);
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to cancel order',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function adminCancelOrder(Request $request, $orderId)
+    {
+        try {
+            // 1. Tìm đơn hàng
+            $order = ExcelOrder::with(['items', 'creator'])->find($orderId);
+
+            if (!$order) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Order not found'
+                ], 404);
+            }
+
+            // 2. Kiểm tra trạng thái đơn hàng
+            if ($order->status === 'cancelled') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Order is already cancelled'
+                ], 400);
+            }
+
+            // Admin có thể cancel order ở tất cả trạng thái
+            DB::beginTransaction();
+
+            try {
+                // 3. Tính toán số tiền cần hoàn
+                $orderTotal = $order->items->sum(function ($item) {
+                    return (float)$item->print_price * (int)$item->quantity;
+                });
+
+                // 4. Hoàn tiền cho khách hàng
+                $wallet = $order->creator->wallet;
+                if (!$wallet) {
+                    throw new \Exception('Customer wallet not found');
+                }
+
+                // Thêm tiền vào wallet
+                $wallet->deposit($orderTotal);
+
+                // 5. Tạo transaction hoàn tiền
+                $reason = $request->input('reason', 'Admin cancelled order');
+                $refundTransaction = Transaction::create([
+                    'user_id' => $order->created_by,
+                    'type' => Transaction::TYPE_REFUND,
+                    'method' => Transaction::METHOD_VND,
+                    'amount' => $orderTotal,
+                    'status' => Transaction::STATUS_APPROVED,
+                    'transaction_code' => 'ADMIN_CANCEL_' . $order->external_id . '_' . time(),
+                    'note' => "Admin cancelled order: {$order->external_id}. Reason: {$reason}",
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+
+                // 6. Cập nhật trạng thái đơn hàng
+                $cancelReason = $reason ? " - Reason: {$reason}" : "";
+                $order->update([
+                    'status' => 'cancelled',
+                    'comment' => $order->comment . "\nCancelled by admin at: " . now()->format('Y-m-d H:i:s') . $cancelReason
+                ]);
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Order cancelled and refunded successfully',
+                    'data' => [
+                        'order_id' => $order->id,
+                        'order_number' => $order->external_id,
+                        'status' => $order->status,
+                        'refund_amount' => number_format($orderTotal, 2, '.', ''),
+                        'refund_transaction' => [
+                            'id' => $refundTransaction->id,
+                            'amount' => number_format($refundTransaction->amount, 2, '.', ''),
+                            'status' => $refundTransaction->status,
+                            'created_at' => $refundTransaction->created_at->toISOString()
+                        ]
+                    ]
+                ]);
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Failed to cancel order',
+                'error' => $e->getMessage()
+            ], 500);
+        }
+    }
+
+    private function customerCancelOrder(Request $request, $orderId)
     {
         try {
             // 1. Xác thực API token
@@ -2263,6 +2979,105 @@ class SupplierFulfillmentController extends Controller
     }
 
     /**
+     * Cancel order for customer via web interface
+     */
+    public function cancelCustomerOrder(Request $request, $orderId)
+    {
+        try {
+            $userId = Auth::id();
+
+            // Tìm đơn hàng của customer với items
+            $order = ExcelOrder::with('items')
+                ->where('id', $orderId)
+                ->where('created_by', $userId)
+                ->first();
+
+            if (!$order) {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Không tìm thấy đơn hàng'
+                ], 404);
+            }
+
+            // Kiểm tra trạng thái đơn hàng
+            if ($order->status === 'cancelled') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Đơn hàng đã được hủy trước đó'
+                ], 400);
+            }
+
+            if ($order->status !== 'on hold') {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Chỉ có thể hủy đơn hàng đang ở trạng thái "On Hold"'
+                ], 400);
+            }
+
+            DB::beginTransaction();
+
+            try {
+                // Tính tổng giá trị đơn hàng
+                $orderTotal = $order->items->sum(function ($item) {
+                    return $item->print_price * $item->quantity;
+                });
+
+                if ($orderTotal <= 0) {
+                    throw new \Exception('Đơn hàng không có giá trị để hoàn tiền');
+                }
+
+                // Tạo transaction hoàn tiền
+                $refundTransaction = Transaction::create([
+                    'user_id' => $userId,
+                    'order_id' => $order->id,
+                    'type' => Transaction::TYPE_REFUND,
+                    'method' => Transaction::METHOD_VND,
+                    'amount' => $orderTotal,
+                    'status' => Transaction::STATUS_APPROVED,
+                    'transaction_code' => 'REFUND_' . $order->external_id . '_' . time(),
+                    'note' => "Hoàn tiền cho đơn hàng đã hủy: {$order->external_id}",
+                    'created_at' => now(),
+                    'updated_at' => now()
+                ]);
+
+                // Cập nhật balance của user qua Wallet
+                $user = User::find($userId);
+                $wallet = $user->wallet;
+
+                if (!$wallet) {
+                    throw new \Exception('Không tìm thấy ví của người dùng');
+                }
+
+                if (!$wallet->deposit($orderTotal)) {
+                    throw new \Exception('Không thể thêm tiền vào ví');
+                }
+
+                // Cập nhật trạng thái đơn hàng
+                $order->update([
+                    'status' => 'cancelled',
+                    'comment' => ($order->comment ?? '') . "\nHủy đơn bởi khách hàng lúc: " . now()->format('Y-m-d H:i:s') . " - Đã hoàn tiền: $" . number_format($orderTotal, 2)
+                ]);
+
+                DB::commit();
+
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Đơn hàng đã được hủy và hoàn tiền thành công',
+                    'refund_amount' => number_format($refundTransaction->amount, 2)
+                ]);
+            } catch (\Exception $e) {
+                DB::rollBack();
+                throw $e;
+            }
+        } catch (\Exception $e) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi hủy đơn hàng: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    /**
      * Hủy đơn hàng và hoàn tiền cho khách hàng
      */
 
@@ -2353,7 +3168,7 @@ class SupplierFulfillmentController extends Controller
                 $query->whereHas('creator', function ($q) use ($searchTerm) {
                     $q->where('first_name', 'LIKE', "%{$searchTerm}%")
                         ->orWhere('last_name', 'LIKE', "%{$searchTerm}%")
-                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$searchTerm}%"]);
+                        ->orWhereRaw("first_name || ' ' || last_name LIKE ?", ["%{$searchTerm}%"]);
                 });
             }
 
@@ -2469,7 +3284,7 @@ class SupplierFulfillmentController extends Controller
                 $query->whereHas('creator', function ($q) use ($searchTerm) {
                     $q->where('first_name', 'LIKE', "%{$searchTerm}%")
                         ->orWhere('last_name', 'LIKE', "%{$searchTerm}%")
-                        ->orWhereRaw("CONCAT(first_name, ' ', last_name) LIKE ?", ["%{$searchTerm}%"]);
+                        ->orWhereRaw("first_name || ' ' || last_name LIKE ?", ["%{$searchTerm}%"]);
                 });
             }
 
@@ -2599,23 +3414,11 @@ class SupplierFulfillmentController extends Controller
      */
     private function logPricingLogic($validated, $allItems, $itemPriceBreakdowns, $totalAmount, $orderNumber = null)
     {
-        Log::info('=== PRICING LOGIC BREAKDOWN ===', [
-            'order_number' => $orderNumber ?? $validated['order_number'] ?? 'N/A',
-            'shipping_method' => $validated['shipping_method'] ?? 'N/A'
-        ]);
+
 
         foreach ($allItems as $index => $item) {
             $breakdown = $itemPriceBreakdowns[$index] ?? null;
-
-            Log::info("Product {$index}: {$item['part_number']}", [
-                'quantity' => $item['quantity'],
-                'first_item_price' => $item['first_item_price'],
-                'pricing_breakdown' => $breakdown
-            ]);
         }
-
-        Log::info('Total amount calculated:', ['total' => $totalAmount]);
-        Log::info('=== END PRICING BREAKDOWN ===');
     }
 
     /**
@@ -3094,8 +3897,9 @@ class SupplierFulfillmentController extends Controller
             if (isset($validated['channel'])) $updateData['channel'] = $validated['channel'];
             if (isset($validated['customer_email'])) $updateData['buyer_email'] = $validated['customer_email'];
             if (isset($validated['customer_name'])) {
-                $updateData['first_name'] = explode(' ', $validated['customer_name'])[0];
-                $updateData['last_name'] = substr($validated['customer_name'], strpos($validated['customer_name'], ' ') + 1) ?: '';
+                $customerNameParts = explode(' ', trim($validated['customer_name']), 2);
+                $updateData['first_name'] = $customerNameParts[0] ?? '';
+                $updateData['last_name'] = $customerNameParts[1] ?? '';
             }
             if (isset($validated['store_name'])) $updateData['company'] = $validated['store_name'];
             if (isset($validated['address'])) $updateData['address1'] = $validated['address'];
@@ -3753,6 +4557,8 @@ class SupplierFulfillmentController extends Controller
                 'date_to' => 'nullable|date',
                 'status' => 'nullable|string',
                 'warehouse' => 'nullable|string',
+                'external_id' => 'nullable|string',
+                'customer_name' => 'nullable|string',
                 'export_all' => 'nullable|boolean',
                 'export_format' => 'nullable|string|in:csv,tsv'
             ]);
@@ -3797,7 +4603,8 @@ class SupplierFulfillmentController extends Controller
             // Xây dựng query - đơn giản hóa relationships
             $query = ExcelOrder::with([
                 'items.mockups',
-                'items.designs'
+                'items.designs',
+                'creator'
             ]);
 
             // Debug: Log số lượng đơn hàng total
@@ -3835,6 +4642,20 @@ class SupplierFulfillmentController extends Controller
                 Log::info('CSV Export - Warehouse filter:', ['warehouse' => $request->warehouse]);
             }
 
+            if ($request->filled('external_id')) {
+                $query->where('external_id', 'like', '%' . $request->external_id . '%');
+                Log::info('CSV Export - External ID filter:', ['external_id' => $request->external_id]);
+            }
+
+            if ($request->filled('customer_name')) {
+                $query->whereHas('creator', function ($q) use ($request) {
+                    $q->where('first_name', 'like', '%' . $request->customer_name . '%')
+                        ->orWhere('last_name', 'like', '%' . $request->customer_name . '%')
+                        ->orWhereRaw("first_name || ' ' || last_name LIKE ?", ['%' . $request->customer_name . '%']);
+                });
+                Log::info('CSV Export - Customer name filter:', ['customer_name' => $request->customer_name]);
+            }
+
             // Debug: Log query trước khi execute
             $queryCount = $query->count();
             Log::info('CSV Export - Query result count:', ['count' => $queryCount]);
@@ -3855,7 +4676,7 @@ class SupplierFulfillmentController extends Controller
 
                 $debugInfo = [
                     'total_orders_in_database' => $totalOrders,
-                    'applied_filters' => $request->only(['date_from', 'date_to', 'status', 'warehouse', 'export_all']),
+                    'applied_filters' => $request->only(['date_from', 'date_to', 'status', 'warehouse', 'external_id', 'customer_name', 'export_all']),
                     'order_ids_filter' => $orderIds,
                     'latest_order_date' => $latestOrder ? $latestOrder->created_at->format('Y-m-d H:i:s') : null,
                     'earliest_order_date' => $earliestOrder ? $earliestOrder->created_at->format('Y-m-d H:i:s') : null,
@@ -3900,6 +4721,8 @@ class SupplierFulfillmentController extends Controller
             $csvData = [];
             $headers = [
                 'External_ID',
+                'Customer_Name',
+                'Customer_Email',
                 'Link_Label',
                 'Order_Status',
                 'SKU',
@@ -3942,8 +4765,18 @@ class SupplierFulfillmentController extends Controller
                     // Format External ID dựa trên export format
                     $externalIdForExport = $this->formatExternalIdForExport($order->external_id, $exportFormat);
 
+                    // Lấy thông tin customer
+                    $customerName = '';
+                    $customerEmail = '';
+                    if ($order->creator) {
+                        $customerName = $order->creator->getFullName();
+                        $customerEmail = $order->creator->email ?? '';
+                    }
+
                     $row = [
                         $externalIdForExport,
+                        $customerName,
+                        $customerEmail,
                         $order->comment ?? '',
                         $order->status,
                         $item->part_number,
@@ -4109,6 +4942,7 @@ class SupplierFulfillmentController extends Controller
             $csvData = [];
             $headers = [
                 'Order_ID',
+                'Customer_Name',
                 'First_Name',
                 'Last_Name',
                 'Email',
@@ -4148,8 +4982,12 @@ class SupplierFulfillmentController extends Controller
 
                     $externalIdForExport = $this->formatExternalIdForExport($order->external_id, $exportFormat); // Phương thức giả định
 
+                    // Lấy tên đầy đủ của customer
+                    $customerName = trim(($order->first_name ?? '') . ' ' . ($order->last_name ?? ''));
+
                     $row = [
                         $externalIdForExport,
+                        $customerName,
                         $order->first_name ?? '',
                         $order->last_name ?? '',
                         $order->buyer_email ?? '',
@@ -4203,13 +5041,6 @@ class SupplierFulfillmentController extends Controller
             }
             fclose($file);
 
-            Log::info('Hoàn tất xuất dữ liệu khách hàng', [
-                'filename' => $filename,
-                'format' => $exportFormat,
-                'orders_count' => $orders->count(),
-                'total_rows' => count($csvData) - 1,
-                'created_by' => Auth::id()
-            ]);
 
             return response()->download($filePath, $filename, [
                 'Content-Type' => $exportFormat === 'tsv' ? 'text/tab-separated-values' : 'text/csv',
@@ -4287,12 +5118,7 @@ class SupplierFulfillmentController extends Controller
             $variantParts = array_filter([$size, $color, $sides]);
             $result = !empty($variantParts) ? implode(',', $variantParts) : $sku;
 
-            Log::debug('Variant info extracted', [
-                'sku' => $sku,
-                'variant_id' => $variant->id,
-                'attributes' => $attributeData,
-                'result' => $result
-            ]);
+
 
             return $result;
         } catch (\Exception $e) {
@@ -4320,7 +5146,6 @@ class SupplierFulfillmentController extends Controller
                 ], 400);
             }
 
-            Log::info('Processing orders to factory', ['order_ids' => $orderIds]);
 
             $orders = ExcelOrder::with(['items.mockups', 'items.designs'])
                 ->whereIn('id', $orderIds)
@@ -4334,22 +5159,7 @@ class SupplierFulfillmentController extends Controller
                 ], 400);
             }
 
-            // Log chi tiết về các đơn hàng tìm thấy
-            Log::info('Found orders for processing', [
-                'orders_count' => $orders->count(),
-                'orders_summary' => $orders->map(function ($order) {
-                    return [
-                        'id' => $order->id,
-                        'external_id' => $order->external_id,
-                        'warehouse' => $order->warehouse,
-                        'items_count' => $order->items->count(),
-                        'items_loaded' => $order->relationLoaded('items'),
-                        'mockups_designs_loaded' => $order->items->every(function ($item) {
-                            return $item->relationLoaded('mockups') && $item->relationLoaded('designs');
-                        })
-                    ];
-                })->toArray()
-            ]);
+
 
             // Kiểm tra dữ liệu quan hệ
             foreach ($orders as $order) {
@@ -4402,12 +5212,7 @@ class SupplierFulfillmentController extends Controller
                     if ($response->successful()) {
                         $apiResponse = $response->json();
 
-                        // Log cấu trúc response để debug
-                        Log::info('DTF API Response structure:', [
-                            'response_keys' => array_keys($apiResponse),
-                            'orders_count' => isset($apiResponse['orders']) ? count($apiResponse['orders']) : 'no orders key',
-                            'first_order_keys' => isset($apiResponse['orders'][0]) ? array_keys($apiResponse['orders'][0]) : 'no first order'
-                        ]);
+
 
                         foreach ($apiResponse['orders'] as $orderResponse) {
                             $order = $orders->firstWhere('external_id', $orderResponse['external_id']);
@@ -4416,11 +5221,7 @@ class SupplierFulfillmentController extends Controller
                                 $internalId = $orderResponse['order_id'] ?? $orderResponse['id'] ?? $orderResponse['internal_id'] ?? null;
 
                                 if (!$internalId) {
-                                    Log::error('No internal_id found in DTF response:', [
-                                        'external_id' => $order->external_id,
-                                        'order_response_keys' => array_keys($orderResponse),
-                                        'order_response' => $orderResponse
-                                    ]);
+
 
                                     $results[] = [
                                         'order_id' => $order->id,
@@ -4450,12 +5251,6 @@ class SupplierFulfillmentController extends Controller
                                     'dtf',
                                     $apiResponse
                                 );
-
-                                Log::info('Order mapping created:', [
-                                    'external_id' => $order->external_id,
-                                    'internal_id' => $internalId,
-                                    'factory' => 'dtf'
-                                ]);
                             }
                         }
                     } else {
@@ -4568,6 +5363,37 @@ class SupplierFulfillmentController extends Controller
             return response()->json([
                 'success' => false,
                 'message' => 'Đã xảy ra lỗi khi xử lý đơn hàng: ' . $e->getMessage()
+            ], 500);
+        }
+    }
+
+    public function updateTrackingNumbers(Request $request)
+    {
+        try {
+            // Chạy command để cập nhật tracking numbers
+            $exitCode = Artisan::call('orders:update-tracking-numbers');
+
+            if ($exitCode === 0) {
+                return response()->json([
+                    'success' => true,
+                    'message' => 'Tracking numbers updated successfully'
+                ]);
+            } else {
+                return response()->json([
+                    'success' => false,
+                    'message' => 'Failed to update tracking numbers'
+                ], 500);
+            }
+        } catch (\Exception $e) {
+            Log::error('Error updating tracking numbers', [
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'An error occurred while updating tracking numbers',
+                'error' => $e->getMessage()
             ], 500);
         }
     }

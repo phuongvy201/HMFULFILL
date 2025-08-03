@@ -428,6 +428,7 @@ class ProductController extends Controller
                         // X-AA: Silver tier (X=tiktok_1st, Y=tiktok_next, Z=seller_1st, AA=seller_next)
                         // AB-AE: Gold tier (AB=tiktok_1st, AC=tiktok_next, AD=seller_1st, AE=seller_next)
                         // AF-AI: Diamond tier (AF=tiktok_1st, AG=tiktok_next, AH=seller_1st, AI=seller_next)
+                        // AJ-AM: Special tier (AJ=tiktok_1st, AK=tiktok_next, AL=seller_1st, AM=seller_next)
                         $shippingMethods = [
                             ShippingPrice::METHOD_TIKTOK_1ST,
                             ShippingPrice::METHOD_TIKTOK_NEXT,
@@ -437,9 +438,10 @@ class ProductController extends Controller
 
                         $tierConfigs = [
                             'Wood' => ['start' => 19],      // Cột T-W (19-22 trong array)
-                            'Silver' => ['start' => 23],   // Cột X-AA (23-26 trong array)
-                            'Gold' => ['start' => 27],     // Cột AB-AE (27-30 trong array)
-                            'Diamond' => ['start' => 31]   // Cột AF-AI (31-34 trong array)
+                            'Silver' => ['start' => 23],    // Cột X-AA (23-26 trong array)
+                            'Gold' => ['start' => 27],      // Cột AB-AE (27-30 trong array)
+                            'Diamond' => ['start' => 31],   // Cột AF-AI (31-34 trong array)
+                            'Special' => ['start' => 35]    // Cột AJ-AM (35-38 trong array)
                         ];
 
                         foreach ($tierConfigs as $tierName => $config) {
@@ -457,7 +459,7 @@ class ProductController extends Controller
                             }
                         }
 
-                        $attributeStartColumn = 35; // Cột AJ trở đi là Variant Attributes
+                        $attributeStartColumn = 39; // Cột AN trở đi là Variant Attributes
                         while (isset($cells[$attributeStartColumn]) && isset($cells[$attributeStartColumn + 1])) {
                             $attrName = $cells[$attributeStartColumn];
                             $attrValue = $cells[$attributeStartColumn + 1];

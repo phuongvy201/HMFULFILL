@@ -52,6 +52,9 @@
                                 <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">User</p>
                             </th>
                             <th class="px-6 py-3 text-left">
+                                <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">User ID</p>
+                            </th>
+                            <th class="px-6 py-3 text-left">
                                 <p class="font-medium text-gray-500 text-theme-xs dark:text-gray-400">Actions</p>
                             </th>
                         </tr>
@@ -85,16 +88,19 @@
                                 <p class="text-gray-500 text-theme-sm dark:text-gray-400">{{ $request->user->first_name ?? 'N/A' }} {{ $request->user->last_name ?? 'N/A' }}</p>
                             </td>
                             <td class="px-6 py-3.5">
+                                <p class="text-gray-500 text-theme-sm dark:text-gray-400">{{ $request->user->id }}</p>
+                            </td>
+                            <td class="px-6 py-3.5">
                                 @if($request->status == 'pending')
                                 <a href="javascript:void(0);"
                                     class="text-success-600 hover:text-success-800 mr-2 approve-link"
                                     data-id="{{ $request->id }}"
                                     data-url="{{ route('admin.topup.approve', $request->id) }}">Approve</a>
-                                <a href="javascript:void(0);"
-                                    class="text-error-500 hover:text-error-700 reject-link"
-                                    data-id="{{ $request->id }}"
-                                    data-url="{{ route('admin.topup.reject', $request->id) }}">Reject</a>
-                                @else
+                                    <a href="javascript:void(0);"
+                                        class="text-error-500 hover:text-error-700 reject-link"
+                                        data-id="{{ $request->id }}"
+                                        data-url="{{ route('admin.topup.reject', $request->id) }}">Reject</a>
+                                    @else
                                 <p class="text-theme-sm {{ $request->status == 'approved' ? 'text-success-600' : 'text-error-500' }}">
                                     {{ ucfirst($request->status) }}
                                 </p>

@@ -37,26 +37,14 @@ class BrickApiService
                 'Signature' => $signature
             ];
 
-            // Log request details để debug
-            Log::info('Brick API Request:', [
-                'url' => $this->apiUrl . '/orders.php',
-                'headers' => $headers,
-                'parameters' => $parameters,
-                'body' => $orderData
-            ]);
+        
 
             // Gửi request với query parameters
             $response = Http::withHeaders($headers)
                 ->withQueryParameters($parameters)
                 ->post($this->apiUrl . '/orders.php', $orderData);
 
-            // Log response để debug
-            Log::info('Brick API Response:', [
-                'status' => $response->status(),
-                'headers' => $response->headers(),
-                'body' => $response->body(),
-                'json' => $response->json()
-            ]);
+           
 
             if ($response->successful()) {
                 // Cập nhật status thành 'processed' nếu thành công
@@ -149,11 +137,7 @@ class BrickApiService
             $queryString = http_build_query($queryParams);
             $queryParams['Signature'] = sha1($queryString . $this->secretKey);
 
-            // Ghi log yêu cầu (log tối thiểu trong môi trường sản xuất)
-            Log::debug('Yêu cầu API Brick:', [
-                'url' => $this->apiUrl . '/orders.php',
-                'query_params' => array_diff_key($queryParams, ['Signature' => ''])
-            ]);
+                
 
             $response = Http::get($this->apiUrl . '/orders.php?' . http_build_query($queryParams));
 
@@ -198,11 +182,6 @@ class BrickApiService
             // Thêm signature vào query parameters
             $queryParams['Signature'] = $signature;
 
-            // Log request details
-            Log::info('Brick API getOrderDetails Request:', [
-                'url' => $this->apiUrl . '/order.php',
-                'query_params' => $queryParams
-            ]);
 
             $response = Http::get($this->apiUrl . '/order.php?' . http_build_query($queryParams));
 

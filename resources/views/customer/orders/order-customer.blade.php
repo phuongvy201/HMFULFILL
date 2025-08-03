@@ -4,6 +4,15 @@
 
 @section('content-customer')
 <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
+    <div class="mb-6">
+        <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded relative" role="alert">
+            <strong class="font-bold">Notice:</strong>
+            <span class="block sm:inline">
+                A 20% VAT will be applied to all FF UK orders in accordance with UK government regulations.
+            </span>
+        </div>
+
+    </div>
     <!-- Breadcrumb -->
     <div x-data="{ pageName: 'Orders List' }">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -180,14 +189,24 @@
                                 {{ $order->tracking_number ?? '-' }}
                             </td>
                             <td class="px-6 py-4">
-                                @if($order->external_id)
-                                <a href="{{ route('customer.orders.detail', ['externalId' => $order->external_id]) }}"
-                                    class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
-                                    View Details
-                                </a>
-                                @else
-                                <span class="text-gray-400">No Details</span>
-                                @endif
+                                <div class="flex items-center gap-2">
+                                    @if($order->external_id)
+                                    <a href="{{ route('customer.orders.detail', ['externalId' => urlencode($order->external_id)]) }}"
+                                        class="text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-300">
+                                        View Details
+                                    </a>
+                                    @else
+                                    <span class="text-gray-400">No Details</span>
+                                    @endif
+
+                                    @if($order->status === 'on hold')
+                                    <button class="cancel-order-btn px-3 py-1 text-sm font-medium text-red-600 bg-red-100 border border-red-200 rounded-md hover:bg-red-200 hover:text-red-800 transition-colors"
+                                        data-order-id="{{ $order->id }}"
+                                        data-external-id="{{ $order->external_id }}">
+                                        Cancel
+                                    </button>
+                                    @endif
+                                </div>
                             </td>
                         </tr>
                         @empty
@@ -262,6 +281,72 @@
                 const data = await response.json();
                 alert(data.message || 'An error occurred while exporting orders.');
             }
+        });
+
+        // Handle cancel order button clicks
+        document.querySelectorAll('.cancel-order-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const orderId = this.dataset.orderId;
+                const externalId = this.dataset.externalId;
+
+                Swal.fire({
+                    title: 'Bạn có chắc chắn muốn hủy đơn hàng?',
+                    text: `Đơn hàng ${externalId} sẽ được hủy và hoàn tiền về tài khoản của bạn.`,
+                    icon: 'warning',
+                    showCancelButton: true,
+                    confirmButtonColor: '#dc2626',
+                    cancelButtonColor: '#6b7280',
+                    confirmButtonText: 'Hủy đơn hàng',
+                    cancelButtonText: 'Không'
+                }).then((result) => {
+                    if (result.isConfirmed) {
+                        // Show loading
+                        Swal.fire({
+                            title: 'Đang xử lý...',
+                            allowOutsideClick: false,
+                            didOpen: () => {
+                                Swal.showLoading();
+                            }
+                        });
+
+                        fetch(`/customer/orders/${orderId}/cancel`, {
+                                method: 'POST',
+                                headers: {
+                                    'Content-Type': 'application/json',
+                                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                                }
+                            })
+                            .then(response => response.json())
+                            .then(data => {
+                                if (data.success) {
+                                    Swal.fire({
+                                        title: 'Thành công!',
+                                        text: data.message + (data.refund_amount ? ` Số tiền hoàn: $${data.refund_amount}` : ''),
+                                        icon: 'success',
+                                        confirmButtonText: 'OK'
+                                    }).then(() => {
+                                        location.reload();
+                                    });
+                                } else {
+                                    Swal.fire({
+                                        title: 'Lỗi!',
+                                        text: data.message || 'Có lỗi xảy ra khi hủy đơn hàng',
+                                        icon: 'error',
+                                        confirmButtonText: 'OK'
+                                    });
+                                }
+                            })
+                            .catch(error => {
+                                Swal.fire({
+                                    title: 'Lỗi!',
+                                    text: 'Có lỗi xảy ra khi hủy đơn hàng',
+                                    icon: 'error',
+                                    confirmButtonText: 'OK'
+                                });
+                            });
+                    }
+                });
+            });
         });
     });
 </script>

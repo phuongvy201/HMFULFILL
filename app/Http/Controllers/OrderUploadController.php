@@ -80,6 +80,27 @@ class OrderUploadController extends Controller
         $factory = strtoupper($order->warehouse) === 'US' ? 'dtf' : 'twofifteen';
 
         if ($factory === 'dtf') {
+            // Validate required fields for DTF
+            if (empty($order->external_id)) {
+                throw new \Exception("Order {$order->id} missing external_id");
+            }
+
+            if (empty($order->first_name)) {
+                throw new \Exception("Order {$order->external_id} missing first_name");
+            }
+
+            if (empty($order->address1)) {
+                throw new \Exception("Order {$order->external_id} missing address1");
+            }
+
+            if (empty($order->city)) {
+                throw new \Exception("Order {$order->external_id} missing city");
+            }
+
+            if (empty($order->post_code)) {
+                throw new \Exception("Order {$order->external_id} missing post_code");
+            }
+
             $orderData = [
                 'external_id' => $order->external_id,
                 'brand' => !empty($order->brand) ? $order->brand : 'HM Fulfill',
@@ -131,6 +152,13 @@ class OrderUploadController extends Controller
             if (!empty($order->comment)) {
                 $orderData['label_url'] = $order->comment;
             }
+
+            // Log order data for debugging
+            Log::info("DTF Order Data for {$order->external_id}:", [
+                'order_data' => $orderData,
+                'warehouse' => $order->warehouse,
+                'items_count' => count($orderData['items'])
+            ]);
         } else {
             // Twofifteen
             $orderData = [
@@ -147,7 +175,7 @@ class OrderUploadController extends Controller
                     'city' => $order->city,
                     'county' => $order->county,
                     'postcode' => $order->post_code,
-                    'country' => $order->country,
+                    'country' => 'UK',
                     'phone1' => $order->phone1,
                     'phone2' => $order->phone2
                 ],
@@ -203,6 +231,14 @@ class OrderUploadController extends Controller
                 Log::error("Missing bearer token for DTF API");
                 throw new \Exception("Thiếu bearer token cho DTF API");
             }
+
+            // Log DTF config for debugging
+            Log::info("DTF API Config:", [
+                'api_url' => $config['apiUrl'],
+                'has_bearer_token' => !empty($config['bearerToken']),
+                'data_count' => is_array($data) ? count($data) : 1
+            ]);
+
             return [
                 'config' => $config,
                 'headers' => [
@@ -250,8 +286,6 @@ class OrderUploadController extends Controller
                     $factory,
                     $apiResponse
                 );
-
-                Log::info("Order processed successfully: {$order->external_id} -> {$internalId} ({$factory})");
             }
 
             return [
@@ -357,9 +391,24 @@ class OrderUploadController extends Controller
             if (!empty($dtfOrders)) {
                 try {
                     $apiConfig = $this->buildApiConfig('dtf', $dtfOrders);
+
+                    // Log request details
+                    Log::info("Sending DTF batch request:", [
+                        'url' => $apiConfig['config']['apiUrl'] . '/api/orders/batch',
+                        'orders_count' => count($dtfOrders),
+                        'headers' => array_keys($apiConfig['headers'])
+                    ]);
+
                     $response = Http::withHeaders($apiConfig['headers'])
                         ->withQueryParameters($apiConfig['parameters'])
                         ->post($apiConfig['config']['apiUrl'] . '/api/orders/batch', $dtfOrders);
+
+                    // Log response details
+                    Log::info("DTF API Response:", [
+                        'status_code' => $response->status(),
+                        'success' => $response->successful(),
+                        'response_body' => $response->body()
+                    ]);
 
                     if ($response->successful()) {
                         $apiResponse = $response->json();
@@ -371,7 +420,9 @@ class OrderUploadController extends Controller
                                 $internalId = $orderResponse['order_id'] ?? $orderResponse['id'] ?? $orderResponse['internal_id'] ?? null;
 
                                 if (!$internalId) {
-                                    Log::error("No internal_id found in DTF response for {$order->external_id}");
+                                    Log::error("No internal_id found in DTF response for {$order->external_id}", [
+                                        'order_response' => $orderResponse
+                                    ]);
 
                                     $results[] = [
                                         'order_id' => $order->id,
@@ -406,10 +457,17 @@ class OrderUploadController extends Controller
                             }
                         }
                     } else {
+                        // Log detailed error information
+                        $errorResponse = $response->json();
+                        Log::error("DTF API Error Response:", [
+                            'status_code' => $response->status(),
+                            'error_response' => $errorResponse,
+                            'response_headers' => $response->headers()
+                        ]);
+
                         foreach ($dtfOrders as $orderData) {
                             $order = $orders->firstWhere('external_id', $orderData['external_id']);
                             if ($order) {
-                                $errorResponse = $response->json();
                                 $errorMessage = '';
 
                                 // Xử lý lỗi validation từ API
@@ -421,7 +479,7 @@ class OrderUploadController extends Controller
                                     }
                                     $errorMessage = implode(', ', $errorMessages);
                                 } else {
-                                    $errorMessage = $errorResponse['error'] ?? 'Lỗi không xác định';
+                                    $errorMessage = $errorResponse['error'] ?? $errorResponse['message'] ?? 'Lỗi không xác định';
                                 }
 
                                 $errorData = [
@@ -446,7 +504,10 @@ class OrderUploadController extends Controller
                         }
                     }
                 } catch (\Exception $e) {
-                    Log::error("Error processing DTF batch: {$e->getMessage()}");
+                    Log::error("Error processing DTF batch: {$e->getMessage()}", [
+                        'exception' => $e,
+                        'trace' => $e->getTraceAsString()
+                    ]);
                     foreach ($dtfOrders as $orderData) {
                         $order = $orders->firstWhere('external_id', $orderData['external_id']);
                         if ($order) {
@@ -785,10 +846,6 @@ class OrderUploadController extends Controller
                     'api_response' => $apiResponse
                 ]);
 
-                Log::info('DTF order updated successfully', [
-                    'order_id' => $orderId,
-                    'external_id' => $orderMapping->external_id
-                ]);
 
                 return response()->json([
                     'success' => true,

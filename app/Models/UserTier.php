@@ -30,6 +30,7 @@ class UserTier extends Model
     const TIER_GOLD = 'Gold';
     const TIER_SILVER = 'Silver';
     const TIER_WOOD = 'Wood';
+    const TIER_SPECIAL = 'Special'; // Thêm tier Special
 
     // Ngưỡng đơn hàng cho từng tier
     const TIER_THRESHOLDS = [
@@ -37,6 +38,7 @@ class UserTier extends Model
         self::TIER_GOLD => 4500,
         self::TIER_SILVER => 1500,
         self::TIER_WOOD => 0
+        // Special tier không có ngưỡng vì được set thủ công
     ];
 
     /**
@@ -60,6 +62,7 @@ class UserTier extends Model
      */
     public static function determineTier(int $orderCount): string
     {
+        // Special tier không được xác định tự động
         if ($orderCount >= self::TIER_THRESHOLDS[self::TIER_DIAMOND]) {
             return self::TIER_DIAMOND;
         } elseif ($orderCount >= self::TIER_THRESHOLDS[self::TIER_GOLD]) {
@@ -69,6 +72,56 @@ class UserTier extends Model
         } else {
             return self::TIER_WOOD;
         }
+    }
+
+    /**
+     * Kiểm tra xem một tier có phải là Special hay không
+     */
+    public static function isSpecialTier(string $tier): bool
+    {
+        return $tier === self::TIER_SPECIAL;
+    }
+
+    /**
+     * Set tier Special cho user
+     */
+    public static function setSpecialTier(int $userId, Carbon $month, int $orderCount = 0, float $revenue = 0): self
+    {
+        // Luôn cập nhật tier Special, bỏ qua kiểm tra bảo vệ
+        return self::updateOrCreate(
+            [
+                'user_id' => $userId,
+                'month' => $month->startOfMonth()
+            ],
+            [
+                'tier' => self::TIER_SPECIAL,
+                'order_count' => $orderCount,
+                'revenue' => $revenue
+            ]
+        );
+    }
+
+    /**
+     * Xóa tier Special và chuyển về tier thường
+     */
+    public static function removeSpecialTier(int $userId, Carbon $month): ?self
+    {
+        $tierRecord = self::where('user_id', $userId)
+            ->where('month', $month->startOfMonth())
+            ->first();
+
+        if ($tierRecord && $tierRecord->tier === self::TIER_SPECIAL) {
+            // Tính toán tier thông thường dựa trên order count
+            $normalTier = self::determineTier($tierRecord->order_count);
+
+            $tierRecord->update([
+                'tier' => $normalTier
+            ]);
+
+            return $tierRecord;
+        }
+
+        return null;
     }
 
     /**
@@ -99,6 +152,15 @@ class UserTier extends Model
      */
     public static function createOrUpdateTier(int $userId, string $tier, int $orderCount, Carbon $month, float $revenue = 0): self
     {
+        $existingTier = self::where('user_id', $userId)
+            ->where('month', $month->startOfMonth())
+            ->first();
+
+        // Nếu tier hiện tại là Special và tier mới không phải Special, không cập nhật
+        if ($existingTier && $existingTier->tier === self::TIER_SPECIAL && $tier !== self::TIER_SPECIAL) {
+            return $existingTier; // Giữ nguyên tier Special
+        }
+
         return self::updateOrCreate(
             [
                 'user_id' => $userId,
@@ -329,7 +391,7 @@ class UserTier extends Model
                 ->selectRaw('SUM(order_count) as total_orders')
                 ->where('month', $currentMonth)
                 ->groupBy('tier')
-                ->orderByRaw("FIELD(tier, 'Diamond', 'Gold', 'Silver', 'Wood')")
+                ->orderByRaw("FIELD(tier, 'Special', 'Diamond', 'Gold', 'Silver', 'Wood')")
                 ->get();
 
             // Lấy tổng số khách hàng có tier
@@ -421,7 +483,8 @@ class UserTier extends Model
                 $q->where('users.first_name', 'LIKE', "%{$search}%")
                     ->orWhere('users.last_name', 'LIKE', "%{$search}%")
                     ->orWhere('users.email', 'LIKE', "%{$search}%")
-                    ->orWhere('users.phone', 'LIKE', "%{$search}%");
+                    ->orWhere('users.phone', 'LIKE', "%{$search}%")
+                    ->orWhereRaw("users.first_name || ' ' || users.last_name LIKE ?", ["%{$search}%"]);
             });
         }
 
@@ -494,7 +557,8 @@ class UserTier extends Model
                 $q->where('users.first_name', 'LIKE', "%{$search}%")
                     ->orWhere('users.last_name', 'LIKE', "%{$search}%")
                     ->orWhere('users.email', 'LIKE', "%{$search}%")
-                    ->orWhere('users.phone', 'LIKE', "%{$search}%");
+                    ->orWhere('users.phone', 'LIKE', "%{$search}%")
+                    ->orWhereRaw("users.first_name || ' ' || users.last_name LIKE ?", ["%{$search}%"]);
             });
         }
 

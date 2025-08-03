@@ -103,7 +103,7 @@
                             <a
                                 class="inline-flex items-center gap-1.5 text-sm text-gray-500 dark:text-gray-400"
                                 href="/admin/order-fulfillment-list">
-                            Home
+                                Home
                                 <svg
                                     class="stroke-current"
                                     width="17"
@@ -220,9 +220,12 @@
                                 <tbody class="divide-y divide-gray-200">
                                     @foreach($order->excelOrders as $excelOrder)
                                     <!-- Order Row -->
-                                    <tr class="hover:bg-gray-50 transition-colors duration-200" data-order-id="{{ $excelOrder->id }}">
+                                    <tr class="hover:bg-gray-50 transition-colors duration-200 {{ $excelOrder->status === 'cancelled' ? 'opacity-50' : '' }}" data-order-id="{{ $excelOrder->id }}">
                                         <td class="border-r px-6 py-4">
-                                            <input type="checkbox" class="item-checkbox form-checkbox rounded h-5 w-5 text-blue-600 transition duration-150 ease-in-out" data-order-id="{{ $excelOrder->id }}" />
+                                            <input type="checkbox"
+                                                class="item-checkbox form-checkbox rounded h-5 w-5 text-blue-600 transition duration-150 ease-in-out {{ $excelOrder->status === 'cancelled' ? 'cursor-not-allowed opacity-50' : '' }}"
+                                                data-order-id="{{ $excelOrder->id }}"
+                                                {{ $excelOrder->status === 'cancelled' ? 'disabled' : '' }} />
                                         </td>
                                         <td class="border-r px-6 py-4">
                                             @switch($excelOrder->status)
@@ -238,6 +241,11 @@
                                             @break
                                             @case('failed')
                                             <span class="rounded-full bg-red-50 px-2 py-0.5 text-theme-xs font-medium text-red-700">
+                                                {{ $excelOrder->status }}
+                                            </span>
+                                            @break
+                                            @case('cancelled')
+                                            <span class="rounded-full bg-red-100 px-2 py-0.5 text-theme-xs font-medium text-red-700">
                                                 {{ $excelOrder->status }}
                                             </span>
                                             @break
@@ -428,17 +436,18 @@
     // Checkbox handling
     const selectAllCheckbox = document.getElementById('select-all');
     const itemCheckboxes = document.querySelectorAll('.item-checkbox');
+    const enabledCheckboxes = document.querySelectorAll('.item-checkbox:not([disabled])');
 
     selectAllCheckbox.addEventListener('change', function() {
-        itemCheckboxes.forEach(checkbox => {
+        enabledCheckboxes.forEach(checkbox => {
             checkbox.checked = this.checked;
         });
     });
 
     // Update select-all checkbox state based on individual checkboxes
-    itemCheckboxes.forEach(checkbox => {
+    enabledCheckboxes.forEach(checkbox => {
         checkbox.addEventListener('change', function() {
-            const allChecked = Array.from(itemCheckboxes).every(cb => cb.checked);
+            const allChecked = Array.from(enabledCheckboxes).every(cb => cb.checked);
             selectAllCheckbox.checked = allChecked;
         });
     });
@@ -460,7 +469,7 @@
     // Log khi "Select All" được thay đổi
     document.getElementById('select-all').addEventListener('change', function() {
         const isChecked = this.checked;
-        const totalItems = document.querySelectorAll('.item-checkbox').length;
+        const totalItems = document.querySelectorAll('.item-checkbox:not([disabled])').length;
         console.log(`Select All ${isChecked ? 'checked' : 'unchecked'}:`, {
             totalItems,
             status: isChecked
@@ -469,14 +478,14 @@
 
     // Upload selected orders
     document.getElementById('uploadSelected').addEventListener('click', async function() {
-        const selectedCheckboxes = document.querySelectorAll('.item-checkbox:checked');
+        const selectedCheckboxes = document.querySelectorAll('.item-checkbox:checked:not([disabled])');
         const selectedOrders = Array.from(selectedCheckboxes).map(checkbox => {
             const row = checkbox.closest('tr');
             return {
                 orderId: checkbox.dataset.orderId,
-                externalId: row.querySelector('td:nth-child(2) span').textContent,
-                brand: row.querySelector('td:nth-child(3) span').textContent,
-                channel: row.querySelector('td:nth-child(4) span').textContent
+                externalId: row.querySelector('td:nth-child(3) span').textContent,
+                brand: row.querySelector('td:nth-child(4) span').textContent,
+                channel: row.querySelector('td:nth-child(5) span').textContent
             };
         });
 

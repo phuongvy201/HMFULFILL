@@ -25,7 +25,7 @@
                     Export Criteria
                 </h4>
 
-                <form id="exportForm" action="{{ route('admin.orders.export-csv') }}" method="POST" class="space-y-6">
+                <form id="exportForm" action="/admin/orders/export-csv" method="POST" class="space-y-6">
                     @csrf
 
                     <!-- Export All Option -->

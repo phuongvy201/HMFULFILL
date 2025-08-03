@@ -6,7 +6,7 @@ use Illuminate\Database\Eloquent\Model;
 
 class ShippingPrice extends Model
 {
-    protected $fillable = ['variant_id', 'method', 'price', 'currency', 'tier_name'];
+    protected $fillable = ['variant_id', 'method', 'price', 'currency', 'tier_name', 'user_id'];
     protected $appends = ['price_usd', 'price_vnd', 'price_gbp'];
 
     // Định nghĩa các hằng số cho shipping methods
@@ -34,6 +34,14 @@ class ShippingPrice extends Model
     public function tier()
     {
         return $this->belongsTo(UserTier::class, 'tier_id');
+    }
+
+    /**
+     * Relationship với User
+     */
+    public function user()
+    {
+        return $this->belongsTo(User::class);
     }
 
     // Format giá shipping theo currency
@@ -141,5 +149,99 @@ class ShippingPrice extends Model
         return self::where('tier_id', $tierId)
             ->with(['variant', 'variant.product'])
             ->get();
+    }
+
+    /**
+     * Tìm giá theo thứ tự ưu tiên: user-specific -> user tier -> default (null) -> Wood tier
+     *
+     * @param int $variantId ID của variant
+     * @param string $method Shipping method
+     * @param int|null $userId ID của user
+     * @param string|null $userTier Tier của user
+     * @return ShippingPrice|null
+     */
+    public static function findPriceByPriority(int $variantId, string $method, ?int $userId = null, ?string $userTier = null): ?ShippingPrice
+    {
+        // 1. Ưu tiên cao nhất: giá riêng cho user cụ thể
+        if ($userId) {
+            $userSpecificPrice = self::where('variant_id', $variantId)
+                ->where('method', $method)
+                ->where('user_id', $userId)
+                ->first();
+
+            if ($userSpecificPrice) {
+                return $userSpecificPrice;
+            }
+        }
+
+        // 2. Ưu tiên lấy giá theo tier của user
+        if ($userTier) {
+            $tierPrice = self::where('variant_id', $variantId)
+                ->where('method', $method)
+                ->where('tier_name', $userTier)
+                ->first();
+
+            if ($tierPrice) {
+                return $tierPrice;
+            }
+        }
+
+        // 3. Tìm giá mặc định (tier_name = null, user_id = null)
+        $defaultPrice = self::where('variant_id', $variantId)
+            ->where('method', $method)
+            ->whereNull('tier_name')
+            ->whereNull('user_id')
+            ->first();
+
+        if ($defaultPrice) {
+            return $defaultPrice;
+        }
+
+        // 4. Fallback về Wood tier
+        return self::where('variant_id', $variantId)
+            ->where('method', $method)
+            ->where('tier_name', 'Wood')
+            ->whereNull('user_id')
+            ->first();
+    }
+
+    /**
+     * Lấy giá riêng cho user cụ thể
+     */
+    public static function getUserSpecificPrice(int $variantId, string $method, int $userId): ?ShippingPrice
+    {
+        return self::where('variant_id', $variantId)
+            ->where('method', $method)
+            ->where('user_id', $userId)
+            ->first();
+    }
+
+    /**
+     * Tạo hoặc cập nhật giá riêng cho user
+     */
+    public static function setUserSpecificPrice(int $variantId, string $method, int $userId, float $price, string $currency = 'USD'): ShippingPrice
+    {
+        return self::updateOrCreate(
+            [
+                'variant_id' => $variantId,
+                'method' => $method,
+                'user_id' => $userId
+            ],
+            [
+                'price' => $price,
+                'currency' => $currency
+            ]
+        );
+    }
+
+    /**
+     * Xóa giá riêng cho user
+     */
+    public static function removeUserSpecificPrice(int $variantId, string $method, int $userId): bool
+    {
+        return self::where('variant_id', $variantId)
+            ->where('method', $method)
+            ->where('user_id', $userId)
+            ->delete() > 0;
     }
 }

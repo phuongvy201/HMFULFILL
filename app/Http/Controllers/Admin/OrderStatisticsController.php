@@ -252,12 +252,23 @@ class OrderStatisticsController extends Controller
     }
 
     /**
+     * Kiểm tra database driver hiện tại
+     */
+    private function isSQLite()
+    {
+        $driver = config('database.default');
+        return config("database.connections.{$driver}.driver") === 'sqlite';
+    }
+
+    /**
      * Lấy thống kê doanh thu theo thời gian
      */
     private function getRevenueStatistics($startDate, $period)
     {
         $query = ExcelOrder::join('excel_order_items', 'excel_orders.id', '=', 'excel_order_items.excel_order_id')
             ->where('excel_orders.created_at', '>=', $startDate);
+
+        $isSQLite = $this->isSQLite();
 
         switch ($period) {
             case 'day':
@@ -271,33 +282,54 @@ class OrderStatisticsController extends Controller
                 break;
 
             case 'week':
-                $query->select(
-                    DB::raw('YEARWEEK(excel_orders.created_at) as week'),
-                    DB::raw('SUM(excel_order_items.print_price * excel_order_items.quantity) as revenue'),
-                    DB::raw('COUNT(DISTINCT excel_orders.id) as orders')
-                )
-                    ->groupBy('week')
-                    ->orderBy('week');
+                if ($isSQLite) {
+                    $query->select(
+                        DB::raw('strftime("%Y-%W", excel_orders.created_at) as week'),
+                        DB::raw('SUM(excel_order_items.print_price * excel_order_items.quantity) as revenue'),
+                        DB::raw('COUNT(DISTINCT excel_orders.id) as orders')
+                    );
+                } else {
+                    $query->select(
+                        DB::raw('YEARWEEK(excel_orders.created_at) as week'),
+                        DB::raw('SUM(excel_order_items.print_price * excel_order_items.quantity) as revenue'),
+                        DB::raw('COUNT(DISTINCT excel_orders.id) as orders')
+                    );
+                }
+                $query->groupBy('week')->orderBy('week');
                 break;
 
             case 'month':
-                $query->select(
-                    DB::raw('DATE_FORMAT(excel_orders.created_at, "%Y-%m") as month'),
-                    DB::raw('SUM(excel_order_items.print_price * excel_order_items.quantity) as revenue'),
-                    DB::raw('COUNT(DISTINCT excel_orders.id) as orders')
-                )
-                    ->groupBy('month')
-                    ->orderBy('month');
+                if ($isSQLite) {
+                    $query->select(
+                        DB::raw('strftime("%Y-%m", excel_orders.created_at) as month'),
+                        DB::raw('SUM(excel_order_items.print_price * excel_order_items.quantity) as revenue'),
+                        DB::raw('COUNT(DISTINCT excel_orders.id) as orders')
+                    );
+                } else {
+                    $query->select(
+                        DB::raw('DATE_FORMAT(excel_orders.created_at, "%Y-%m") as month'),
+                        DB::raw('SUM(excel_order_items.print_price * excel_order_items.quantity) as revenue'),
+                        DB::raw('COUNT(DISTINCT excel_orders.id) as orders')
+                    );
+                }
+                $query->groupBy('month')->orderBy('month');
                 break;
 
             case 'year':
-                $query->select(
-                    DB::raw('YEAR(excel_orders.created_at) as year'),
-                    DB::raw('SUM(excel_order_items.print_price * excel_order_items.quantity) as revenue'),
-                    DB::raw('COUNT(DISTINCT excel_orders.id) as orders')
-                )
-                    ->groupBy('year')
-                    ->orderBy('year');
+                if ($isSQLite) {
+                    $query->select(
+                        DB::raw('strftime("%Y", excel_orders.created_at) as year'),
+                        DB::raw('SUM(excel_order_items.print_price * excel_order_items.quantity) as revenue'),
+                        DB::raw('COUNT(DISTINCT excel_orders.id) as orders')
+                    );
+                } else {
+                    $query->select(
+                        DB::raw('YEAR(excel_orders.created_at) as year'),
+                        DB::raw('SUM(excel_order_items.print_price * excel_order_items.quantity) as revenue'),
+                        DB::raw('COUNT(DISTINCT excel_orders.id) as orders')
+                    );
+                }
+                $query->groupBy('year')->orderBy('year');
                 break;
         }
 

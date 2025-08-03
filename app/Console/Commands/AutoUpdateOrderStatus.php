@@ -18,18 +18,18 @@ class AutoUpdateOrderStatus extends Command
     /**
      * Thời gian chờ trước khi cập nhật trạng thái (tính bằng phút)
      */
-    private const HOLD_DURATION_MINUTES = 60;
+    private const HOLD_DURATION_HOURS = 1;
 
     /**
      * Thực thi command
      */
     public function handle()
-    {
+    {   
         $this->info('Bắt đầu cập nhật trạng thái đơn hàng...');
 
         try {
             // Lấy thời điểm 1 giờ trước
-            $cutoffTime = Carbon::now()->subMinutes(self::HOLD_DURATION_MINUTES);
+            $cutoffTime = Carbon::now()->subHour(self::HOLD_DURATION_HOURS);
 
             // Tìm các đơn hàng có trạng thái "on hold" và được tạo từ 1 giờ trước
             $orders = ExcelOrder::where('status', 'on hold')

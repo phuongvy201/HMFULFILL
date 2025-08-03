@@ -19,7 +19,8 @@ class AdminController extends Controller
                     ->orWhere('last_name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
                     ->orWhere('phone', 'like', "%{$search}%")
-                    ->orWhere('id', 'like', "%{$search}%");
+                    ->orWhere('id', 'like', "%{$search}%")
+                    ->orWhereRaw("first_name || ' ' || last_name LIKE ?", ["%{$search}%"]);
             });
         }
 

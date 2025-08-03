@@ -46,5 +46,9 @@ return [
         'bearer_token' => env('DTF_BEARER_TOKEN'),
     ],
 
+    'usps' => [
+        'user_id' => env('USPS_USER_ID'),
+        'password' => env('USPS_PASSWORD'),
+    ],
 
 ];

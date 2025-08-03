@@ -33,7 +33,7 @@ class TwofifteenService
         $url = "{$config['apiUrl']}/orders.php?" . http_build_query($params);
 
         $response = Http::get($url);
-        Log::info('Twofifteen API response', ['url' => $url, 'response' => $response->json()]);
+        //  Log::info('Twofifteen API response', ['url' => $url, 'response' => $response->json()]);
 
         if ($response->successful()) {
             $data = $response->json();

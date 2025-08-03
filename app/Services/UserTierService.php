@@ -19,12 +19,6 @@ class UserTierService
         $startOfMonth = $month->copy()->startOfMonth();
         $endOfMonth = $month->copy()->endOfMonth();
 
-        Log::info('Bắt đầu tính toán tier cho tháng', [
-            'month' => $startOfMonth->format('Y-m'),
-            'start_date' => $startOfMonth->format('Y-m-d'),
-            'end_date' => $endOfMonth->format('Y-m-d')
-        ]);
-
         // Lấy tất cả user có đơn hàng trong tháng
         $usersWithOrders = ExcelOrder::whereBetween('created_at', [$startOfMonth, $endOfMonth])
             ->with('creator')
@@ -42,8 +36,6 @@ class UserTierService
             try {
                 $result = $this->calculateTierForUser($userId, $month);
                 $results['updated_tiers'][] = $result;
-
-                Log::info("Đã cập nhật tier cho user {$userId}", $result);
             } catch (\Exception $e) {
                 $error = [
                     'user_id' => $userId,
@@ -70,16 +62,25 @@ class UserTierService
         $startOfMonth = $month->copy()->startOfMonth();
         $endOfMonth = $month->copy()->endOfMonth();
 
-        // Đếm số đơn hàng của user trong tháng
-        $orderCount = ExcelOrder::where('created_by', $userId)
-            ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
-            ->count();
+        // Kiểm tra xem user hiện tại có đang ở tier Special không
+        $currentTier = UserTier::getCurrentTier($userId);
+        if ($currentTier && $currentTier->tier === UserTier::TIER_SPECIAL) {
+            // Nếu đang ở tier Special, giữ nguyên tier này
+            $tier = UserTier::TIER_SPECIAL;
+            $orderCount = $currentTier->order_count; // Giữ nguyên order count
+            $revenue = $currentTier->revenue; // Giữ nguyên revenue
+        } else {
+            // Đếm số đơn hàng của user trong tháng
+            $orderCount = ExcelOrder::where('created_by', $userId)
+                ->whereBetween('created_at', [$startOfMonth, $endOfMonth])
+                ->count();
 
-        // Tính tổng doanh thu từ tất cả các đơn hàng trong tháng
-        $revenue = ExcelOrder::calculateUserRevenue($userId, $startOfMonth, $endOfMonth);
+            // Tính tổng doanh thu từ tất cả các đơn hàng trong tháng
+            $revenue = ExcelOrder::calculateUserRevenue($userId, $startOfMonth, $endOfMonth);
 
-        // Xác định tier dựa trên số đơn hàng
-        $tier = UserTier::determineTier($orderCount);
+            // Xác định tier dựa trên số đơn hàng
+            $tier = UserTier::determineTier($orderCount);
+        }
 
         // Lưu tier vào database (cho tháng hiện tại)
         $effectiveMonth = Carbon::now()->startOfMonth();
@@ -91,7 +92,8 @@ class UserTierService
             'revenue' => $revenue,
             'tier' => $tier,
             'effective_month' => $effectiveMonth->format('Y-m'),
-            'previous_tier' => $this->getPreviousTier($userId, $month)
+            'previous_tier' => $this->getPreviousTier($userId, $month),
+            'is_special_tier' => $tier === UserTier::TIER_SPECIAL
         ];
     }
 

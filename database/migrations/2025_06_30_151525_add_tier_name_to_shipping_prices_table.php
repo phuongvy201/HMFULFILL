@@ -12,7 +12,7 @@ return new class extends Migration
     public function up(): void
     {
         Schema::table('shipping_prices', function (Blueprint $table) {
-            $table->enum('tier_name', ['Wood', 'Silver', 'Gold', 'Diamond'])->nullable()->after('method');
+            $table->enum('tier_name', ['Wood', 'Silver', 'Gold', 'Diamond','Special'])->nullable()->after('method');
         });
     }
 

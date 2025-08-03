@@ -37,11 +37,7 @@ class FinanceController extends Controller
                     $data = $response->json();
                     $rate = $data['conversion_rate'] ?? null;
 
-                    Log::info('Exchange rate fetched successfully and cached for 1 week', [
-                        'rate' => $rate,
-                        'response' => $data,
-                        'cache_expiry' => now()->addWeek()->format('Y-m-d H:i:s')
-                    ]);
+                  
 
                     return $rate;
                 } else {
@@ -102,10 +98,7 @@ class FinanceController extends Controller
                 'proof_image.max' => 'Image size cannot exceed 2MB.'
             ]);
 
-            Log::info('Topup request validated', [
-                'user_id' => Auth::id(),
-                'data' => $validated
-            ]);
+    
 
             $imageUrl = '';
             $filePath = '';
@@ -122,12 +115,9 @@ class FinanceController extends Controller
                     // Tạo URL cục bộ cho hình ảnh
                     $imageUrl = asset('proofs/' . $fileName);
 
-                    Log::info('Image uploaded successfully to local storage', [
-                        'path' => $filePath,
-                        'url' => $imageUrl
-                    ]);
+                  
                 } else {
-                    Log::info('No image uploaded');
+                   
                 }
             } catch (\Exception $e) {
                 Log::error('Error uploading image to local storage: ' . $e->getMessage());
@@ -162,16 +152,13 @@ class FinanceController extends Controller
                 // Gửi email ngay lập tức thay vì queue
                 try {
                     Mail::to(config('mail.admin.address'))->send(new NewTopupRequest($transaction));
-                    Log::info('Email sent successfully');
+                   
                 } catch (\Exception $e) {
                     Log::warning('Failed to send email notification', ['error' => $e->getMessage()]);
                     // Không throw exception để không làm fail transaction
                 }
 
-                Log::info('Transaction created and notification sent', [
-                    'transaction_id' => $transaction->id,
-                    'transaction_code' => $transaction->transaction_code
-                ]);
+               
 
                 return response()->json([
                     'message' => 'Topup request successful. Please wait for confirmation.'
@@ -190,9 +177,7 @@ class FinanceController extends Controller
                 // Xóa hình ảnh khỏi thư mục public nếu tạo giao dịch thất bại
                 if ($imageUrl && file_exists(public_path($filePath))) {
                     unlink(public_path($filePath));
-                    Log::info('Delete image from public folder after create transaction failed', [
-                        'path' => $filePath
-                    ]);
+                   
                 }
 
                 return response()->json([
@@ -224,12 +209,7 @@ class FinanceController extends Controller
             ->paginate(10);
 
         // Log danh sách các transaction
-        Log::info('Topup requests retrieved', [
-            'total' => $topupRequests->total(),
-            'per_page' => $topupRequests->perPage(),
-            'current_page' => $topupRequests->currentPage(),
-            'transactions' => $topupRequests->items()
-        ]);
+       
 
         return view('admin.topup.topup-request', [
             'topupRequests' => $topupRequests
@@ -282,10 +262,7 @@ class FinanceController extends Controller
                 Log::warning('Failed to send approval email', ['error' => $e->getMessage()]);
             }
 
-            Log::info('Transaction approved successfully', [
-                'transaction_id' => $transaction->id,
-                'admin_id' => Auth::id()
-            ]);
+           
 
             return redirect()->back()
                 ->with('success', 'Topup request approved successfully.');
@@ -421,13 +398,7 @@ class FinanceController extends Controller
                 $message = 'Successfully deduct money from account.';
             }
 
-            Log::info('Admin adjusted user balance', [
-                'admin_id' => Auth::id(),
-                'user_id' => $user->id,
-                'type' => $request->type,
-                'amount' => $request->amount,
-                'transaction_id' => $transaction->id
-            ]);
+           
 
             return redirect()->back()->with('success', $message);
         } catch (ValidationException $e) {
@@ -452,7 +423,8 @@ class FinanceController extends Controller
                 $q->where('first_name', 'like', "%{$search}%")
                     ->orWhere('last_name', 'like', "%{$search}%")
                     ->orWhere('email', 'like', "%{$search}%")
-                    ->orWhere('id', 'like', "%{$search}%");
+                    ->orWhere('id', 'like', "%{$search}%")
+                    ->orWhereRaw("first_name || ' ' || last_name LIKE ?", ["%{$search}%"]);
             });
         }
 
@@ -469,12 +441,7 @@ class FinanceController extends Controller
             }
         }
 
-        Log::info('Admin accessed balance overview', [
-            'admin_id' => Auth::id(),
-            'search_term' => $search,
-            'total_users' => $users->total(),
-            'users' => $users
-        ]);
+       
 
         return view('admin.topup.balance-overview', [
             'users' => $users,
@@ -504,12 +471,7 @@ class FinanceController extends Controller
                 $request->refund_note
             );
 
-            Log::info('Transaction refunded successfully', [
-                'original_transaction_id' => $transaction->id,
-                'refund_transaction_id' => $refundTransaction->id,
-                'admin_id' => Auth::id(),
-                'amount' => $transaction->amount
-            ]);
+                    
 
             return redirect()->back()
                 ->with('success', 'Giao dịch đã được hoàn tiền thành công.');

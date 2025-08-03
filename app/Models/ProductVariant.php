@@ -69,26 +69,14 @@ class ProductVariant extends Model
             $method = ShippingPrice::METHOD_SELLER_1ST;
         }
 
-        // Nếu có userId, ưu tiên lấy giá theo tier
+        // Sử dụng logic mới với user-specific pricing
+        $userTier = null;
         if ($userId) {
             $userTier = \App\Models\UserTier::getCurrentTier($userId);
             $tierName = $userTier ? $userTier->tier : 'Wood';
-
-            $tierPrice = $this->shippingPrices()
-                ->where('method', $method)
-                ->where('tier_name', $tierName)
-                ->first();
-
-            if ($tierPrice) {
-                return $tierPrice->price_usd;
-            }
         }
 
-        // Fallback về giá Wood tier
-        $shippingPrice = $this->shippingPrices()
-            ->where('method', $method)
-            ->where('tier_name', 'Wood')
-            ->first();
+        $shippingPrice = ShippingPrice::findPriceByPriority($this->id, $method, $userId, $userTier ? $userTier->tier : null);
 
         return $shippingPrice ? $shippingPrice->price_usd : 0;
     }
@@ -102,6 +90,8 @@ class ProductVariant extends Model
         $productId = $this->product_id;
         $method = null;
         $tierName = 'Wood';
+        $tierPrice = false;
+        $userSpecificPrice = false;
 
         if (!empty($shippingMethod)) {
             $shippingMethodLower = strtolower($shippingMethod);
@@ -115,55 +105,56 @@ class ProductVariant extends Model
             $method = $position === 1 ? ShippingPrice::METHOD_SELLER_1ST : ShippingPrice::METHOD_SELLER_NEXT;
         }
 
-        // Nếu có userId, ưu tiên lấy giá theo tier
+        $shippingPriceFound = false;
+
+        // Sử dụng logic mới với user-specific pricing
+        $userTier = null;
         if ($userId) {
             $userTier = \App\Models\UserTier::getCurrentTier($userId);
             $tierName = $userTier ? $userTier->tier : 'Wood';
+        }
 
-            $tierPrice = $this->shippingPrices()
-                ->where('method', $method)
-                ->where('tier_name', $tierName)
-                ->first();
+        $shippingPrice = ShippingPrice::findPriceByPriority($this->id, $method, $userId, $userTier ? $userTier->tier : null);
 
-            if ($tierPrice) {
-                $printPrice = $tierPrice->price_usd;
+        if ($shippingPrice) {
+            $printPrice = $shippingPrice->price_usd;
+            $shippingPriceFound = true;
 
+            // Xác định loại giá
+            if ($shippingPrice->user_id) {
+                $userSpecificPrice = true;
+                $tierPrice = false;
+                Log::info("Found user-specific price for variant", [
+                    'variant_id' => $this->id,
+                    'user_id' => $userId,
+                    'method' => $method,
+                    'price_usd' => $printPrice,
+                    'position' => $position,
+                    'price_type' => 'user_specific'
+                ]);
+            } elseif ($shippingPrice->tier_name) {
+                $tierPrice = true;
+                $userSpecificPrice = false;
                 Log::info("Found tier price for variant", [
                     'variant_id' => $this->id,
                     'user_id' => $userId,
                     'method' => $method,
                     'price_usd' => $printPrice,
                     'position' => $position,
-                    'tier' => $tierName
+                    'tier' => $shippingPrice->tier_name
                 ]);
-
-                return [
-                    'print_price' => $printPrice,
-                    'product_id' => $productId,
+            } else {
+                $tierPrice = false;
+                $userSpecificPrice = false;
+                Log::info("Found default price for variant", [
+                    'variant_id' => $this->id,
+                    'user_id' => $userId,
                     'method' => $method,
-                    'shipping_price_found' => true,
-                    'tier_price' => true,
-                    'tier' => $tierName
-                ];
+                    'price_usd' => $printPrice,
+                    'position' => $position,
+                    'price_type' => 'default'
+                ]);
             }
-        }
-
-        // Fallback về giá Wood tier
-        $shippingPrice = $this->shippingPrices()
-            ->where('method', $method)
-            ->where('tier_name', 'Wood')
-            ->first();
-
-        if ($shippingPrice) {
-            $printPrice = $shippingPrice->price_usd; // Sử dụng accessor price_usd để luôn quy đổi về USD
-
-            Log::info("Found shipping price for variant", [
-                'variant_id' => $this->id,
-                'method' => $method,
-                'price_usd' => $printPrice,
-                'position' => $position,
-                'tier' => 'Wood'
-            ]);
         } else {
             Log::warning("No shipping price found for variant", [
                 'variant_id' => $this->id,
@@ -177,8 +168,10 @@ class ProductVariant extends Model
             'print_price' => $printPrice,
             'product_id' => $productId,
             'method' => $method,
-            'shipping_price_found' => !is_null($shippingPrice),
-            'tier_price' => false
+            'shipping_price_found' => $shippingPriceFound,
+            'tier_price' => $tierPrice,
+            'user_specific_price' => $userSpecificPrice,
+            'tier' => $tierName
         ];
     }
 
@@ -217,5 +210,126 @@ class ProductVariant extends Model
                 'currency' => $currency
             ]
         );
+    }
+
+    /**
+     * Tạo hoặc cập nhật giá riêng cho user
+     */
+    public function setUserSpecificPrice(int $userId, string $method, float $price, string $currency = 'USD')
+    {
+        return ShippingPrice::setUserSpecificPrice($this->id, $method, $userId, $price, $currency);
+    }
+
+    /**
+     * Lấy giá riêng cho user
+     */
+    public function getUserSpecificPrice(int $userId, string $method)
+    {
+        return ShippingPrice::getUserSpecificPrice($this->id, $method, $userId);
+    }
+
+    /**
+     * Xóa giá riêng cho user
+     */
+    public function removeUserSpecificPrice(int $userId, string $method)
+    {
+        return ShippingPrice::removeUserSpecificPrice($this->id, $method, $userId);
+    }
+
+    /**
+     * Lấy tất cả giá riêng cho user
+     */
+    public function getAllUserSpecificPrices(int $userId)
+    {
+        return $this->shippingPrices()
+            ->where('user_id', $userId)
+            ->get();
+    }
+
+    /**
+     * Tìm variant dựa trên attributes
+     *
+     * @param int $productId
+     * @param array $selectedAttributes ['color' => 'Black', 'size' => 'M']
+     * @return ProductVariant|null
+     */
+    public static function findVariantByAttributes(int $productId, array $selectedAttributes): ?ProductVariant
+    {
+        if (empty($selectedAttributes)) {
+            return null;
+        }
+
+        $variant = self::where('product_id', $productId)
+            ->whereHas('attributes', function ($query) use ($selectedAttributes) {
+                // Đếm số attributes match
+                $query->selectRaw('variant_id, COUNT(*) as match_count')
+                    ->whereIn('name', array_keys($selectedAttributes))
+                    ->whereIn('value', array_values($selectedAttributes))
+                    ->groupBy('variant_id')
+                    ->having('match_count', '=', count($selectedAttributes));
+            })
+            ->first();
+
+        return $variant;
+    }
+
+    /**
+     * Tìm variant dựa trên attributes với fallback
+     *
+     * @param int $productId
+     * @param array $selectedAttributes
+     * @return ProductVariant|null
+     */
+    public static function findVariantByAttributesWithFallback(int $productId, array $selectedAttributes): ?ProductVariant
+    {
+        // Thử tìm exact match trước
+        $variant = self::findVariantByAttributes($productId, $selectedAttributes);
+
+        if ($variant) {
+            return $variant;
+        }
+
+        // Nếu không tìm thấy, thử tìm partial match
+        $variant = self::where('product_id', $productId)
+            ->whereHas('attributes', function ($query) use ($selectedAttributes) {
+                foreach ($selectedAttributes as $name => $value) {
+                    $query->whereHas('attributes', function ($subQuery) use ($name, $value) {
+                        $subQuery->where('name', $name)
+                            ->where('value', $value);
+                    });
+                }
+            })
+            ->first();
+
+        return $variant;
+    }
+
+    /**
+     * Lấy tất cả attributes của variant dưới dạng array
+     *
+     * @return array
+     */
+    public function getAttributesArray(): array
+    {
+        return $this->attributes->pluck('value', 'name')->toArray();
+    }
+
+    /**
+     * Kiểm tra xem variant có match với attributes không
+     *
+     * @param array $selectedAttributes
+     * @return bool
+     */
+    public function matchesAttributes(array $selectedAttributes): bool
+    {
+        $variantAttributes = $this->getAttributesArray();
+
+        foreach ($selectedAttributes as $name => $value) {
+            if (!isset($variantAttributes[$name]) || $variantAttributes[$name] !== $value) {
+                return false;
+            }
+        }
+
+        return true;
     }
 }

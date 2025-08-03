@@ -42,13 +42,7 @@ class DtfService
 
         $response = Http::withHeaders($headers)->get($url);
 
-        Log::info('Phản hồi API DTF', [
-            'url' => $url,
-            'internal_ids_count' => count($internalIds),
-            'internal_ids' => $internalIds,
-            'response_status' => $response->status(),
-            'response' => $response->json()
-        ]);
+ 
 
         if ($response->successful()) {
             $data = $response->json();

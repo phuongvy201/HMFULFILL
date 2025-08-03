@@ -596,14 +596,14 @@
                     await Swal.fire({
                         icon: 'info',
                         title: 'Thông báo',
-                        text: 'Chỉ có thể đổi status từ pending sang processed!',
+                        text: 'Chỉ có thể đổi status từ "on hold" sang "processed"!',
                     });
                     return;
                 }
 
                 const result = await Swal.fire({
                     title: 'Xác nhận đổi status',
-                    text: "Bạn có chắc muốn đổi status từ 'pending' sang 'processed'?",
+                    text: "Bạn có chắc muốn đổi status từ 'on hold' sang 'processed'?",
                     icon: 'question',
                     showCancelButton: true,
                     confirmButtonColor: '#3085d6',

@@ -4,6 +4,9 @@
 
 @section('content-customer')
 <div class="p-4 mx-auto max-w-(--breakpoint-2xl) md:p-6">
+    
+    <!-- VAT Warning Start -->
+   
     <!-- Breadcrumb -->
     <div x-data="{ pageName: 'Order Detail' }">
         <div class="mb-6 flex flex-wrap items-center justify-between gap-3">
@@ -56,7 +59,7 @@
     <!-- Customer Information -->
     <div class="bg-white rounded-lg shadow dark:bg-gray-800 mb-6">
         <div class="p-6">
-           
+
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
                     <p class="text-sm text-gray-500 dark:text-gray-400">Order ID</p>

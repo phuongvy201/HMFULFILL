@@ -165,6 +165,24 @@
         background: #e5e7eb;
     }
 
+    .btn-danger {
+        background: #dc2626;
+        color: #ffffff;
+    }
+
+    .btn-danger:hover {
+        background: #b91c1c;
+    }
+
+    .btn-info {
+        background: #0891b2;
+        color: #ffffff;
+    }
+
+    .btn-info:hover {
+        background: #0e7490;
+    }
+
     /* Card Styling */
     .stat-card {
         background: #ffffff;
@@ -227,6 +245,12 @@
                 </h3>
             </div>
             <div class="flex items-center gap-3">
+                <button id="updateTracking" class="btn btn-info">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                    </svg>
+                    Update Tracking
+                </button>
                 <button id="exportSelected" class="btn btn-secondary" disabled>
                     <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 10v6m0 0l-3-3m3 3l3-3m2 8H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path>
@@ -400,6 +424,14 @@
                                                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z" />
                                                     </svg>
                                                     Edit
+                                                </button>
+                                                @endif
+                                                @if($order->status !== 'cancelled')
+                                                <button onclick="cancelOrder('{{ $order->id }}', '{{ $order->external_id }}', '{{ $order->items ? $order->items->sum(function($item) { return (float)$item->print_price * (int)$item->quantity; }) : 0 }}')" class="btn btn-danger">
+                                                    <svg class="w-4 h-4 mr-1" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12" />
+                                                    </svg>
+                                                    Cancel
                                                 </button>
                                                 @endif
                                             </div>
@@ -679,6 +711,65 @@
             });
         }
 
+        // Update Tracking functionality
+        const updateTrackingButton = document.getElementById('updateTracking');
+        if (updateTrackingButton) {
+            updateTrackingButton.addEventListener('click', async function() {
+                try {
+                    this.disabled = true;
+                    this.innerHTML = `
+                        <svg class="animate-spin h-4 w-4 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                        </svg>
+                        Updating...
+                    `;
+
+                    const response = await fetch('/admin/orders/update-tracking', {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content
+                        }
+                    });
+
+                    const result = await response.json();
+
+                    if (result.success) {
+                        Swal.fire({
+                            icon: 'success',
+                            title: 'Thành công',
+                            text: result.message
+                        }).then(() => {
+                            // Reload page to show updated tracking numbers
+                            window.location.reload();
+                        });
+                    } else {
+                        Swal.fire({
+                            icon: 'error',
+                            title: 'Lỗi',
+                            text: result.message
+                        });
+                    }
+                } catch (error) {
+                    console.error('Update tracking error:', error);
+                    Swal.fire({
+                        icon: 'error',
+                        title: 'Lỗi',
+                        text: 'Có lỗi xảy ra khi cập nhật tracking numbers'
+                    });
+                } finally {
+                    this.disabled = false;
+                    this.innerHTML = `
+                        <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+                        </svg>
+                        Update Tracking
+                    `;
+                }
+            });
+        }
+
         function showExportDialog(selectedOrderIds = null) {
             Swal.fire({
                 title: 'Export Options',
@@ -772,7 +863,7 @@
             }
 
             try {
-                const response = await fetch('{{ route("admin.orders.export-csv") }}', {
+                const response = await fetch('/admin/orders/export-csv', {
                     method: 'POST',
                     body: formData
                 });
@@ -812,102 +903,86 @@
         }
     });
 
-    function editDtfOrder(orderId) {
+
+
+    // Cancel Order Function
+    function cancelOrder(orderId, externalId, orderTotal) {
         Swal.fire({
-            title: 'Edit DTF Order',
+            title: 'Cancel Order',
             html: `
-                <form id="editOrderForm" class="text-left">
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">Channel</label>
-                        <input type="text" id="channel" name="channel" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                <div class="text-left space-y-4">
+                    <div class="p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <h4 class="font-semibold text-red-800 mb-2">Đơn hàng sẽ bị hủy</h4>
+                        <p class="text-sm text-red-700">Order ID: <strong>${externalId}</strong></p>
+                        <p class="text-sm text-red-700">Giá trị đơn hàng: <strong>$${parseFloat(orderTotal).toFixed(2)}</strong></p>
                     </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">Buyer Email</label>
-                        <input type="email" id="buyer_email" name="buyer_email" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
+                    
+                    <div class="p-4 bg-green-50 border border-green-200 rounded-lg">
+                        <h4 class="font-semibold text-green-800 mb-2">Hoàn tiền cho khách hàng</h4>
+                        <p class="text-sm text-green-700">Số tiền <strong>$${parseFloat(orderTotal).toFixed(2)}</strong> sẽ được hoàn về wallet của khách hàng</p>
                     </div>
-                    <div class="mb-4">
-                        <label class="block text-sm font-medium text-gray-700">Shipping Address</label>
-                        <div class="grid grid-cols-2 gap-4">
-                            <input type="text" id="firstName" name="shipping_address[firstName]" placeholder="First Name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <input type="text" id="lastName" name="shipping_address[lastName]" placeholder="Last Name" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <input type="text" id="company" name="shipping_address[company]" placeholder="Company" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <input type="text" id="address1" name="shipping_address[address1]" placeholder="Address 1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <input type="text" id="address2" name="shipping_address[address2]" placeholder="Address 2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <input type="text" id="city" name="shipping_address[city]" placeholder="City" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <input type="text" id="state" name="shipping_address[state]" placeholder="State" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <input type="text" id="postcode" name="shipping_address[postcode]" placeholder="Postcode" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <input type="text" id="country" name="shipping_address[country]" placeholder="Country" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <input type="text" id="phone1" name="shipping_address[phone1]" placeholder="Phone 1" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                            <input type="text" id="phone2" name="shipping_address[phone2]" placeholder="Phone 2" class="mt-1 block w-full rounded-md border-gray-300 shadow-sm focus:border-blue-500 focus:ring-blue-500">
-                        </div>
+                    
+                    <div class="p-4 bg-yellow-50 border border-yellow-200 rounded-lg">
+                        <h4 class="font-semibold text-yellow-800 mb-2">⚠️ Cảnh báo</h4>
+                        <p class="text-sm text-yellow-700">Hành động này không thể hoàn tác. Vui lòng xác nhận trước khi tiếp tục.</p>
                     </div>
-                </form>
+                    
+                    <div class="mt-4">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">Lý do hủy đơn (tùy chọn)</label>
+                        <textarea id="cancelReason" class="w-full p-2 border border-gray-300 rounded-md" rows="3" placeholder="Nhập lý do hủy đơn..."></textarea>
+                    </div>
+                </div>
             `,
             showCancelButton: true,
-            confirmButtonText: 'Update',
-            cancelButtonText: 'Cancel',
+            confirmButtonText: 'Xác nhận hủy đơn',
+            cancelButtonText: 'Hủy bỏ',
+            confirmButtonColor: '#dc2626',
+            cancelButtonColor: '#6b7280',
             showLoaderOnConfirm: true,
             preConfirm: async () => {
-                const form = document.getElementById('editOrderForm');
-                const formData = new FormData(form);
-                const data = {};
-
-                // Chỉ lấy những trường có giá trị
-                for (let [key, value] of formData.entries()) {
-                    if (value.trim() !== '') {
-                        if (key.startsWith('shipping_address[')) {
-                            const field = key.match(/\[(.*?)\]/)[1];
-                            if (!data.shipping_address) {
-                                data.shipping_address = {};
-                            }
-                            data.shipping_address[field] = value;
-                        } else {
-                            data[key] = value;
-                        }
-                    }
-                }
-
-                // Nếu không có dữ liệu nào được nhập
-                if (Object.keys(data).length === 0) {
-                    Swal.showValidationMessage('Vui lòng nhập ít nhất một trường để cập nhật');
-                    return false;
-                }
-
-                try {
-                    const response = await fetch(`/admin/api/dtf/orders/${orderId}`, {
-                        method: 'PUT',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
-                            'Accept': 'application/json'
-                        },
-                        body: JSON.stringify(data)
-                    });
-
-                    if (!response.ok) {
-                        const errorData = await response.json();
-                        throw new Error(errorData.message || 'Failed to update order');
-                    }
-
-                    const result = await response.json();
-                    return result;
-                } catch (error) {
-                    console.error('Update error:', error);
-                    Swal.showValidationMessage(`Request failed: ${error.message}`);
-                    return false;
-                }
+                const reason = document.getElementById('cancelReason').value;
+                return await performCancelOrder(orderId, reason);
             }
         }).then((result) => {
             if (result.isConfirmed) {
                 Swal.fire({
                     icon: 'success',
-                    title: 'Success',
-                    text: 'Order updated successfully'
+                    title: 'Đã hủy đơn hàng',
+                    text: 'Đơn hàng đã được hủy và tiền đã được hoàn về wallet khách hàng',
+                    confirmButtonColor: '#059669'
                 }).then(() => {
                     window.location.reload();
                 });
             }
         });
+    }
+
+    async function performCancelOrder(orderId, reason) {
+        try {
+            const response = await fetch(`/admin/orders/${orderId}/cancel`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').content,
+                    'Accept': 'application/json'
+                },
+                body: JSON.stringify({
+                    reason: reason
+                })
+            });
+
+            if (!response.ok) {
+                const errorData = await response.json();
+                throw new Error(errorData.message || 'Không thể hủy đơn hàng');
+            }
+
+            const result = await response.json();
+            return result;
+        } catch (error) {
+            console.error('Cancel order error:', error);
+            Swal.showValidationMessage(`Lỗi: ${error.message}`);
+            return false;
+        }
     }
 </script>
 @endsection
