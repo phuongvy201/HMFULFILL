@@ -75,8 +75,6 @@ class ProductController extends Controller
                         'flashship_sku' => $variantData['flashship_sku']
                     ]);
 
-                    Log::info('Đã tạo variant:', ['variant_id' => $variant->id]);
-
                     // Tạo shipping prices
                     $shippingPrices = [
                         ['method' => ShippingPrice::METHOD_TIKTOK_1ST, 'price' => $variantData['ship_tiktok_1']],
@@ -87,11 +85,6 @@ class ProductController extends Controller
 
                     foreach ($shippingPrices as $shipping) {
                         $variant->shippingPrices()->create([
-                            'method' => $shipping['method'],
-                            'price' => $shipping['price']
-                        ]);
-                        Log::info('Đã tạo shipping price:', [
-                            'variant_id' => $variant->id,
                             'method' => $shipping['method'],
                             'price' => $shipping['price']
                         ]);
@@ -111,14 +104,8 @@ class ProductController extends Controller
 
             // Xử lý images
             if ($request->hasFile('images')) {
-                Log::info('Bắt đầu xử lý images');
                 try {
                     foreach ($request->file('images') as $image) {
-                        Log::info('Đang xử lý file:', [
-                            'original_name' => $image->getClientOriginalName(),
-                            'mime_type' => $image->getMimeType()
-                        ]);
-
                         // Tạo tên file mới với timestamp
                         $imageName = time() . '_' . $image->getClientOriginalName();
 
@@ -128,20 +115,15 @@ class ProductController extends Controller
                         // Đường dẫn để lưu vào database
                         $imagePath = 'images/products/' . $imageName;
 
-                        Log::info('Đã lưu file tại: ' . $imagePath);
-
                         // Lưu thông tin vào database
                         $product->images()->create([
                             'image_url' => $imagePath
                         ]);
                     }
-                    Log::info('Hoàn thành xử lý images');
                 } catch (\Exception $e) {
                     Log::error('Lỗi khi xử lý images: ' . $e->getMessage());
                     throw $e;
                 }
-            } else {
-                Log::info('Không có images được upload');
             }
 
             return redirect()
@@ -167,7 +149,6 @@ class ProductController extends Controller
         foreach ($products as $product) {
             $product->main_image = $product->images->first(); // Lấy hình ảnh đầu tiên làm ảnh chính
         }
-        Log::info($products);
         return view('admin.products.product-list', compact('products')); // Trả về view với danh sách sản phẩm
     }
     public function index()
@@ -249,83 +230,65 @@ class ProductController extends Controller
         }
     }
 
-    public function show($slug)
-    {
-        $product = Product::with([
-            'images',
-            'variants.attributes',
-            'variants.shippingPrices',
-            'fulfillmentLocations'
-        ])
-            ->where('slug', $slug)
-            ->firstOrFail();
+        public function show($slug)
+        {
+            $product = Product::with([
+                'images',
+                'variants.attributes',
+                'variants.shippingPrices' => function ($query) {
+                    $query->where(function ($q) {
+                        $q->where('tier_name', 'Wood')
+                            ->orWhereNull('tier_name');
+                    })->whereNull('user_id');
+                },
+                'fulfillmentLocations'
+            ])
+                ->where('slug', $slug)
+                ->firstOrFail();
 
-        $groupedAttributes = $product->getGroupedAttributes()->toArray();
-        Log::info($groupedAttributes);
-        Log::info($product);
+            $groupedAttributes = $product->getGroupedAttributes()->toArray();
 
-        // Lấy tỷ giá từ config
-        $currencyRates = [
-            'usd_to_vnd' => config('currency.usd_to_vnd'),
-            'gbp_to_vnd' => config('currency.gbp_to_vnd'),
-            'gbp_to_usd' => config('currency.gbp_to_usd'),
-        ];
+            // Retrieve currency rates from config
+            $currencyRates = [
+                'usd_to_vnd' => config('currency.usd_to_vnd', 24326.23),
+                'gbp_to_vnd' => config('currency.gbp_to_vnd', 30894.31),
+                'gbp_to_usd' => config('currency.gbp_to_usd', 1.27),
+            ];
 
-        // Lấy giá sản phẩm theo từng loại tiền
-        $priceUSD = $product->price_usd;
-        $priceVND = $product->price_vnd;
-        $priceGBP = $product->price_gbp;
-
-        // Mặc định tất cả user lấy giá Wood tier
-        $currentUserTier = 'Wood';
-
-        // Lấy giá cho từng variant (nếu cần dùng ở JS)
-        $variants = $product->variants->map(function ($variant) use ($currentUserTier) {
-            return [
-                'id' => $variant->id,
-                'attributes' => $variant->attributes,
-                'price_usd' => $variant->price_usd,
-                'price_vnd' => $variant->price_vnd,
-                'price_gbp' => $variant->price_gbp,
-                'current_user_tier' => $currentUserTier,
-                'shipping_prices' => $variant->shippingPrices()
-                    ->where('tier_name', $currentUserTier)
-                    ->get()
-                    ->map(function ($sp) {
+            // Prepare variants with necessary fields
+            $variants = $product->variants->map(function ($variant) {
+                return [
+                    'id' => $variant->id,
+                    'sku' => $variant->sku ?? 'N/A',
+                    'attributes' => $variant->attributes->map(function ($attr) {
                         return [
-                            'method' => $sp->method,
-                            'tier_name' => $sp->tier_name,
-                            'price_usd' => $sp->price_usd,
-                            'price_vnd' => $sp->price_vnd,
-                            'price_gbp' => $sp->price_gbp,
+                            'name' => $attr->name,
+                            'value' => $attr->value
                         ];
                     }),
-                'all_tier_prices' => $variant->shippingPrices->groupBy('tier_name')->map(function ($prices, $tier) {
-                    return $prices->map(function ($sp) {
+                    'price_usd' => $variant->price_usd ?? 0,
+                    'price_vnd' => $variant->price_vnd ?? 0,
+                    'price_gbp' => $variant->price_gbp ?? 0,
+                    'shipping_prices' => $variant->shippingPrices->map(function ($sp) {
                         return [
                             'method' => $sp->method,
                             'tier_name' => $sp->tier_name,
-                            'price_usd' => $sp->price_usd,
-                            'price_vnd' => $sp->price_vnd,
-                            'price_gbp' => $sp->price_gbp,
+                            'price_usd' => $sp->price_usd ?? 0,
+                            'price_vnd' => $sp->price_vnd ?? 0,
+                            'price_gbp' => $sp->price_gbp ?? 0,
                         ];
-                    });
-                }),
-            ];
-        });
+                    })
+                ];
+            });
 
-        return view('customer.products.product-detail', compact(
-            'product',
-            'groupedAttributes',
-            'currencyRates',
-            'priceUSD',
-            'priceVND',
-            'priceGBP',
-            'variants',
-            'currentUserTier'
-        ));
-    }
-    /**
+            return view('customer.products.product-detail', compact(
+                'product',
+                'groupedAttributes',
+                'currencyRates',
+                'variants'
+            ));
+        }
+        /**
      * Import sản phẩm từ file Excel
      * Cấu trúc cột Excel:
      * - A-O: Thông tin sản phẩm
@@ -350,7 +313,6 @@ class ProductController extends Controller
 
             // Lấy số dòng tối đa để kiểm tra
             $highestRow = $worksheet->getHighestRow();
-            Log::info("Tổng số dòng trong file Excel: $highestRow");
 
             // Sử dụng iterator để xử lý từng dòng
             $rowIterator = $worksheet->getRowIterator(2); // Bỏ qua dòng tiêu đề
@@ -364,7 +326,6 @@ class ProductController extends Controller
             foreach ($rowIterator as $row) {
                 $processedRows++;
                 $rowIndex = $row->getRowIndex(); // Lấy số thứ tự dòng
-                Log::info("Đang xử lý dòng: $rowIndex");
 
                 try {
                     // Lấy giá trị ô của dòng hiện tại
@@ -375,7 +336,6 @@ class ProductController extends Controller
 
                     // Bỏ qua nếu dòng hoàn toàn trống
                     if (empty(array_filter($cells))) {
-                        Log::warning("Dòng $rowIndex trống, bỏ qua.");
                         continue;
                     }
 
@@ -395,7 +355,6 @@ class ProductController extends Controller
                         ]);
 
                         $currentProductId = $currentProduct->id;
-                        Log::info("Tạo sản phẩm ID: $currentProductId cho dòng $rowIndex");
 
                         if (!empty($cells[5])) {
                             FulfillmentLocation::create([
@@ -482,7 +441,6 @@ class ProductController extends Controller
             }
 
             DB::commit();
-            Log::info("Tổng số dòng đã xử lý: $processedRows");
             return redirect()->back()->with('success', "Nhập dữ liệu thành công. Đã xử lý $processedRows/$highestRow dòng.");
         } catch (\Exception $e) {
             DB::rollBack();

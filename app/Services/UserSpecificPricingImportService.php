@@ -12,7 +12,7 @@ use Illuminate\Support\Facades\Validator;
 class UserSpecificPricingImportService
 {
     /**
-     * Import giá riêng cho user từ CSV/JSON
+     * Import giá riêng cho user từ CSV/JSON với hỗ trợ nhiều email
      */
     public static function importFromData(array $data): array
     {
@@ -31,7 +31,7 @@ class UserSpecificPricingImportService
             try {
                 // Validate dữ liệu
                 $validator = Validator::make($row, [
-                    'user_email' => 'required|email|exists:users,email',
+                    'user_email' => 'required|string', // Thay đổi từ email thành string để hỗ trợ nhiều email
                     'product_id' => 'required|integer|exists:products,id',
                     'product_name' => 'required|string',
                     'variant_sku' => 'required|string',
@@ -54,13 +54,50 @@ class UserSpecificPricingImportService
                     continue;
                 }
 
-                // Tìm user
-                $user = User::where('email', $row['user_email'])->first();
-                if (!$user) {
+                // Xử lý nhiều email
+                $emails = self::parseMultipleEmails($row['user_email']);
+                if (empty($emails)) {
                     $results['failed']++;
                     $results['errors'][] = [
                         'row' => $rowNumber,
-                        'errors' => ['user_email' => ['User not found']],
+                        'errors' => ['user_email' => ['No valid emails found']],
+                        'data' => $row
+                    ];
+                    continue;
+                }
+
+                // Validate tất cả email
+                $validEmails = [];
+                $invalidEmails = [];
+                foreach ($emails as $email) {
+                    $email = trim($email);
+                    if (filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        $user = User::where('email', $email)->first();
+                        if ($user) {
+                            $validEmails[] = $email;
+                        } else {
+                            $invalidEmails[] = $email;
+                        }
+                    } else {
+                        $invalidEmails[] = $email;
+                    }
+                }
+
+                if (!empty($invalidEmails)) {
+                    $results['failed']++;
+                    $results['errors'][] = [
+                        'row' => $rowNumber,
+                        'errors' => ['user_email' => ['Invalid or non-existent emails: ' . implode(', ', $invalidEmails)]],
+                        'data' => $row
+                    ];
+                    continue;
+                }
+
+                if (empty($validEmails)) {
+                    $results['failed']++;
+                    $results['errors'][] = [
+                        'row' => $rowNumber,
+                        'errors' => ['user_email' => ['No valid users found']],
                         'data' => $row
                     ];
                     continue;
@@ -98,21 +135,20 @@ class UserSpecificPricingImportService
 
                     foreach ($row as $key => $value) {
                         if (strpos($key, 'attr_name_') === 0) {
-                            $index = substr($key, 10); // Lấy số sau 'attr_name_'
-                            $attrNames[$index] = $value;
+                            $attrNames[] = $value;
                         } elseif (strpos($key, 'attr_value_') === 0) {
-                            $index = substr($key, 11); // Lấy số sau 'attr_value_'
-                            $attrValues[$index] = $value;
+                            $attrValues[] = $value;
                         }
                     }
 
-                    // Kết hợp name và value
-                    foreach ($attrNames as $index => $name) {
-                        if (!empty($name) && isset($attrValues[$index]) && !empty($attrValues[$index])) {
-                            $selectedAttributes[$name] = $attrValues[$index];
+                    // Tạo cặp attribute name-value
+                    for ($i = 0; $i < count($attrNames); $i++) {
+                        if (!empty($attrNames[$i]) && !empty($attrValues[$i])) {
+                            $selectedAttributes[$attrNames[$i]] = $attrValues[$i];
                         }
                     }
 
+                    // Tìm variant theo attributes
                     if (!empty($selectedAttributes)) {
                         $variant = ProductVariant::findVariantByAttributes($row['product_id'], $selectedAttributes);
                     }
@@ -122,30 +158,60 @@ class UserSpecificPricingImportService
                     $results['failed']++;
                     $results['errors'][] = [
                         'row' => $rowNumber,
-                        'errors' => ['variant_sku' => ['Product variant not found for this product or attributes']],
+                        'errors' => ['variant_sku' => ['Variant not found']],
                         'data' => $row
                     ];
                     continue;
                 }
 
-                // Thiết lập giá riêng cho từng method
+                // Định nghĩa các method cần import
                 $methods = ['tiktok_1st', 'tiktok_next', 'seller_1st', 'seller_next'];
-                $pricesSet = 0;
 
-                foreach ($methods as $method) {
-                    if (!empty($row[$method]) && is_numeric($row[$method])) {
-                        UserSpecificPricingService::setUserPrice(
-                            $user->id,
-                            $variant->id,
-                            $method,
-                            $row[$method],
-                            $row['currency']
-                        );
-                        $pricesSet++;
+                // Import giá cho tất cả user
+                $totalPricesSet = 0;
+                foreach ($validEmails as $email) {
+                    $user = User::where('email', $email)->first();
+                    $pricesSet = 0;
+
+                    foreach ($methods as $method) {
+                        if (!empty($row[$method]) && is_numeric($row[$method])) {
+                            UserSpecificPricingService::setUserPrice(
+                                $user->id,
+                                $variant->id,
+                                $method,
+                                $row[$method],
+                                $row['currency']
+                            );
+                            $pricesSet++;
+                        }
+                    }
+
+                    if ($pricesSet > 0) {
+                        $totalPricesSet += $pricesSet;
+
+                        // Thống kê theo user
+                        if (!isset($processedUsers[$user->id])) {
+                            $processedUsers[$user->id] = [
+                                'user_email' => $user->email,
+                                'user_name' => $user->first_name . ' ' . $user->last_name,
+                                'count' => 0
+                            ];
+                        }
+                        $processedUsers[$user->id]['count']++;
+
+                        Log::info("User-specific prices imported", [
+                            'row' => $rowNumber,
+                            'user_id' => $user->id,
+                            'user_email' => $user->email,
+                            'variant_id' => $variant->id,
+                            'variant_sku' => $variant->sku,
+                            'prices_set' => $pricesSet,
+                            'currency' => $row['currency']
+                        ]);
                     }
                 }
 
-                if ($pricesSet > 0) {
+                if ($totalPricesSet > 0) {
                     $results['success']++;
                 } else {
                     $results['failed']++;
@@ -156,27 +222,6 @@ class UserSpecificPricingImportService
                     ];
                     continue;
                 }
-
-                // Thống kê theo user
-                if (!isset($processedUsers[$user->id])) {
-                    $processedUsers[$user->id] = [
-                        'user_email' => $user->email,
-                        'user_name' => $user->first_name . ' ' . $user->last_name,
-                        'count' => 0
-                    ];
-                }
-                $processedUsers[$user->id]['count']++;
-
-                Log::info("User-specific prices imported", [
-                    'row' => $rowNumber,
-                    'user_id' => $user->id,
-                    'user_email' => $user->email,
-                    'variant_id' => $variant->id,
-                    'variant_sku' => $variant->sku,
-                    'method' => $row['method'],
-                    'price' => $row['price'],
-                    'currency' => $row['currency']
-                ]);
             } catch (\Exception $e) {
                 $results['failed']++;
                 $results['errors'][] = [
@@ -184,61 +229,111 @@ class UserSpecificPricingImportService
                     'errors' => ['general' => [$e->getMessage()]],
                     'data' => $row
                 ];
-
-                Log::error("Failed to import user-specific price", [
-                    'row' => $rowNumber,
-                    'data' => $row,
-                    'error' => $e->getMessage()
-                ]);
             }
         }
 
         $results['summary'] = [
             'total_rows' => count($data),
-            'processed_users' => $processedUsers
+            'processed_users' => array_values($processedUsers)
         ];
 
         return $results;
     }
 
     /**
-     * Tạo template Excel để download
+     * Parse nhiều email từ một chuỗi
+     * Hỗ trợ các định dạng: email1,email2,email3 hoặc email1;email2;email3
+     */
+    private static function parseMultipleEmails(string $emailString): array
+    {
+        // Loại bỏ khoảng trắng và chuyển về chữ thường
+        $emailString = trim($emailString);
+
+        // Tách theo dấu phẩy hoặc dấu chấm phẩy
+        $emails = preg_split('/[,;]/', $emailString);
+
+        // Lọc và làm sạch email
+        $cleanEmails = [];
+        foreach ($emails as $email) {
+            $email = trim($email);
+            if (!empty($email)) {
+                $cleanEmails[] = $email;
+            }
+        }
+
+        return $cleanEmails;
+    }
+
+    /**
+     * Tạo template CSV
      */
     public static function generateTemplate(): string
     {
-        $filename = 'user_specific_pricing_template_' . date('Y-m-d_H-i-s') . '.xlsx';
+        $filename = 'user_specific_pricing_template_' . date('Y-m-d_H-i-s') . '.csv';
         $path = storage_path('app/public/' . $filename);
 
-        try {
-            // Tạo spreadsheet mới
-            $spreadsheet = new \PhpOffice\PhpSpreadsheet\Spreadsheet();
-            $worksheet = $spreadsheet->getActiveSheet();
+        $handle = fopen($path, 'w');
 
-            // Header
-            $headers = ['user_email', 'product_id', 'product_name', 'variant_sku', 'tiktok_1st', 'tiktok_next', 'seller_1st', 'seller_next', 'currency', 'attr_name_1', 'attr_value_1', 'attr_name_2', 'attr_value_2', 'attr_name_3', 'attr_value_3'];
-            $worksheet->fromArray([$headers], null, 'A1');
+        // Header
+        fputcsv($handle, [
+            'user_email',
+            'product_id',
+            'product_name',
+            'variant_sku',
+            'tiktok_1st',
+            'tiktok_next',
+            'seller_1st',
+            'seller_next',
+            'currency',
+            'attr_name_1',
+            'attr_value_1',
+            'attr_name_2',
+            'attr_value_2',
+            'attr_name_3',
+            'attr_value_3'
+        ]);
 
-            // Sample data
-            $sampleData = [
-                ['john.doe@example.com', '123', 'Product Name 1', 'PROD-001', '15.99', '12.50', '18.99', '14.50', 'USD', 'color', 'Black', 'size', 'M', 'material', 'Cotton'],
-                ['jane.smith@example.com', '456', 'Product Name 2', 'PROD-002', '12.50', '10.00', '16.50', '13.00', 'USD', 'color', 'White', 'size', 'L', 'style', 'Sport']
-            ];
+        // Sample data
+        fputcsv($handle, [
+            'user1@example.com,user2@example.com', // Multiple emails separated by comma
+            '1',
+            'Sample Product',
+            'SKU001',
+            '10.00',
+            '5.00',
+            '8.00',
+            '4.00',
+            'USD',
+            'Color',
+            'Red',
+            'Size',
+            'Large',
+            '',
+            ''
+        ]);
 
-            $worksheet->fromArray($sampleData, null, 'A2');
+        // Another sample with semicolon separator
+        fputcsv($handle, [
+            'user3@example.com;user4@example.com;user5@example.com', // Multiple emails separated by semicolon
+            '2',
+            'Another Product',
+            'SKU002',
+            '15.00',
+            '7.50',
+            '12.00',
+            '6.00',
+            'USD',
+            'Material',
+            'Cotton',
+            '',
+            '',
+            '',
+            ''
+        ]);
 
-            // Auto-size columns
-            foreach (range('A', 'O') as $column) {
-                $worksheet->getColumnDimension($column)->setAutoSize(true);
-            }
+        fclose($handle);
 
-            // Tạo Excel file
-            $writer = new \PhpOffice\PhpSpreadsheet\Writer\Xlsx($spreadsheet);
-            $writer->save($path);
-
-            return $filename;
-        } catch (\Exception $e) {
-            throw new \Exception('Failed to generate Excel template: ' . $e->getMessage());
-        }
+        return $filename;
     }
 
     /**
@@ -381,9 +476,29 @@ class UserSpecificPricingImportService
 
             // Kiểm tra email
             if (!empty($row['user_email'])) {
-                $user = User::where('email', $row['user_email'])->first();
-                if (!$user) {
-                    $errors[] = "Dòng {$rowNumber}: Email '{$row['user_email']}' không tồn tại";
+                $emails = self::parseMultipleEmails($row['user_email']);
+                $invalidEmails = [];
+                $nonExistentEmails = [];
+
+                foreach ($emails as $email) {
+                    $email = trim($email);
+                    if (!filter_var($email, FILTER_VALIDATE_EMAIL)) {
+                        $invalidEmails[] = $email;
+                    } else {
+                        // Kiểm tra email có tồn tại trong database không
+                        $user = User::where('email', $email)->first();
+                        if (!$user) {
+                            $nonExistentEmails[] = $email;
+                        }
+                    }
+                }
+
+                if (!empty($invalidEmails)) {
+                    $errors[] = "Dòng {$rowNumber}: Email không hợp lệ: " . implode(', ', $invalidEmails);
+                }
+
+                if (!empty($nonExistentEmails)) {
+                    $errors[] = "Dòng {$rowNumber}: Email không tồn tại trong hệ thống: " . implode(', ', $nonExistentEmails);
                 }
             }
 

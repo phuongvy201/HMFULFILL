@@ -8,6 +8,7 @@ use App\Services\UserSpecificPricingService;
 use App\Models\User;
 use App\Models\ProductVariant;
 use App\Models\ShippingPrice;
+use App\Services\UserSpecificPricingImportService as ImportService;
 
 class ImportUserSpecificPricing extends Command
 {
@@ -96,6 +97,8 @@ class ImportUserSpecificPricing extends Command
             fclose($handle);
             return;
         }
+
+        $this->info("Note: Multiple emails can be separated by comma (,) or semicolon (;) in the user_email column");
 
         // Đọc data
         $rowCount = 0;
@@ -206,13 +209,28 @@ class ImportUserSpecificPricing extends Command
         $this->info("DRY RUN - Preview of data to import:");
         $this->info("");
 
-        $headers = ['Row', 'User Email', 'Variant SKU', 'Method', 'Price', 'Currency'];
+        $headers = ['Row', 'User Email(s)', 'Variant SKU', 'Method', 'Price', 'Currency'];
         $rows = [];
 
         foreach (array_slice($data, 0, 10) as $index => $row) {
+            $emails = $row['user_email'] ?? 'N/A';
+            if ($emails !== 'N/A') {
+                // Parse emails để hiển thị số lượng
+                $emailArray = explode(',', str_replace(';', ',', $emails));
+                $emailArray = array_map('trim', $emailArray);
+                $emailArray = array_filter($emailArray);
+
+                if (count($emailArray) > 1) {
+                    $emails = count($emailArray) . " emails: " . implode(', ', array_slice($emailArray, 0, 3));
+                    if (count($emailArray) > 3) {
+                        $emails .= " (+" . (count($emailArray) - 3) . " more)";
+                    }
+                }
+            }
+
             $rows[] = [
                 $index + 1,
-                $row['user_email'] ?? 'N/A',
+                $emails,
                 $row['variant_sku'] ?? 'N/A',
                 $row['method'] ?? 'N/A',
                 $row['price'] ?? 'N/A',

@@ -180,11 +180,7 @@
                             class="w-full max-w-xl mx-auto rounded-lg shadow-md object-contain cursor-pointer hover:opacity-90 transition-opacity"
                             alt="Mockup"
                             onclick="openImageModal('{{ $task->getMockupUrl() }}', 'Mockup - {{ $task->title }}')">
-                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200 rounded-lg flex items-center justify-center pointer-events-none">
-                            <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                <i class="fas fa-search-plus text-white text-xl drop-shadow-lg"></i>
-                            </div>
-                        </div>
+
                     </div>
                     @else
                     <div class="text-center py-8">
@@ -263,11 +259,7 @@
                             class="w-full max-w-xl mx-auto rounded-lg shadow-md object-contain cursor-pointer hover:opacity-90 transition-opacity"
                             alt="Design"
                             onclick="openImageModal('{{ $task->getCurrentDesignUrl() }}', 'Design - {{ $task->title }}')">
-                        <div class="absolute inset-0 bg-black bg-opacity-0 group-hover:bg-opacity-10 transition-all duration-200 rounded-lg flex items-center justify-center pointer-events-none">
-                            <div class="opacity-0 group-hover:opacity-100 transition-opacity duration-200">
-                                <i class="fas fa-search-plus text-white text-xl drop-shadow-lg"></i>
-                            </div>
-                        </div>
+
                     </div>
                     @else
                     <div class="text-center py-8">
