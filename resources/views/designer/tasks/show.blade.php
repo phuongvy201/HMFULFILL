@@ -321,6 +321,52 @@
                             </div>
                             @endif
 
+                            @php
+                            $designUrls = $revision->getDesignUrls();
+                            $sideNames = ['Mặt trước', 'Mặt sau', 'Mặt trái', 'Mặt phải', 'Mặt trên'];
+                            @endphp
+
+                            @if(count($designUrls) > 1)
+                            <!-- Multiple design files -->
+                            <div class="mb-2">
+                                <span class="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded">
+                                    {{ count($designUrls) }} files thiết kế
+                                </span>
+                            </div>
+                            <div class="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-3">
+                                @foreach($designUrls as $index => $designUrl)
+                                @php
+                                $sideName = $sideNames[$index] ?? "Mặt " . ($index + 1);
+                                $isImage = $revision->isDesignImage($designUrl);
+                                @endphp
+                                <div class="border border-gray-200 rounded-lg p-2 hover:shadow-md transition-shadow">
+                                    <div class="mb-1">
+                                        <h6 class="text-xs font-medium text-gray-800">{{ $sideName }}</h6>
+                                    </div>
+
+                                    @if($isImage)
+                                    <img src="{{ $designUrl }}"
+                                        class="w-full h-16 object-cover rounded border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                                        alt="Design {{ $sideName }} v{{ $revision->version }}"
+                                        onclick="openImageModal('{{ $designUrl }}', 'Design {{ $sideName }} v{{ $revision->version }}')">
+                                    @else
+                                    <div class="w-full h-16 bg-gray-100 rounded border border-gray-200 flex items-center justify-center">
+                                        <i class="fas fa-file text-gray-400 text-sm"></i>
+                                    </div>
+                                    @endif
+
+                                    <div class="mt-1 text-center">
+                                        <a href="{{ $designUrl }}"
+                                            target="_blank"
+                                            class="text-blue-600 hover:text-blue-700 text-xs font-medium flex items-center justify-center">
+                                            <i class="fas fa-download mr-1"></i>Tải
+                                        </a>
+                                    </div>
+                                </div>
+                                @endforeach
+                            </div>
+                            @else
+                            <!-- Single design file -->
                             <div class="flex space-x-2">
                                 @if($revision->isDesignImage())
                                 <img src="{{ $revision->getDesignUrl() }}"
@@ -338,6 +384,7 @@
                                     <i class="fas fa-download mr-1"></i>Tải xuống
                                 </a>
                             </div>
+                            @endif
                         </div>
                         @endforeach
                     </div>
