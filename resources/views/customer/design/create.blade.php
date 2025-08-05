@@ -123,10 +123,21 @@
                     class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-3 px-6 rounded-lg transition duration-200">
                     Hủy
                 </a>
-                <button type="submit"
+                <button type="submit" id="submitBtn"
                     class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 px-8 rounded-lg transition duration-200 flex items-center">
                     <i class="fas fa-paper-plane mr-2"></i>Tạo yêu cầu
                 </button>
+            </div>
+
+            <!-- Progress Bar -->
+            <div id="uploadProgress" class="hidden mt-4">
+                <div class="flex items-center justify-between mb-2">
+                    <span class="text-sm font-medium text-gray-700">Đang tạo yêu cầu...</span>
+                    <span id="progressPercent" class="text-sm font-medium text-gray-700">0%</span>
+                </div>
+                <div class="w-full bg-gray-200 rounded-full h-2">
+                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                </div>
             </div>
         </form>
     </div>
@@ -230,6 +241,40 @@
         updateFileUploads();
     });
 
+    // Upload Progress Handler
+    function handleUploadProgress(form, progressId, progressBarId, progressPercentId, submitBtnId) {
+        const progressDiv = document.getElementById(progressId);
+        const progressBar = document.getElementById(progressBarId);
+        const progressPercent = document.getElementById(progressPercentId);
+        const submitBtn = document.getElementById(submitBtnId);
+
+        if (form && progressDiv && progressBar && progressPercent && submitBtn) {
+            form.addEventListener('submit', function(e) {
+                // Show progress bar
+                progressDiv.classList.remove('hidden');
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+                // Simulate progress (since we can't get real upload progress without AJAX)
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += Math.random() * 15;
+                    if (progress > 90) progress = 90; // Don't go to 100% until upload completes
+
+                    progressBar.style.width = progress + '%';
+                    progressPercent.textContent = Math.round(progress) + '%';
+                }, 200);
+
+                // Reset progress when form is actually submitted
+                setTimeout(() => {
+                    clearInterval(interval);
+                    progressBar.style.width = '100%';
+                    progressPercent.textContent = '100%';
+                }, 1000);
+            });
+        }
+    }
+
     // Thêm validation trước khi submit
     document.querySelector('form').addEventListener('submit', function(e) {
         const sidesCount = parseInt(document.getElementById('sides_count').value) || 0;
@@ -285,6 +330,20 @@
         }
 
         console.log('Form validation passed, submitting...');
+    });
+
+    // Initialize progress handler
+    document.addEventListener('DOMContentLoaded', function() {
+        const form = document.querySelector('form');
+        if (form) {
+            handleUploadProgress(
+                form,
+                'uploadProgress',
+                'progressBar',
+                'progressPercent',
+                'submitBtn'
+            );
+        }
     });
 </script>
 @endsection

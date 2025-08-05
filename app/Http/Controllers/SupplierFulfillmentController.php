@@ -33,6 +33,7 @@ use App\Models\Wallet;
 use App\Models\Transaction;
 use App\Models\UserTier;
 use App\Services\OrderRowValidator;
+use App\Services\OrderValidationService;
 use Illuminate\Support\Facades\Artisan;
 
 /**
@@ -50,6 +51,7 @@ class SupplierFulfillmentController extends Controller
     private $secretKey;
     private OrderRowValidator $validator;
     private ExcelOrderImportService $excelOrderImportService;
+    private OrderValidationService $orderValidationService;
 
     // Thêm properties cho API services
     protected $apiServices = [
@@ -64,12 +66,13 @@ class SupplierFulfillmentController extends Controller
         ],
     ];
 
-    public function __construct(OrderRowValidator $validator, ExcelOrderImportService $excelOrderImportService)
+    public function __construct(OrderRowValidator $validator, ExcelOrderImportService $excelOrderImportService, OrderValidationService $orderValidationService)
     {
         $this->appId = config('services.twofifteen.app_id');
         $this->secretKey = config('services.twofifteen.secret_key');
         $this->validator = $validator;
         $this->excelOrderImportService = $excelOrderImportService;
+        $this->orderValidationService = $orderValidationService;
 
         // Khởi tạo API services
         $this->apiServices = [
@@ -926,13 +929,16 @@ class SupplierFulfillmentController extends Controller
                 'products.*.mockups.*.print_space' => 'required_with:products.*.mockups|string',
             ]);
 
-            // Custom validation logic dựa trên OrderRowValidator
-            $validationErrors = $this->validateCustomerManualOrder($validated);
+            // Custom validation logic using OrderValidationService
+            $validationErrors = $this->orderValidationService->validateCustomerManualOrder($validated);
             if (!empty($validationErrors)) {
                 return redirect()->back()
                     ->withInput()
                     ->withErrors($validationErrors);
             }
+
+            // No formatting needed - positions are entered manually and validated
+            $formattedData = $validated;
 
             DB::beginTransaction();
 
@@ -943,19 +949,29 @@ class SupplierFulfillmentController extends Controller
             $totalAmount = 0;
             $itemPrices = [];
 
-            foreach ($validated['products'] as $index => $product) {
-                $variant = ProductVariant::findOrFail($product['variant_id']);
+            try {
+                foreach ($validated['products'] as $index => $product) {
+                    $variant = ProductVariant::findOrFail($product['variant_id']);
 
-                // Tính giá cho item này
-                $priceInfo = $variant->getOrderPriceInfo(
-                    $validated['shipping_method'],
-                    1, // position - có thể cần logic phức tạp hơn
-                    $user->id
-                );
+                    // Tính giá cho item này
+                    $priceInfo = $variant->getOrderPriceInfo(
+                        $validated['shipping_method'],
+                        1, // position - có thể cần logic phức tạp hơn
+                        $user->id
+                    );
 
-                $itemPrice = $priceInfo['print_price'] * $product['quantity'];
-                $itemPrices[$index] = $priceInfo['print_price'];
-                $totalAmount += $itemPrice;
+                    $itemPrice = $priceInfo['print_price'] * $product['quantity'];
+                    $itemPrices[$index] = $priceInfo['print_price'];
+                    $totalAmount += $itemPrice;
+                }
+            } catch (\Exception $e) {
+                Log::error('Error calculating prices: ' . $e->getMessage(), [
+                    'validated' => $validated,
+                    'trace' => $e->getTraceAsString()
+                ]);
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Error calculating prices: ' . $e->getMessage());
             }
 
             // Kiểm tra số dư ví
@@ -1015,38 +1031,48 @@ class SupplierFulfillmentController extends Controller
             ]);
 
             // Tạo order items
-            foreach ($validated['products'] as $index => $product) {
-                $variant = ProductVariant::findOrFail($product['variant_id']);
+            try {
+                foreach ($validated['products'] as $index => $product) {
+                    $variant = ProductVariant::findOrFail($product['variant_id']);
 
-                $orderItem = ExcelOrderItem::create([
-                    'excel_order_id' => $order->id,
-                    'part_number' => $variant->twofifteen_sku ?? $variant->sku,
-                    'title' => $product['title'] ?? 'Customer Manual Order Item',
-                    'quantity' => $product['quantity'],
-                    'print_price' => $itemPrices[$index],
-                    'product_id' => $variant->product_id,
-                    'description' => '',
-                ]);
-
-                // Tạo designs
-                foreach ($product['designs'] as $design) {
-                    ExcelOrderDesign::create([
-                        'excel_order_item_id' => $orderItem->id,
-                        'title' => $design['print_space'],
-                        'url' => $design['file_url']
+                    $orderItem = ExcelOrderItem::create([
+                        'excel_order_id' => $order->id,
+                        'part_number' => $variant->twofifteen_sku ?? $variant->sku,
+                        'title' => $product['title'] ?? 'Customer Manual Order Item',
+                        'quantity' => $product['quantity'],
+                        'print_price' => $itemPrices[$index],
+                        'product_id' => $variant->product_id,
+                        'description' => '',
                     ]);
-                }
 
-                // Tạo mockups (nếu có)
-                if (!empty($product['mockups'])) {
-                    foreach ($product['mockups'] as $mockup) {
-                        ExcelOrderMockup::create([
+                    // Tạo designs
+                    foreach ($product['designs'] as $design) {
+                        ExcelOrderDesign::create([
                             'excel_order_item_id' => $orderItem->id,
-                            'title' => $mockup['print_space'],
-                            'url' => $mockup['file_url']
+                            'title' => $design['print_space'],
+                            'url' => $design['file_url']
                         ]);
                     }
+
+                    // Tạo mockups (nếu có)
+                    if (!empty($product['mockups'])) {
+                        foreach ($product['mockups'] as $mockup) {
+                            ExcelOrderMockup::create([
+                                'excel_order_item_id' => $orderItem->id,
+                                'title' => $mockup['print_space'],
+                                'url' => $mockup['file_url']
+                            ]);
+                        }
+                    }
                 }
+            } catch (\Exception $e) {
+                Log::error('Error creating order items: ' . $e->getMessage(), [
+                    'validated' => $validated,
+                    'trace' => $e->getTraceAsString()
+                ]);
+                return redirect()->back()
+                    ->withInput()
+                    ->with('error', 'Error creating order items: ' . $e->getMessage());
             }
 
             DB::commit();
@@ -1063,307 +1089,7 @@ class SupplierFulfillmentController extends Controller
         }
     }
 
-    /**
-     * Validate customer manual order dựa trên OrderRowValidator logic
-     */
-    private function validateCustomerManualOrder(array $validated): array
-    {
-        $errors = [];
-        $warehouse = $validated['warehouse'];
-        $shippingMethod = $validated['shipping_method'] ?? '';
-        $orderNote = $validated['order_note'] ?? '';
 
-        // Validate shipping method và comment
-        $this->validateShippingMethodAndComment($shippingMethod, $orderNote, $errors);
-
-        // Validate từng product
-        foreach ($validated['products'] as $productIndex => $product) {
-            $variant = ProductVariant::find($product['variant_id']);
-            if (!$variant) {
-                $errors[] = "Product #" . ($productIndex + 1) . ": Variant không tồn tại.";
-                continue;
-            }
-
-            $sku = $variant->sku;
-
-            // Validate SKU và warehouse
-            $this->validateSkuAndWarehouse($sku, $warehouse, $productIndex, $errors);
-
-            // Validate print data (designs và mockups)
-            $this->validatePrintData($product, $sku, $warehouse, $productIndex, $errors);
-        }
-
-        return $errors;
-    }
-
-    /**
-     * Validate shipping method và comment
-     */
-    private function validateShippingMethodAndComment(string $shippingMethod, string $orderNote, array &$errors): void
-    {
-        $shippingMethodLower = strtolower($shippingMethod);
-
-        // Kiểm tra shipping method chỉ được phép là 'tiktok_label' hoặc 'Tiktok_label'
-        if (!empty($shippingMethod) && !in_array($shippingMethod, ['tiktok_label', 'Tiktok_label'])) {
-            $errors[] = "Shipping method must be 'tiktok_label' or 'Tiktok_label', but got '$shippingMethod'.";
-            return;
-        }
-
-        if ($shippingMethodLower === 'tiktok_label') {
-            if (empty($orderNote)) {
-                $errors[] = "Shipping method is '$shippingMethod' but no label link found in comment.";
-            } else {
-                // Kiểm tra xem comment có phải là link hợp lệ hay không
-                if (!filter_var($orderNote, FILTER_VALIDATE_URL)) {
-                    $errors[] = "Comment must contain a valid URL for shipping method '$shippingMethod'.";
-                } else {
-                    // Kiểm tra xem link có chứa các domain không được phép
-                    if (
-                        str_contains(strtolower($orderNote), 'seller-uk.tiktok.com') ||
-                        str_contains(strtolower($orderNote), 'seller-us.tiktok.com') ||
-                        str_contains(strtolower($orderNote), 'seller.tiktok.com')
-                    ) {
-                        $errors[] = "TikTok Seller links are not allowed in comment.";
-                    }
-                }
-            }
-        } else {
-            // Nếu shipping method không phải 'tiktok_label', comment phải để trống
-            if (!empty($orderNote)) {
-                $errors[] = "Comment must be empty unless shipping method is 'tiktok_label' or 'Tiktok_label'.";
-            }
-        }
-    }
-
-    /**
-     * Validate SKU và warehouse
-     */
-    private function validateSkuAndWarehouse(string $sku, string $warehouse, int $productIndex, array &$errors): void
-    {
-        $skuParts = explode('-', $sku);
-        $skuSuffix = end($skuParts);
-
-        if ($skuSuffix === 'UK' && $warehouse !== 'UK') {
-            $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' is for UK warehouse but selected warehouse is $warehouse";
-        }
-        if ($skuSuffix === 'US' && $warehouse !== 'US') {
-            $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' is for US warehouse but selected warehouse is $warehouse";
-        }
-
-        // Kiểm tra xem SKU được nhập có phải là twofifteen_sku hay flashship_sku không
-        $variantWithTwofifteen = ProductVariant::where('twofifteen_sku', $sku)->first();
-        $variantWithFlashship = ProductVariant::where('flashship_sku', $sku)->first();
-
-        if ($variantWithTwofifteen || $variantWithFlashship) {
-            $errors[] = "Product #" . ($productIndex + 1) . ": Product code (SKU) does not exist in the system: '$sku'.";
-        }
-    }
-
-    /**
-     * Validate print data (designs và mockups)
-     */
-    private function validatePrintData(array $product, string $sku, string $warehouse, int $productIndex, array &$errors): void
-    {
-        $productType = $this->getProductTypeFromSku($sku);
-        $requiredPrintCount = $this->getRequiredPrintCount($sku);
-
-        $designs = $product['designs'] ?? [];
-        $mockups = $product['mockups'] ?? [];
-
-        // Validate số lượng designs và mockups
-        if ($requiredPrintCount !== null) {
-            // SKU có 1S, 2S, 3S, 4S, 5S
-            if (count($designs) !== $requiredPrintCount) {
-                $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' requires exactly $requiredPrintCount design(s), but provided " . count($designs) . ".";
-            }
-            if (count($mockups) !== $requiredPrintCount) {
-                $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' requires exactly $requiredPrintCount mockup(s), but provided " . count($mockups) . ".";
-            }
-        } else {
-            // Logic mặc định cho các sản phẩm khác
-            if (count($designs) > 0 && count($mockups) > 0) {
-                if (count($designs) !== count($mockups)) {
-                    $errors[] = "Product #" . ($productIndex + 1) . ": Number of designs (" . count($designs) . ") and mockups (" . count($mockups) . ") must be equal.";
-                }
-            }
-
-            if (empty($designs)) {
-                $errors[] = "Product #" . ($productIndex + 1) . ": At least one design URL is required.";
-            }
-            if (empty($mockups)) {
-                $errors[] = "Product #" . ($productIndex + 1) . ": At least one mockup URL is required.";
-            }
-        }
-
-        // Validate từng design và mockup
-        foreach ($designs as $designIndex => $design) {
-            $this->validateImageUrl($design['file_url'], $productIndex, $designIndex, 'design', $errors);
-            $this->validatePrintSpace($design['print_space'], $warehouse, $productType, $productIndex, $designIndex, $errors);
-        }
-
-        foreach ($mockups as $mockupIndex => $mockup) {
-            $this->validateImageUrl($mockup['file_url'], $productIndex, $mockupIndex, 'mockup', $errors);
-            $this->validatePrintSpace($mockup['print_space'], $warehouse, $productType, $productIndex, $mockupIndex, $errors);
-        }
-    }
-
-    /**
-     * Validate image URL
-     */
-    private function validateImageUrl(string $url, int $productIndex, int $itemIndex, string $type, array &$errors): void
-    {
-        if (str_contains($url, 'drive.google.com')) {
-            if (!str_contains($url, '/file/d/')) {
-                $errors[] = "Product #" . ($productIndex + 1) . " $type #" . ($itemIndex + 1) . ": Google Drive link must be a sharing link.";
-            }
-        } else {
-            if (!$this->isValidImageMime($url)) {
-                $errors[] = "Product #" . ($productIndex + 1) . " $type #" . ($itemIndex + 1) . ": File is not a valid image (JPG, JPEG, PNG).";
-            }
-        }
-    }
-
-    /**
-     * Validate print space
-     */
-    private function validatePrintSpace(string $printSpace, string $warehouse, string $productType, int $productIndex, int $itemIndex, array &$errors): void
-    {
-        $validPositions = $this->getValidPositionsByProductType($productType);
-        $validSizes = $this->getValidSizesByProductType($productType);
-
-        if ($warehouse === 'UK') {
-            if (!in_array($printSpace, $validPositions)) {
-                $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Print space '$printSpace' is invalid. Valid values for $productType in UK warehouse are: " . implode(', ', $validPositions);
-            }
-        } elseif ($warehouse === 'US') {
-            if (str_contains($printSpace, '(Special)')) {
-                if ($productType !== 'Default') {
-                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Special position format is not allowed for $productType.";
-                }
-                $parts = explode('-', str_replace(' (Special)', '', $printSpace));
-                if (count($parts) !== 2 || trim($parts[1]) !== 'Front') {
-                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Print space format is invalid: '$printSpace'. For $productType in US warehouse, Special position must be in format 'size-Front (Special)'.";
-                }
-                $size = trim($parts[0]);
-                if (!in_array($size, $validSizes)) {
-                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Size '$size' is invalid. Valid sizes for $productType are: " . implode(', ', $validSizes);
-                }
-            } else {
-                $parts = explode('-', $printSpace);
-                if (count($parts) !== 2) {
-                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Print space format is invalid: '$printSpace'. For $productType in US warehouse, position must be in format 'size-side'.";
-                }
-
-                $size = trim($parts[0]);
-                $side = trim($parts[1]);
-
-                if (!in_array($size, $validSizes)) {
-                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Size '$size' is invalid. Valid sizes for $productType are: " . implode(', ', $validSizes);
-                }
-
-                if (!in_array($side, $validPositions)) {
-                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Side '$side' is invalid. Valid sides for $productType in US warehouse are: " . implode(', ', $validPositions);
-                }
-            }
-        }
-    }
-
-    /**
-     * Validate image MIME type
-     */
-    private function isValidImageMime(string $url): bool
-    {
-        $validImageMimeTypes = ['image/jpeg', 'image/png', 'image/jpg'];
-        $headers = @get_headers($url, 1);
-        if (!$headers) return false;
-        $mime = isset($headers['Content-Type']) ? (is_array($headers['Content-Type']) ? $headers['Content-Type'][0] : $headers['Content-Type']) : '';
-        return in_array(strtolower($mime), $validImageMimeTypes);
-    }
-
-    /**
-     * Get product type from SKU
-     */
-    private function getProductTypeFromSku(string $sku): string
-    {
-        if (str_starts_with($sku, 'OS01')) {
-            return 'BabyOnesie';
-        } elseif (str_starts_with($sku, 'DIECUT-MAGNET')) {
-            return 'Diecut-Magnet';
-        } elseif (str_starts_with($sku, 'MAGNET')) {
-            return 'Magnet';
-        } elseif (str_starts_with($sku, 'UV-STICKER')) {
-            return 'UV Sticker';
-        } elseif (str_starts_with($sku, 'VINYL-STICKER')) {
-            return 'Vinyl Sticker';
-        } elseif (str_starts_with($sku, 'CASE-IPHONE')) {
-            return 'Phone Case';
-        } elseif (str_starts_with($sku, 'TOTEBAG') || str_starts_with($sku, 'TOTEBAG')) {
-            return 'Tote Bag';
-        }
-        return 'Default';
-    }
-
-    /**
-     * Get required print count from SKU
-     */
-    private function getRequiredPrintCount(string $sku): ?int
-    {
-        $skuParts = explode('-', $sku);
-        $printCountIndicator = $skuParts[count($skuParts) - 2] ?? '';
-        if ($printCountIndicator === '1S') {
-            return 1;
-        } elseif ($printCountIndicator === '2S') {
-            return 2;
-        }
-        if ($printCountIndicator === '3S') {
-            return 3;
-        }
-        if ($printCountIndicator === '4S') {
-            return 4;
-        }
-        if ($printCountIndicator === '5S') {
-            return 5;
-        }
-        return null; // Không có yêu cầu cụ thể
-    }
-
-    /**
-     * Get valid positions by product type
-     */
-    private function getValidPositionsByProductType(string $productType): array
-    {
-        $validPositionsByProductType = [
-            'BabyOnesie' => ['Front', 'Back'],
-            'Magnet' => ['Front'],
-            'Diecut-Magnet' => ['Front'],
-            'UV Sticker' => ['Front'],
-            'Vinyl Sticker' => ['Front'],
-            'Phone Case' => ['Front'],
-            'Tote Bag' => ['Front', 'Back'],
-            'Default' => ['Front', 'Back', 'Right Sleeve', 'Left Sleeve', 'Hem']
-        ];
-
-        return $validPositionsByProductType[$productType] ?? $validPositionsByProductType['Default'];
-    }
-
-    /**
-     * Get valid sizes by product type
-     */
-    private function getValidSizesByProductType(string $productType): array
-    {
-        $validSizesByProductType = [
-            'BabyOnesie' => ['0-6', '6-12', '12-18', '18-24'],
-            'Magnet' => ['5x5', '7.5x4.5', '10x3'],
-            'Diecut-Magnet' => ['2x2', '3x3', '4x4', '5x5', '6x6'],
-            'UV Sticker' => ['2x2', '3x3', '4x4', '5x5', '6x6', '7x7', '8x8', '9x9', '10x10', '12x12', '15x15', '18x18', '20x20'],
-            'Vinyl Sticker' => ['3x4', '6x8', '8x10'],
-            'Phone Case' => ['15', '15 Pro', '15 Pro Max', '15 Plus', '16', '16 Plus', '16 Pro', '16 Pro Max'],
-            'Tote Bag' => ['Tote Bag'],
-            'Default' => ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
-        ];
-
-        return $validSizesByProductType[$productType] ?? $validSizesByProductType['Default'];
-    }
 
     /**
      * Cập nhật status của ImportFile

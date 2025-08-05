@@ -430,7 +430,7 @@
                                 placeholder="Mô tả về thiết kế, kỹ thuật sử dụng..."></textarea>
                         </div>
 
-                        <button type="submit" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center">
+                        <button type="submit" id="submitBtn" class="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center">
                             <i class="fas fa-upload mr-2"></i>
                             @if($task->sides_count > 1)
                             Gửi {{ $task->sides_count }} thiết kế
@@ -438,6 +438,17 @@
                             Gửi thiết kế
                             @endif
                         </button>
+
+                        <!-- Progress Bar -->
+                        <div id="uploadProgress" class="hidden mt-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-gray-700">Đang tải lên...</span>
+                                <span id="progressPercent" class="text-sm font-medium text-gray-700">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="progressBar" class="bg-green-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -524,7 +535,7 @@
                                 placeholder="Mô tả những thay đổi đã thực hiện..."></textarea>
                         </div>
 
-                        <button type="submit" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center">
+                        <button type="submit" id="submitBtnRevision" class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center">
                             <i class="fas fa-upload mr-2"></i>
                             @if($task->sides_count > 1)
                             Gửi {{ $task->sides_count }} thiết kế đã chỉnh sửa
@@ -532,6 +543,17 @@
                             Gửi thiết kế đã chỉnh sửa
                             @endif
                         </button>
+
+                        <!-- Progress Bar for Revision -->
+                        <div id="uploadProgressRevision" class="hidden mt-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-gray-700">Đang tải lên...</span>
+                                <span id="progressPercentRevision" class="text-sm font-medium text-gray-700">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="progressBarRevision" class="bg-yellow-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
                     </form>
                 </div>
             </div>
@@ -703,6 +725,67 @@
     document.addEventListener('keydown', function(e) {
         if (e.key === 'Escape') {
             closeImageModal();
+        }
+    });
+
+    // Upload Progress Handler
+    function handleUploadProgress(form, progressId, progressBarId, progressPercentId, submitBtnId) {
+        const progressDiv = document.getElementById(progressId);
+        const progressBar = document.getElementById(progressBarId);
+        const progressPercent = document.getElementById(progressPercentId);
+        const submitBtn = document.getElementById(submitBtnId);
+
+        if (form && progressDiv && progressBar && progressPercent && submitBtn) {
+            form.addEventListener('submit', function(e) {
+                // Show progress bar
+                progressDiv.classList.remove('hidden');
+                submitBtn.disabled = true;
+                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
+
+                // Simulate progress (since we can't get real upload progress without AJAX)
+                let progress = 0;
+                const interval = setInterval(() => {
+                    progress += Math.random() * 15;
+                    if (progress > 90) progress = 90; // Don't go to 100% until upload completes
+
+                    progressBar.style.width = progress + '%';
+                    progressPercent.textContent = Math.round(progress) + '%';
+                }, 200);
+
+                // Reset progress when form is actually submitted
+                setTimeout(() => {
+                    clearInterval(interval);
+                    progressBar.style.width = '100%';
+                    progressPercent.textContent = '100%';
+                }, 1000);
+            });
+        }
+    }
+
+    // Initialize progress handlers
+    document.addEventListener('DOMContentLoaded', function() {
+        // For initial design submission (when status is 'joined')
+        const initialForm = document.querySelector('#submitBtn')?.closest('form');
+        if (initialForm) {
+            handleUploadProgress(
+                initialForm,
+                'uploadProgress',
+                'progressBar',
+                'progressPercent',
+                'submitBtn'
+            );
+        }
+
+        // For revision submission (when status is 'revision')
+        const revisionForm = document.querySelector('#submitBtnRevision')?.closest('form');
+        if (revisionForm) {
+            handleUploadProgress(
+                revisionForm,
+                'uploadProgressRevision',
+                'progressBarRevision',
+                'progressPercentRevision',
+                'submitBtnRevision'
+            );
         }
     });
 </script>

@@ -250,7 +250,6 @@
                     <select name="shipping_method" id="shipping_method" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                         <option value="">-- Select Method --</option>
                         <option value="tiktok_label" {{ old('shipping_method') == 'tiktok_label' ? 'selected' : '' }}>TikTok Label</option>
-                        <option value="seller_shipping" {{ old('shipping_method') == 'seller_shipping' ? 'selected' : '' }}>Seller Shipping</option>
                     </select>
                 </div>
 
@@ -297,8 +296,6 @@
                         <option value="VN" {{ old('country') == 'VN' ? 'selected' : '' }}>Vietnam</option>
                         <option value="US" {{ old('country') == 'US' ? 'selected' : '' }}>United States</option>
                         <option value="UK" {{ old('country') == 'UK' ? 'selected' : '' }}>United Kingdom</option>
-                        <option value="CA" {{ old('country') == 'CA' ? 'selected' : '' }}>Canada</option>
-                        <option value="AU" {{ old('country') == 'AU' ? 'selected' : '' }}>Australia</option>
                     </select>
                 </div>
 
@@ -537,14 +534,7 @@
                                         <input type="url" name="products[${index}][designs][${designIndex}][file_url]" placeholder="Design file URL" class="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" value="${design.file_url || ''}" required>
                                     </div>
                                     <div class="flex gap-2">
-                                        <select name="products[${index}][designs][${designIndex}][print_space]" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
-                                            <option value="">-- Print Space --</option>
-                                            <option value="Front" ${design.print_space === 'Front' ? 'selected' : ''}>Front</option>
-                                            <option value="Back" ${design.print_space === 'Back' ? 'selected' : ''}>Back</option>
-                                            <option value="Left Sleeve" ${design.print_space === 'Left Sleeve' ? 'selected' : ''}>Left Sleeve</option>
-                                            <option value="Right Sleeve" ${design.print_space === 'Right Sleeve' ? 'selected' : ''}>Right Sleeve</option>
-                                            <option value="Hem" ${design.print_space === 'Hem' ? 'selected' : ''}>Hem</option>
-                                        </select>
+                                        <input type="text" name="products[${index}][designs][${designIndex}][print_space]" placeholder="Enter position (e.g. Front, Back, S-Front, Tote Bag-Front)" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" value="${design.print_space || ''}" required>
                                         <button type="button" class="remove-design bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 transition-colors">
                                             Remove
                                         </button>
@@ -569,14 +559,7 @@
                                         <input type="url" name="products[${index}][mockups][${mockupIndex}][file_url]" placeholder="Mockup file URL" class="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" value="${mockup.file_url || ''}" required>
                                     </div>
                                     <div class="flex gap-2">
-                                        <select name="products[${index}][mockups][${mockupIndex}][print_space]" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
-                                            <option value="">-- Print Space --</option>
-                                            <option value="Front" ${mockup.print_space === 'Front' ? 'selected' : ''}>Front</option>
-                                            <option value="Back" ${mockup.print_space === 'Back' ? 'selected' : ''}>Back</option>
-                                            <option value="Left Sleeve" ${mockup.print_space === 'Left Sleeve' ? 'selected' : ''}>Left Sleeve</option>
-                                            <option value="Right Sleeve" ${mockup.print_space === 'Right Sleeve' ? 'selected' : ''}>Right Sleeve</option>
-                                            <option value="Hem" ${mockup.print_space === 'Hem' ? 'selected' : ''}>Hem</option>
-                                        </select>
+                                        <input type="text" name="products[${index}][mockups][${mockupIndex}][print_space]" placeholder="Enter position (e.g. Front, Back, S-Front, Tote Bag-Front)" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" value="${mockup.print_space || ''}" required>
                                         <button type="button" class="remove-mockup bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 transition-colors">
                                             Remove
                                         </button>
@@ -1006,13 +989,11 @@
                     </div>
                     ${twofifteenSku ? `
                     <div class="flex justify-between items-center">
-                        <span class="text-xs text-gray-500 dark:text-gray-400">TwoFifteen:</span>
                         <span class="text-xs text-gray-900 dark:text-gray-100 font-mono">${twofifteenSku}</span>
                     </div>
                     ` : ''}
                     ${flashshipSku ? `
                     <div class="flex justify-between items-center">
-                        <span class="text-xs text-gray-500 dark:text-gray-400">Flashship:</span>
                         <span class="text-xs text-gray-900 dark:text-gray-100 font-mono">${flashshipSku}</span>
                     </div>
                     ` : ''}
@@ -1118,19 +1099,12 @@
             <div>
                 <input type="url" name="products[${productIdx}][designs][${designIndex}][file_url]" placeholder="Design file URL" class="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
             </div>
-            <div class="flex gap-2">
-                <select name="products[${productIdx}][designs][${designIndex}][print_space]" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
-                    <option value="">-- Print Space --</option>
-                    <option value="Front">Front</option>
-                    <option value="Back">Back</option>
-                    <option value="Left Sleeve">Left Sleeve</option>
-                    <option value="Right Sleeve">Right Sleeve</option>
-                    <option value="Hem">Hem</option>
-                </select>
-                <button type="button" class="remove-design bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 transition-colors">
-                    Remove
-                </button>
-            </div>
+                                                <div class="flex gap-2">
+                                        <input type="text" name="products[${productIdx}][designs][${designIndex}][print_space]" placeholder="Enter position (e.g. Front, Back, S-Front, Tote Bag-Front)" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                                        <button type="button" class="remove-design bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 transition-colors">
+                                            Remove
+                                        </button>
+                                    </div>
         </div>
     `;
 
@@ -1147,19 +1121,12 @@
             <div>
                 <input type="url" name="products[${productIdx}][mockups][${mockupIndex}][file_url]" placeholder="Mockup file URL" class="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
             </div>
-            <div class="flex gap-2">
-                <select name="products[${productIdx}][mockups][${mockupIndex}][print_space]" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
-                    <option value="">-- Print Space --</option>
-                    <option value="Front">Front</option>
-                    <option value="Back">Back</option>
-                    <option value="Left Sleeve">Left Sleeve</option>
-                    <option value="Right Sleeve">Right Sleeve</option>
-                    <option value="Hem">Hem</option>
-                </select>
-                <button type="button" class="remove-mockup bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 transition-colors">
-                    Remove
-                </button>
-            </div>
+                                                <div class="flex gap-2">
+                                        <input type="text" name="products[${productIdx}][mockups][${mockupIndex}][print_space]" placeholder="Enter position (e.g. Front, Back, S-Front, Tote Bag-Front)" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                                        <button type="button" class="remove-mockup bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 transition-colors">
+                                            Remove
+                                        </button>
+                                    </div>
         </div>
     `;
 

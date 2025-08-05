@@ -4,6 +4,7 @@ namespace App\Providers;
 
 use App\Services\OrderRowValidator;
 use App\Services\ExcelOrderImportService;
+use App\Services\OrderValidationService;
 use Illuminate\Support\ServiceProvider;
 use Illuminate\Support\Facades\URL;
 
@@ -20,6 +21,10 @@ class AppServiceProvider extends ServiceProvider
 
         $this->app->singleton(ExcelOrderImportService::class, function ($app) {
             return new ExcelOrderImportService($app->make(OrderRowValidator::class));
+        });
+
+        $this->app->singleton(OrderValidationService::class, function ($app) {
+            return new OrderValidationService();
         });
     }
 
