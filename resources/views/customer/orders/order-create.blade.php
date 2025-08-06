@@ -275,13 +275,13 @@
 
             <div class="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <div>
-                    <label for="customer_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recipient Name *</label>
-                    <input type="text" name="customer_name" id="customer_name" value="{{ old('customer_name') }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                    <label for="customer_name" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recipient Name </label>
+                    <input type="text" name="customer_name" id="customer_name" value="{{ old('customer_name') }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                 </div>
 
                 <div>
-                    <label for="customer_email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recipient Email *</label>
-                    <input type="email" name="customer_email" id="customer_email" value="{{ old('customer_email') }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                    <label for="customer_email" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Recipient Email </label>
+                    <input type="email" name="customer_email" id="customer_email" value="{{ old('customer_email') }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                 </div>
 
                 <div>
@@ -290,8 +290,8 @@
                 </div>
 
                 <div>
-                    <label for="country" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Country *</label>
-                    <select name="country" id="country" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                    <label for="country" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Country </label>
+                    <select name="country" id="country" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" >
                         <option value="">-- Select Country --</option>
                         <option value="VN" {{ old('country') == 'VN' ? 'selected' : '' }}>Vietnam</option>
                         <option value="US" {{ old('country') == 'US' ? 'selected' : '' }}>United States</option>
@@ -300,8 +300,8 @@
                 </div>
 
                 <div>
-                    <label for="address" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address *</label>
-                    <input type="text" name="address" id="address" value="{{ old('address') }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                    <label for="address" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Address </label>
+                    <input type="text" name="address" id="address" value="{{ old('address') }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" >
                 </div>
 
                 <div>
@@ -310,8 +310,8 @@
                 </div>
 
                 <div>
-                    <label for="city" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">City *</label>
-                    <input type="text" name="city" id="city" value="{{ old('city') }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                    <label for="city" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">City </label>
+                    <input type="text" name="city" id="city" value="{{ old('city') }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                 </div>
 
                 <div>
@@ -320,8 +320,8 @@
                 </div>
 
                 <div>
-                    <label for="postcode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Postal Code *</label>
-                    <input type="text" name="postcode" id="postcode" value="{{ old('postcode') }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                    <label for="postcode" class="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Postal Code </label>
+                    <input type="text" name="postcode" id="postcode" value="{{ old('postcode') }}" class="w-full p-2 border border-gray-300 rounded-md focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white">
                 </div>
             </div>
         </div>
@@ -443,7 +443,7 @@
             designs.forEach(design => {
                 productData.designs.push({
                     file_url: design.querySelector('input[type="url"]')?.value || '',
-                    print_space: design.querySelector('select')?.value || ''
+                    print_space: design.querySelector('input[name*="[print_space]"]')?.value || ''
                 });
             });
 
@@ -452,7 +452,7 @@
             mockups.forEach(mockup => {
                 productData.mockups.push({
                     file_url: mockup.querySelector('input[type="url"]')?.value || '',
-                    print_space: mockup.querySelector('select')?.value || ''
+                    print_space: mockup.querySelector('input[name*="[print_space]"]')?.value || ''
                 });
             });
 
@@ -1099,12 +1099,12 @@
             <div>
                 <input type="url" name="products[${productIdx}][designs][${designIndex}][file_url]" placeholder="Design file URL" class="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
             </div>
-                                                <div class="flex gap-2">
-                                        <input type="text" name="products[${productIdx}][designs][${designIndex}][print_space]" placeholder="Enter position (e.g. Front, Back, S-Front, Tote Bag-Front)" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
-                                        <button type="button" class="remove-design bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 transition-colors">
-                                            Remove
-                                        </button>
-                                    </div>
+            <div class="flex gap-2">
+                <input type="text" name="products[${productIdx}][designs][${designIndex}][print_space]" placeholder="Enter position (e.g. Front, Back, S-Front, Tote Bag-Front)" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                <button type="button" class="remove-design bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 transition-colors">
+                    Remove
+                </button>
+            </div>
         </div>
     `;
 
@@ -1121,17 +1121,19 @@
             <div>
                 <input type="url" name="products[${productIdx}][mockups][${mockupIndex}][file_url]" placeholder="Mockup file URL" class="w-full p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
             </div>
-                                                <div class="flex gap-2">
-                                        <input type="text" name="products[${productIdx}][mockups][${mockupIndex}][print_space]" placeholder="Enter position (e.g. Front, Back, S-Front, Tote Bag-Front)" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
-                                        <button type="button" class="remove-mockup bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 transition-colors">
-                                            Remove
-                                        </button>
-                                    </div>
+            <div class="flex gap-2">
+                <input type="text" name="products[${productIdx}][mockups][${mockupIndex}][print_space]" placeholder="Enter position (e.g. Front, Back, S-Front, Tote Bag-Front)" class="flex-1 p-2 border border-gray-300 rounded-md text-sm focus:ring-2 focus:ring-blue-500 focus:border-blue-500 dark:bg-gray-700 dark:border-gray-600 dark:text-white" required>
+                <button type="button" class="remove-mockup bg-red-500 text-white px-2 py-1 rounded text-sm hover:bg-red-600 transition-colors">
+                    Remove
+                </button>
+            </div>
         </div>
     `;
 
         container.insertAdjacentHTML('beforeend', mockupHtml);
     }
+
+
 
     // Function to handle shipping method change
     function handleShippingMethodChange() {

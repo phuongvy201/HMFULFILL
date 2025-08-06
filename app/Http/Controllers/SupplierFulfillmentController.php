@@ -905,15 +905,15 @@ class SupplierFulfillmentController extends Controller
                 'order_number' => 'required|string|max:255|unique:excel_orders,external_id',
                 'store_name' => 'nullable|string|max:255',
                 'channel' => 'nullable|string|max:255',
-                'customer_name' => 'required|string|max:255',
-                'customer_email' => 'required|email|max:255',
+                'customer_name' => 'nullable|string|max:255',
+                'customer_email' => 'nullable|email|max:255',
                 'customer_phone' => 'nullable|string|max:20',
-                'address' => 'required|string|max:500',
+                'address' => 'nullable|string|max:500',
                 'address_2' => 'nullable|string|max:500',
-                'city' => 'required|string|max:255',
+                'city' => 'nullable|string|max:255',
                 'state' => 'nullable|string|max:255',
-                'postcode' => 'required|string|max:20',
-                'country' => 'required|string|max:2',
+                'postcode' => 'nullable|string|max:20',
+                'country' => 'nullable|string|max:2',
                 'shipping_method' => 'nullable|string|max:100',
                 'order_note' => 'nullable|string|max:1000',
                 'warehouse' => 'required|in:US,UK',
@@ -1002,7 +1002,7 @@ class SupplierFulfillmentController extends Controller
             }
 
             // Tạo đơn hàng
-            $customerNameParts = explode(' ', trim($validated['customer_name']), 2);
+            $customerNameParts = explode(' ', trim($formattedData['customer_name']), 2);
             $firstName = $customerNameParts[0] ?? '';
             $lastName = $customerNameParts[1] ?? '';
 
@@ -1010,17 +1010,17 @@ class SupplierFulfillmentController extends Controller
                 'external_id' => $validated['order_number'],
                 'brand' => $validated['store_name'] ?? '',
                 'channel' => $validated['channel'] ?? 'customer-manual',
-                'buyer_email' => $validated['customer_email'],
-                'first_name' => $firstName,
-                'last_name' => $lastName,
+                'buyer_email' => $validated['customer_email'] ?? '1',
+                'first_name' => $firstName ?? '1',  
+                'last_name' => $lastName ?? '1',
                 'company' => $validated['store_name'] ?? '',
-                'address1' => $validated['address'],
-                'address2' => $validated['address_2'],
-                'city' => $validated['city'],
-                'county' => $validated['state'],
-                'post_code' => $validated['postcode'],
-                'country' => $validated['country'],
-                'phone1' => $validated['customer_phone'],
+                'address1' => $validated['address'] ?? '1',
+                'address2' => $validated['address_2'] ?? '',
+                'city' => $validated['city'] ?? '1',
+                'county' => $validated['state'] ?? '1',
+                'post_code' => $validated['postcode'] ?? '1',
+                'country' => $validated['country'] ?? '1',
+                'phone1' => $validated['customer_phone'] ?? '1',
                 'phone2' => null,
                 'comment' => $validated['order_note'] ?? '',
                 'shipping_method' => $validated['shipping_method'] ?? null,
@@ -1067,7 +1067,7 @@ class SupplierFulfillmentController extends Controller
                 }
             } catch (\Exception $e) {
                 Log::error('Error creating order items: ' . $e->getMessage(), [
-                    'validated' => $validated,
+                    'formattedData' => $formattedData,
                     'trace' => $e->getTraceAsString()
                 ]);
                 return redirect()->back()
@@ -1089,7 +1089,311 @@ class SupplierFulfillmentController extends Controller
         }
     }
 
+    /**
+     * Validate customer manual order dựa trên OrderRowValidator logic
+     */
+    private function validateCustomerManualOrder(array $validated): array
+    {
+        $errors = [];
+        $warehouse = $validated['warehouse'];
+        $shippingMethod = $validated['shipping_method'] ?? '';
+        $orderNote = $validated['order_note'] ?? '';
 
+        // Validate shipping method và comment
+        $this->validateShippingMethodAndComment($shippingMethod, $orderNote, $errors);
+
+        // Validate từng product
+        foreach ($validated['products'] as $productIndex => $product) {
+            $variant = ProductVariant::find($product['variant_id']);
+            if (!$variant) {
+                $errors[] = "Product #" . ($productIndex + 1) . ": Variant không tồn tại.";
+                continue;
+            }
+
+            $sku = $variant->sku;
+
+            // Validate SKU và warehouse
+            $this->validateSkuAndWarehouse($sku, $warehouse, $productIndex, $errors);
+
+            // Validate print data (designs và mockups)
+            $this->validatePrintData($product, $sku, $warehouse, $productIndex, $errors);
+        }
+
+        return $errors;
+    }
+
+    /**
+     * Validate shipping method và comment
+     */
+    private function validateShippingMethodAndComment(string $shippingMethod, string $orderNote, array &$errors): void
+    {
+        $shippingMethodLower = strtolower($shippingMethod);
+
+        // Kiểm tra shipping method chỉ được phép là 'tiktok_label' hoặc 'Tiktok_label'
+        if (!empty($shippingMethod) && !in_array($shippingMethod, ['tiktok_label', 'Tiktok_label'])) {
+            $errors[] = "Shipping method must be 'tiktok_label' or 'Tiktok_label', but got '$shippingMethod'.";
+            return;
+        }
+
+        if ($shippingMethodLower === 'tiktok_label') {
+            if (empty($orderNote)) {
+                $errors[] = "Shipping method is '$shippingMethod' but no label link found in comment.";
+            } else {
+                // Kiểm tra xem comment có phải là link hợp lệ hay không
+                if (!filter_var($orderNote, FILTER_VALIDATE_URL)) {
+                    $errors[] = "Comment must contain a valid URL for shipping method '$shippingMethod'.";
+                } else {
+                    // Kiểm tra xem link có chứa các domain không được phép
+                    if (
+                        str_contains(strtolower($orderNote), 'seller-uk.tiktok.com') ||
+                        str_contains(strtolower($orderNote), 'seller-us.tiktok.com') ||
+                        str_contains(strtolower($orderNote), 'seller.tiktok.com')
+                    ) {
+                        $errors[] = "TikTok Seller links are not allowed in comment.";
+                    }
+                }
+            }
+        } else {
+            // Nếu shipping method không phải 'tiktok_label', comment phải để trống
+            if (!empty($orderNote)) {
+                $errors[] = "Comment must be empty unless shipping method is 'tiktok_label' or 'Tiktok_label'.";
+            }
+        }
+    }
+
+    /**
+     * Validate SKU và warehouse
+     */
+    private function validateSkuAndWarehouse(string $sku, string $warehouse, int $productIndex, array &$errors): void
+    {
+        $skuParts = explode('-', $sku);
+        $skuSuffix = end($skuParts);
+
+        if ($skuSuffix === 'UK' && $warehouse !== 'UK') {
+            $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' is for UK warehouse but selected warehouse is $warehouse";
+        }
+        if ($skuSuffix === 'US' && $warehouse !== 'US') {
+            $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' is for US warehouse but selected warehouse is $warehouse";
+        }
+
+        // Kiểm tra xem SKU được nhập có phải là twofifteen_sku hay flashship_sku không
+        $variantWithTwofifteen = ProductVariant::where('twofifteen_sku', $sku)->first();
+        $variantWithFlashship = ProductVariant::where('flashship_sku', $sku)->first();
+
+        if ($variantWithTwofifteen || $variantWithFlashship) {
+            $errors[] = "Product #" . ($productIndex + 1) . ": Product code (SKU) does not exist in the system: '$sku'.";
+        }
+    }
+
+    /**
+     * Validate print data (designs và mockups)
+     */
+    private function validatePrintData(array $product, string $sku, string $warehouse, int $productIndex, array &$errors): void
+    {
+        $productType = $this->getProductTypeFromSku($sku);
+        $requiredPrintCount = $this->getRequiredPrintCount($sku);
+
+        $designs = $product['designs'] ?? [];
+        $mockups = $product['mockups'] ?? [];
+
+        // Validate số lượng designs và mockups
+        if ($requiredPrintCount !== null) {
+            // SKU có 1S, 2S, 3S, 4S, 5S
+            if (count($designs) !== $requiredPrintCount) {
+                $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' requires exactly $requiredPrintCount design(s), but provided " . count($designs) . ".";
+            }
+            if (count($mockups) !== $requiredPrintCount) {
+                $errors[] = "Product #" . ($productIndex + 1) . ": SKU '$sku' requires exactly $requiredPrintCount mockup(s), but provided " . count($mockups) . ".";
+            }
+        } else {
+            // Logic mặc định cho các sản phẩm khác
+            if (count($designs) > 0 && count($mockups) > 0) {
+                if (count($designs) !== count($mockups)) {
+                    $errors[] = "Product #" . ($productIndex + 1) . ": Number of designs (" . count($designs) . ") and mockups (" . count($mockups) . ") must be equal.";
+                }
+            }
+
+            if (empty($designs)) {
+                $errors[] = "Product #" . ($productIndex + 1) . ": At least one design URL is required.";
+            }
+            if (empty($mockups)) {
+                $errors[] = "Product #" . ($productIndex + 1) . ": At least one mockup URL is required.";
+            }
+        }
+
+        // Validate từng design và mockup
+        foreach ($designs as $designIndex => $design) {
+            $this->validateImageUrl($design['file_url'], $productIndex, $designIndex, 'design', $errors);
+            $this->validatePrintSpace($design['print_space'], $warehouse, $productType, $productIndex, $designIndex, $errors);
+        }
+
+        foreach ($mockups as $mockupIndex => $mockup) {
+            $this->validateImageUrl($mockup['file_url'], $productIndex, $mockupIndex, 'mockup', $errors);
+            $this->validatePrintSpace($mockup['print_space'], $warehouse, $productType, $productIndex, $mockupIndex, $errors);
+        }
+    }
+
+    /**
+     * Validate image URL
+     */
+    private function validateImageUrl(string $url, int $productIndex, int $itemIndex, string $type, array &$errors): void
+    {
+        if (str_contains($url, 'drive.google.com')) {
+            if (!str_contains($url, '/file/d/')) {
+                $errors[] = "Product #" . ($productIndex + 1) . " $type #" . ($itemIndex + 1) . ": Google Drive link must be a sharing link.";
+            }
+        } else {
+            if (!$this->isValidImageMime($url)) {
+                $errors[] = "Product #" . ($productIndex + 1) . " $type #" . ($itemIndex + 1) . ": File is not a valid image (JPG, JPEG, PNG).";
+            }
+        }
+    }
+
+    /**
+     * Validate print space
+     */
+    private function validatePrintSpace(string $printSpace, string $warehouse, string $productType, int $productIndex, int $itemIndex, array &$errors): void
+    {
+        $validSizes = $this->getValidSizesByProductType($productType);
+        $validPositions = $this->getValidPositionsByProductType($productType);
+
+        if ($warehouse === 'UK') {
+            if (!in_array($printSpace, $validPositions)) {
+                $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Invalid print position '$printSpace'. Valid values for $productType in UK warehouse are: " . implode(', ', $validPositions);
+            }
+        } elseif ($warehouse === 'US') {
+            if (str_contains($printSpace, '(Special)')) {
+                if ($productType !== 'Default') {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Special position format is not allowed for $productType.";
+                }
+                $parts = explode('-', str_replace(' (Special)', '', $printSpace));
+                if (count($parts) !== 2 || trim($parts[1]) !== 'Front') {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Invalid print position format '$printSpace'. For $productType in US warehouse, Special position must be in format 'size-Front (Special)'.";
+                }
+                $size = trim($parts[0]);
+                if (!in_array($size, $validSizes)) {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Invalid size '$size' in position. Valid sizes for $productType are: " . implode(', ', $validSizes);
+                }
+            } else {
+                $parts = explode('-', $printSpace);
+                if (count($parts) !== 2) {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Invalid print position format '$printSpace'. For $productType in US warehouse, position must be in format 'size-side'.";
+                }
+
+                $size = trim($parts[0]);
+                $side = trim($parts[1]);
+
+                if (!in_array($size, $validSizes)) {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Invalid size '$size' in position. Valid sizes for $productType are: " . implode(', ', $validSizes);
+                }
+
+                if (!in_array($side, $validPositions)) {
+                    $errors[] = "Product #" . ($productIndex + 1) . " item #" . ($itemIndex + 1) . ": Invalid side '$side' in position. Valid sides for $productType in US warehouse are: " . implode(', ', $validPositions);
+                }
+            }
+        }
+    }
+
+    /**
+     * Validate image MIME type
+     */
+    private function isValidImageMime(string $url): bool
+    {
+        $validImageMimeTypes = ['image/jpeg', 'image/png', 'image/jpg'];
+        $headers = @get_headers($url, 1);
+        if (!$headers) return false;
+        $mime = isset($headers['Content-Type']) ? (is_array($headers['Content-Type']) ? $headers['Content-Type'][0] : $headers['Content-Type']) : '';
+        return in_array(strtolower($mime), $validImageMimeTypes);
+    }
+
+    /**
+     * Get product type from SKU
+     */
+    private function getProductTypeFromSku(string $sku): string
+    {
+        if (str_starts_with($sku, 'OS01')) {
+            return 'BabyOnesie';
+        } elseif (str_starts_with($sku, 'DIECUT-MAGNET')) {
+            return 'Diecut-Magnet';
+        } elseif (str_starts_with($sku, 'MAGNET')) {
+            return 'Magnet';
+        } elseif (str_starts_with($sku, 'UV-STICKER')) {
+            return 'UV Sticker';
+        } elseif (str_starts_with($sku, 'VINYL-STICKER')) {
+            return 'Vinyl Sticker';
+        } elseif (str_starts_with($sku, 'CASE-IPHONE')) {
+            return 'Phone Case';
+        } elseif (str_starts_with($sku, 'TOTEBAG') || str_starts_with($sku, 'MUG')) {
+            return 'Tote Bag';
+        } elseif (str_starts_with($sku, 'MUG')) {
+            return 'Mug';
+        }
+        return 'Default';
+    }
+
+    /**
+     * Get required print count from SKU
+     */
+    private function getRequiredPrintCount(string $sku): ?int
+    {
+        $skuParts = explode('-', $sku);
+        $printCountIndicator = $skuParts[count($skuParts) - 2] ?? '';
+        if ($printCountIndicator === '1S') {
+            return 1;
+        } elseif ($printCountIndicator === '2S') {
+            return 2;
+        }
+        if ($printCountIndicator === '3S') {
+            return 3;
+        }
+        if ($printCountIndicator === '4S') {
+            return 4;
+        }
+        if ($printCountIndicator === '5S') {
+            return 5;
+        }
+        return null; // Không có yêu cầu cụ thể
+    }
+
+    /**
+     * Get valid positions by product type
+     */
+    private function getValidPositionsByProductType(string $productType): array
+    {
+        $validPositionsByProductType = [
+            'BabyOnesie' => ['Front', 'Back'],
+            'Magnet' => ['Front'],
+            'Diecut-Magnet' => ['Front'],
+            'UV Sticker' => ['Front'],
+            'Vinyl Sticker' => ['Front'],
+            'Phone Case' => ['Front'],
+            'Tote Bag' => ['Front', 'Back'],
+            'Mug' => ['Front'],
+            'Default' => ['Front', 'Back', 'Right Sleeve', 'Left Sleeve']
+        ];
+
+        return $validPositionsByProductType[$productType] ?? $validPositionsByProductType['Default'];
+    }
+
+    /**
+     * Get valid sizes by product type
+     */
+    private function getValidSizesByProductType(string $productType): array
+    {
+        $validSizesByProductType = [
+            'BabyOnesie' => ['0-6', '6-12', '12-18', '18-24'],
+            'Magnet' => ['5x5', '7.5x4.5', '10x3'],
+            'Diecut-Magnet' => ['2x2', '3x3', '4x4', '5x5', '6x6'],
+            'UV Sticker' => ['2x2', '3x3', '4x4', '5x5', '6x6', '7x7', '8x8', '9x9', '10x10', '12x12', '15x15', '18x18', '20x20'],
+            'Vinyl Sticker' => ['3x4', '6x8', '8x10'],
+            'Phone Case' => ['15', '15 Pro', '15 Pro Max', '15 Plus', '16', '16 Plus', '16 Pro', '16 Pro Max'],
+            'Tote Bag' => ['Tote Bag'],
+            'Mug' => ['Mug'],
+            'Default' => ['XS', 'S', 'M', 'L', 'XL', '2XL', '3XL', '4XL', '5XL']
+        ];
+
+        return $validSizesByProductType[$productType] ?? $validSizesByProductType['Default'];
+    }
 
     /**
      * Cập nhật status của ImportFile

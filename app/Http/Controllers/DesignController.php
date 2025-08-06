@@ -178,20 +178,13 @@ class DesignController extends Controller
             return redirect()->back()->withErrors(['error' => 'Bạn không có quyền truy cập.']);
         }
 
-        // Lấy các task đang pending (chưa có designer)
-        $pendingTasks = DesignTask::with('customer')
-            ->where('status', DesignTask::STATUS_PENDING)
+        // Lấy tất cả tasks (pending và đã được nhận bởi bất kỳ designer nào)
+        $allTasks = DesignTask::with(['customer', 'designer'])
+            ->whereIn('status', [DesignTask::STATUS_PENDING, DesignTask::STATUS_JOINED, DesignTask::STATUS_COMPLETED, DesignTask::STATUS_APPROVED, DesignTask::STATUS_REVISION])
             ->orderBy('created_at', 'desc')
             ->get();
 
-        // Lấy các task mà designer này đã nhận
-        $myTasks = DesignTask::with('customer')
-            ->where('designer_id', $user->id)
-            ->whereIn('status', [DesignTask::STATUS_JOINED, DesignTask::STATUS_COMPLETED, DesignTask::STATUS_APPROVED, DesignTask::STATUS_REVISION])
-            ->orderBy('created_at', 'desc')
-            ->get();
-
-        return view('designer.tasks.index', compact('pendingTasks', 'myTasks'));
+        return view('designer.tasks.index', compact('allTasks'));
     }
 
     /**
@@ -226,7 +219,14 @@ class DesignController extends Controller
 
             DB::commit();
 
-            return response()->json(['success' => true, 'message' => 'Bạn đã nhận task thành công!']);
+            return response()->json([
+                'success' => true,
+                'message' => 'Bạn đã nhận task thành công!',
+                'designer' => [
+                    'first_name' => $user->first_name,
+                    'last_name' => $user->last_name
+                ]
+            ]);
         } catch (\Exception $e) {
             DB::rollBack();
             Log::error('Lỗi khi join task: ' . $e->getMessage());
@@ -565,5 +565,118 @@ class DesignController extends Controller
             'recentTasks',
             'completedTasksList'
         ));
+    }
+
+    /**
+     * Thêm comment cho design task
+     */
+    public function addComment(Request $request, $taskId)
+    {
+        $request->validate([
+            'content' => 'required|string|max:1000',
+        ]);
+
+        $task = DesignTask::findOrFail($taskId);
+        $user = Auth::user();
+
+        // Kiểm tra quyền comment
+        if ($user->role === 'design') {
+            // Designer chỉ có thể comment nếu đã nhận task
+            if ($task->designer_id !== $user->id) {
+                return response()->json(['error' => 'Bạn chưa nhận task này'], 403);
+            }
+        } else {
+            // Customer chỉ có thể comment task của mình
+            if ($task->customer_id !== $user->id) {
+                return response()->json(['error' => 'Bạn không có quyền comment task này'], 403);
+            }
+        }
+
+        $comment = $task->comments()->create([
+            'user_id' => $user->id,
+            'content' => $request->content,
+            'type' => $user->role === 'design' ? 'designer' : 'customer',
+        ]);
+
+        return response()->json([
+            'success' => true,
+            'comment' => [
+                'id' => $comment->id,
+                'content' => $comment->content,
+                'user_name' => $comment->getUserDisplayName(),
+                'type' => $comment->type,
+                'created_at' => $comment->getTimeAgo(),
+                'is_own' => true
+            ]
+        ]);
+    }
+
+    /**
+     * Lấy danh sách comments của design task
+     */
+    public function getComments($taskId)
+    {
+        $task = DesignTask::findOrFail($taskId);
+        $user = Auth::user();
+
+        // Kiểm tra quyền xem comments
+        if ($user->role === 'design') {
+            // Designer chỉ có thể xem nếu đã nhận task
+            if ($task->designer_id !== $user->id) {
+                return response()->json(['error' => 'Bạn chưa nhận task này'], 403);
+            }
+        } else {
+            // Customer chỉ có thể xem task của mình
+            if ($task->customer_id !== $user->id) {
+                return response()->json(['error' => 'Bạn không có quyền xem task này'], 403);
+            }
+        }
+
+        $comments = $task->comments()
+            ->with('user')
+            ->orderBy('created_at', 'asc')
+            ->get()
+            ->map(function ($comment) use ($user) {
+                return [
+                    'id' => $comment->id,
+                    'content' => $comment->content,
+                    'user_name' => $comment->getUserDisplayName(),
+                    'type' => $comment->type,
+                    'created_at' => $comment->getFormattedTime(),
+                    'is_own' => $comment->user_id === $user->id
+                ];
+            });
+
+        // Đánh dấu comments là đã đọc
+        $task->markCommentsAsRead($user->id);
+
+        return response()->json([
+            'success' => true,
+            'comments' => $comments
+        ]);
+    }
+
+    /**
+     * Đánh dấu comments là đã đọc
+     */
+    public function markCommentsAsRead($taskId)
+    {
+        $task = DesignTask::findOrFail($taskId);
+        $user = Auth::user();
+
+        // Kiểm tra quyền
+        if ($user->role === 'design') {
+            if ($task->designer_id !== $user->id) {
+                return response()->json(['error' => 'Bạn chưa nhận task này'], 403);
+            }
+        } else {
+            if ($task->customer_id !== $user->id) {
+                return response()->json(['error' => 'Bạn không có quyền xem task này'], 403);
+            }
+        }
+
+        $task->markCommentsAsRead($user->id);
+
+        return response()->json(['success' => true]);
     }
 }

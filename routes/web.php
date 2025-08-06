@@ -222,6 +222,16 @@ Route::prefix('customer')->middleware('auth')->group(function () {
         Route::get('/tasks/{taskId}', [App\Http\Controllers\DesignController::class, 'show'])->name('customer.design.show');
         Route::post('/tasks/{taskId}/review', [App\Http\Controllers\DesignController::class, 'review'])->name('customer.design.review');
         Route::post('/tasks/{taskId}/cancel', [App\Http\Controllers\DesignController::class, 'cancel'])->name('customer.design.cancel');
+
+        // Comment routes
+        Route::post('/tasks/{taskId}/comments', [App\Http\Controllers\DesignController::class, 'addComment'])->name('customer.design.comments.add');
+        Route::get('/tasks/{taskId}/comments', [App\Http\Controllers\DesignController::class, 'getComments'])->name('customer.design.comments.get');
+        Route::post('/tasks/{taskId}/comments/read', [App\Http\Controllers\DesignController::class, 'markCommentsAsRead'])->name('customer.design.comments.read');
+
+        // Chunk upload routes
+        Route::post('/upload-chunk', [App\Http\Controllers\ChunkUploadController::class, 'uploadChunk'])->name('customer.design.upload-chunk');
+        Route::get('/upload-status/{uploadId}', [App\Http\Controllers\ChunkUploadController::class, 'checkUploadStatus'])->name('customer.design.upload-status');
+        Route::post('/upload-cancel', [App\Http\Controllers\ChunkUploadController::class, 'cancelUpload'])->name('customer.design.upload-cancel');
     });
 });
 
@@ -272,4 +282,14 @@ Route::prefix('designer')->middleware(['auth'])->group(function () {
     Route::post('/tasks/{taskId}/join', [App\Http\Controllers\DesignController::class, 'joinTask'])->name('designer.tasks.join');
     Route::post('/tasks/{taskId}/submit', [App\Http\Controllers\DesignController::class, 'submitDesign'])->name('designer.tasks.submit');
     Route::get('/tasks/{taskId}', [App\Http\Controllers\DesignController::class, 'show'])->name('designer.tasks.show');
+
+    // Comment routes
+    Route::post('/tasks/{taskId}/comments', [App\Http\Controllers\DesignController::class, 'addComment'])->name('designer.comments.add');
+    Route::get('/tasks/{taskId}/comments', [App\Http\Controllers\DesignController::class, 'getComments'])->name('designer.comments.get');
+    Route::post('/tasks/{taskId}/comments/read', [App\Http\Controllers\DesignController::class, 'markCommentsAsRead'])->name('designer.comments.read');
+
+    // Chunk upload routes
+    Route::post('/upload-chunk', [App\Http\Controllers\ChunkUploadController::class, 'uploadChunk'])->name('designer.upload-chunk');
+    Route::get('/upload-status/{uploadId}', [App\Http\Controllers\ChunkUploadController::class, 'checkUploadStatus'])->name('designer.upload-status');
+    Route::post('/upload-cancel', [App\Http\Controllers\ChunkUploadController::class, 'cancelUpload'])->name('designer.upload-cancel');
 });

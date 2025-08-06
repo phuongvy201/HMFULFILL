@@ -4,6 +4,7 @@ namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Support\Facades\Storage;
 
@@ -38,8 +39,8 @@ class DesignTask extends Model
     const STATUS_REVISION = 'revision';
     const STATUS_CANCELLED = 'cancelled';
 
-    // Constants cho giá theo số mặt
-    const PRICE_PER_SIDE = 1.5;
+    // Constants cho giá theo số mặt (VND)
+    const PRICE_PER_SIDE_VND = 20000;
 
     /**
      * Get the customer that owns the design task.
@@ -58,11 +59,21 @@ class DesignTask extends Model
     }
 
     /**
-     * Calculate price based on number of sides
+     * Calculate price based on number of sides (VND)
      */
     public static function calculatePrice(int $sidesCount): float
     {
-        return $sidesCount * self::PRICE_PER_SIDE;
+        return $sidesCount * self::PRICE_PER_SIDE_VND;
+    }
+
+    /**
+     * Calculate price in USD based on number of sides
+     */
+    public static function calculatePriceUSD(int $sidesCount): float
+    {
+        $priceVND = self::calculatePrice($sidesCount);
+        $usdToVnd = config('currency.usd_to_vnd', 26128.0);
+        return round($priceVND / $usdToVnd, 2);
     }
 
     /**
@@ -309,9 +320,47 @@ class DesignTask extends Model
     /**
      * Get the design revisions for the task.
      */
-    public function revisions()
+    public function revisions(): HasMany
     {
         return $this->hasMany(DesignRevision::class);
+    }
+
+    /**
+     * Get the comments for the task.
+     */
+    public function comments(): HasMany
+    {
+        return $this->hasMany(DesignComment::class)->orderBy('created_at', 'asc');
+    }
+
+    /**
+     * Get unread comments count for a specific user
+     */
+    public function getUnreadCommentsCount(int $userId): int
+    {
+        return $this->comments()
+            ->where('user_id', '!=', $userId)
+            ->where('is_read', false)
+            ->count();
+    }
+
+    /**
+     * Mark all comments as read for a specific user
+     */
+    public function markCommentsAsRead(int $userId): void
+    {
+        $this->comments()
+            ->where('user_id', '!=', $userId)
+            ->where('is_read', false)
+            ->update(['is_read' => true]);
+    }
+
+    /**
+     * Get latest comment
+     */
+    public function getLatestComment(): ?DesignComment
+    {
+        return $this->comments()->latest()->first();
     }
 
     /**

@@ -479,6 +479,9 @@
                 </div>
             </div>
 
+            <!-- Comments Section -->
+            @include('components.design-comments', ['taskId' => $task->id, 'currentUser' => auth()->user()])
+
             <!-- Quick Actions -->
             <div class="bg-white rounded-xl shadow-lg overflow-hidden border border-gray-100">
                 <div class="px-6 py-4 border-b border-gray-200">

@@ -605,6 +605,8 @@
                 </div>
             </div>
             @endif
+
+
         </div>
 
         <div class="space-y-6">
@@ -680,6 +682,8 @@
                     </div>
                 </div>
             </div>
+            <!-- Comments Section -->
+            @include('components.design-comments', ['taskId' => $task->id, 'currentUser' => auth()->user()])
 
             <!-- Hướng dẫn -->
             <div class="bg-white rounded-lg shadow-lg overflow-hidden">

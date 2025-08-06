@@ -50,7 +50,7 @@
             <h3 class="text-lg font-semibold text-gray-800">Thông tin yêu cầu thiết kế</h3>
         </div>
 
-        <form action="{{ route('customer.design.store') }}" method="POST" enctype="multipart/form-data" class="p-6">
+        <form action="{{ route('customer.design.store') }}" method="POST" enctype="multipart/form-data" class="p-6" id="designForm">
             @csrf
 
             <!-- Title -->
@@ -86,7 +86,7 @@
                     <option value="">Chọn số mặt</option>
                     @for($i = 1; $i <= 5; $i++)
                         <option value="{{ $i }}" {{ old('sides_count') == $i ? 'selected' : '' }}>
-                        {{ $i }} mặt ({{ $i * 1.5 }}$)
+                        {{ $i }} mặt ({{ number_format($i * 20000) }} VND)
                         </option>
                         @endfor
                 </select>
@@ -97,9 +97,9 @@
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="flex justify-between items-center">
                         <span class="text-gray-700 font-medium">Giá dự kiến:</span>
-                        <span class="text-2xl font-bold text-green-600" id="priceDisplay">$0.00</span>
+                        <span class="text-2xl font-bold text-green-600" id="priceDisplay">0 VND</span>
                     </div>
-                    <p class="text-sm text-gray-500 mt-1">Giá sẽ được tính dựa trên số mặt bạn chọn</p>
+                    <p class="text-sm text-gray-500 mt-1">Giá sẽ được tính dựa trên số mặt bạn chọn (20,000 VND/mặt)</p>
                 </div>
             </div>
 
@@ -129,25 +129,44 @@
                 </button>
             </div>
 
-            <!-- Progress Bar -->
+            <!-- Upload Progress -->
             <div id="uploadProgress" class="hidden mt-4">
-                <div class="flex items-center justify-between mb-2">
-                    <span class="text-sm font-medium text-gray-700">Đang tạo yêu cầu...</span>
-                    <span id="progressPercent" class="text-sm font-medium text-gray-700">0%</span>
+                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
+                    <div class="flex items-center justify-between mb-2">
+                        <span class="text-sm font-medium text-blue-700">Đang upload files...</span>
+                        <span id="progressPercent" class="text-sm font-medium text-blue-700">0%</span>
+                    </div>
+                    <div class="w-full bg-blue-200 rounded-full h-2">
+                        <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                    </div>
+                    <div id="uploadDetails" class="mt-2 text-xs text-blue-600">
+                        <span id="currentFile">Chuẩn bị upload...</span>
+                    </div>
                 </div>
-                <div class="w-full bg-gray-200 rounded-full h-2">
-                    <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+            </div>
+
+            <!-- Upload Status -->
+            <div id="uploadStatus" class="hidden mt-4">
+                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
+                    <div class="flex items-center">
+                        <i class="fas fa-check-circle text-green-500 mr-2"></i>
+                        <span class="text-sm font-medium text-green-700">Upload hoàn tất!</span>
+                    </div>
                 </div>
             </div>
         </form>
     </div>
 </div>
 
+<script src="{{ asset('js/chunk-upload.js') }}"></script>
 <script>
+    let uploadManager = null;
+    let uploadedFiles = [];
+
     function updatePrice() {
         const sidesCount = parseInt(document.getElementById('sides_count').value) || 0;
-        const price = sidesCount * 1.5; // $1.5 per side (khớp với DesignTask::PRICE_PER_SIDE)
-        document.getElementById('priceDisplay').textContent = `$${price.toFixed(2)}`;
+        const price = sidesCount * 20000; // 20,000 VND per side (khớp với DesignTask::PRICE_PER_SIDE_VND)
+        document.getElementById('priceDisplay').textContent = `${price.toLocaleString('vi-VN')} VND`;
     }
 
     function updateFileUploads() {
@@ -184,7 +203,7 @@
                             <i class="fas fa-cloud-upload-alt text-3xl text-gray-400"></i>
                             <div>
                                 <p class="text-md font-medium text-gray-700">Tải lên ${sideName.toLowerCase()}</p>
-                                <p class="text-xs text-gray-500 mt-1">JPG, PNG, PDF (tối đa 50MB)</p>
+                                <p class="text-xs text-gray-500 mt-1">JPG, PNG, PDF (tối đa 100MB - upload tự động chia nhỏ)</p>
                             </div>
                             <button type="button" onclick="document.getElementById('mockup_file_${i}').click()"
                                 class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 text-sm">
@@ -229,10 +248,156 @@
         }
     }
 
+    // Khởi tạo upload manager
+    function initUploadManager() {
+        uploadManager = new FileUploadManager({
+            uploadUrl: '{{ route("customer.design.upload-chunk") }}',
+            statusUrl: '{{ route("customer.design.upload-status", ["uploadId" => "UPLOAD_ID"]) }}'.replace('UPLOAD_ID', '{uploadId}'),
+            cancelUrl: '{{ route("customer.design.upload-cancel") }}',
+            chunkSize: 1024 * 1024, // 1MB per chunk
+            maxFileSize: 100 * 1024 * 1024, // 100MB
+            onFileProgress: function(data) {
+                updateUploadProgress(data);
+            },
+            onFileComplete: function(data) {
+                uploadedFiles.push(data.filePath);
+                console.log('File uploaded:', data.filePath);
+            },
+            onFileError: function(data) {
+                console.error('Upload error:', data.error);
+                showNotification('Lỗi upload file: ' + data.error, 'error');
+            },
+            onAllComplete: function(data) {
+                console.log('All uploads completed:', data);
+                showUploadStatus();
+            }
+        });
+    }
+
+    // Cập nhật progress
+    function updateUploadProgress(data) {
+        const progressBar = document.getElementById('progressBar');
+        const progressPercent = document.getElementById('progressPercent');
+        const currentFile = document.getElementById('currentFile');
+
+        progressBar.style.width = data.progress + '%';
+        progressPercent.textContent = Math.round(data.progress) + '%';
+        currentFile.textContent = `Đang upload: ${data.file.name} (${data.chunkIndex}/${data.totalChunks} chunks)`;
+    }
+
+    // Hiển thị trạng thái upload
+    function showUploadStatus() {
+        document.getElementById('uploadProgress').classList.add('hidden');
+        document.getElementById('uploadStatus').classList.remove('hidden');
+    }
+
+    // Xử lý form submission
+    document.getElementById('designForm').addEventListener('submit', async function(e) {
+        e.preventDefault();
+
+        const sidesCount = parseInt(document.getElementById('sides_count').value) || 0;
+        if (sidesCount === 0) {
+            showNotification('Vui lòng chọn số mặt', 'error');
+            return;
+        }
+
+        // Kiểm tra files
+        const files = [];
+        for (let i = 1; i <= sidesCount; i++) {
+            const fileInput = document.getElementById(`mockup_file_${i}`);
+            if (fileInput.files.length === 0) {
+                showNotification(`Vui lòng chọn file cho ${getSideName(i)}`, 'error');
+                return;
+            }
+            files.push(fileInput.files[0]);
+        }
+
+        // Reset uploaded files array
+        uploadedFiles = [];
+
+        // Khởi tạo upload manager nếu chưa có
+        if (!uploadManager) {
+            initUploadManager();
+        }
+
+        // Thêm files vào queue
+        uploadManager.clearQueue();
+        uploadManager.addFiles(files);
+
+        // Hiển thị progress
+        document.getElementById('uploadProgress').classList.remove('hidden');
+        document.getElementById('uploadStatus').classList.add('hidden');
+
+        try {
+            // Bắt đầu upload
+            await uploadManager.startUpload();
+
+            // Kiểm tra lại uploaded files sau khi upload
+            const completedFiles = uploadManager.getCompletedFiles();
+            console.log('Completed files:', completedFiles);
+
+            if (completedFiles.length === sidesCount) {
+                // Thêm uploaded files vào form
+                completedFiles.forEach((filePath, index) => {
+                    const input = document.createElement('input');
+                    input.type = 'hidden';
+                    input.name = 'uploaded_files[]';
+                    input.value = filePath;
+                    document.getElementById('designForm').appendChild(input);
+                });
+
+                // Submit form
+                document.getElementById('designForm').submit();
+            } else {
+                showNotification(`Có lỗi xảy ra khi upload files. Đã upload ${completedFiles.length}/${sidesCount} files.`, 'error');
+            }
+
+        } catch (error) {
+            console.error('Upload error:', error);
+            showNotification('Lỗi upload: ' + error.message, 'error');
+        }
+    });
+
+    // Hiển thị notification
+    function showNotification(message, type) {
+        const notification = document.createElement('div');
+        const bgColor = type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white';
+        const icon = type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle';
+
+        notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full ${bgColor}`;
+        notification.innerHTML = `
+            <div class="flex items-center justify-between">
+                <div class="flex items-center">
+                    <i class="fas ${icon} mr-2"></i>
+                    <span>${message}</span>
+                </div>
+                <button onclick="this.parentElement.parentElement.remove()" class="ml-4 text-white hover:text-gray-200">
+                    <i class="fas fa-times"></i>
+                </button>
+            </div>
+        `;
+
+        document.body.appendChild(notification);
+
+        setTimeout(() => {
+            notification.classList.remove('translate-x-full');
+        }, 100);
+
+        setTimeout(() => {
+            notification.classList.add('translate-x-full');
+            setTimeout(() => {
+                if (document.body.contains(notification)) {
+                    document.body.removeChild(notification);
+                }
+            }, 300);
+        }, 5000);
+    }
+
     // Cập nhật giá và file upload khi trang load
     document.addEventListener('DOMContentLoaded', function() {
         updatePrice();
         updateFileUploads();
+        initUploadManager();
     });
 
     // Cập nhật giá khi thay đổi số mặt

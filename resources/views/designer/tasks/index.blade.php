@@ -16,26 +16,59 @@
     </div>
     @endif
 
-    <!-- Tasks đang chờ -->
-    @if($pendingTasks->count() > 0)
-    <div class="bg-white rounded-lg shadow-lg overflow-hidden mb-8">
-        <div class="bg-yellow-500 text-white px-6 py-4">
+    <!-- Tất cả Tasks -->
+    @if($allTasks->count() > 0)
+    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+        <div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4">
             <h5 class="text-xl font-semibold flex items-center">
-                <i class="fas fa-clock mr-2"></i>
-                Tasks đang chờ ({{ $pendingTasks->count() }})
+                <i class="fas fa-tasks mr-2"></i>
+                Tất cả Design Tasks ({{ $allTasks->count() }})
             </h5>
         </div>
         <div class="p-6">
             <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                @foreach($pendingTasks as $task)
-                <div class="bg-white border-2 border-yellow-200 rounded-lg shadow-md hover:shadow-lg transition duration-200 overflow-hidden">
-                    <div class="px-4 py-3 border-b border-yellow-200">
+                @foreach($allTasks as $task)
+                <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition duration-200 overflow-hidden
+                    @if($task->status === 'pending') border-2 border-yellow-200
+                    @elseif($task->designer_id === auth()->id()) border-2 border-blue-200
+                    @else border border-gray-200 @endif">
+
+                    <!-- Task Header -->
+                    <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center
+                        @if($task->status === 'pending') bg-yellow-50
+                        @elseif($task->designer_id === auth()->id()) bg-blue-50
+                        @else bg-gray-50 @endif">
                         <h6 class="font-semibold text-gray-800 truncate">{{ $task->title }}</h6>
+                        <span class="px-2 py-1 text-xs font-medium rounded-full 
+                                    @if($task->status === 'pending') bg-yellow-100 text-yellow-800
+                                    @elseif($task->status === 'joined') bg-blue-100 text-blue-800
+                                    @elseif($task->status === 'completed') bg-green-100 text-green-800
+                                    @elseif($task->status === 'approved') bg-purple-100 text-purple-800
+                                    @elseif($task->status === 'cancelled') bg-gray-100 text-gray-800
+                                    @else bg-red-100 text-red-800 @endif">
+                            {{ $task->getStatusDisplayName() }}
+                        </span>
                     </div>
+
+                    <!-- Designer Info -->
+                    @if($task->designer)
+                    <div class="px-4 py-2 bg-blue-50 border-b border-blue-100">
+                        <div class="flex items-center justify-between">
+                            <span class="text-xs text-gray-600">Được nhận bởi:</span>
+                            <span class="text-sm font-medium text-blue-700 flex items-center">
+                                <i class="fas fa-user mr-1"></i>
+                                {{ $task->designer->first_name }} {{ $task->designer->last_name }}
+                                @if($task->designer_id === auth()->id())
+                                <span class="ml-2 px-2 py-1 text-xs bg-blue-200 text-blue-800 rounded-full">Bạn</span>
+                                @endif
+                            </span>
+                        </div>
+                    </div>
+                    @endif
 
                     <!-- Hiển thị hình ảnh mockup -->
                     @if($task->mockup_file)
-                    <div class="p-4 border-b border-yellow-200">
+                    <div class="p-4 border-b border-gray-200">
                         <div class="mb-2">
                             <p class="text-xs text-gray-500 uppercase tracking-wide flex items-center">
                                 <i class="fas fa-image mr-1 text-blue-500"></i>Mockup tham khảo
@@ -53,6 +86,34 @@
                             <i class="fas fa-file-pdf text-2xl text-red-500 mb-2"></i>
                             <p class="text-xs text-gray-600 mb-2">File {{ strtoupper($task->getMockupFileExtension()) }}</p>
                             <a href="{{ $task->getMockupUrl() }}" target="_blank"
+                                class="text-blue-600 hover:text-blue-700 text-xs font-medium">
+                                <i class="fas fa-download mr-1"></i>Tải xuống
+                            </a>
+                        </div>
+                        @endif
+                    </div>
+                    @endif
+
+                    <!-- Hiển thị design file nếu có -->
+                    @if($task->design_file)
+                    <div class="p-4 border-b border-gray-200">
+                        <div class="mb-2">
+                            <p class="text-xs text-gray-500 uppercase tracking-wide flex items-center">
+                                <i class="fas fa-palette mr-1 text-green-500"></i>Thiết kế hoàn chỉnh
+                            </p>
+                        </div>
+                        @if($task->isDesignImage())
+                        <div class="relative group">
+                            <img src="{{ $task->getDesignUrl() }}"
+                                alt="Design"
+                                class="w-full h-32 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
+                                onclick="openImageModal('{{ $task->getDesignUrl() }}', 'Design - {{ $task->title }}')">
+                        </div>
+                        @else
+                        <div class="bg-gray-50 rounded-lg p-3 text-center">
+                            <i class="fas fa-file text-2xl text-blue-500 mb-2"></i>
+                            <p class="text-xs text-gray-600 mb-2">File {{ strtoupper($task->getDesignFileExtension()) }}</p>
+                            <a href="{{ $task->getDesignUrl() }}" target="_blank"
                                 class="text-blue-600 hover:text-blue-700 text-xs font-medium">
                                 <i class="fas fa-download mr-1"></i>Tải xuống
                             </a>
@@ -89,142 +150,22 @@
                             <p class="text-gray-800">{{ $task->created_at->format('d/m/Y H:i') }}</p>
                         </div>
                     </div>
-                    <div class="px-4 py-3 bg-gray-50">
-                        <button class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center join-task-btn"
-                            data-task-id="{{ $task->id }}">
-                            <i class="fas fa-hand-paper mr-2"></i>Nhận Task
-                        </button>
-                    </div>
-                </div>
-                @endforeach
-            </div>
-        </div>
-    </div>
-    @endif
 
-    <!-- Tasks của tôi -->
-    @if($myTasks->count() > 0)
-    <div class="bg-white rounded-lg shadow-lg overflow-hidden">
-        <div class="bg-blue-600 text-white px-6 py-4">
-            <h5 class="text-xl font-semibold flex items-center">
-                <i class="fas fa-tasks mr-2"></i>
-                Tasks của tôi ({{ $myTasks->count() }})
-            </h5>
-        </div>
-        <div class="p-6">
-            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                @foreach($myTasks as $task)
-                <div class="bg-white rounded-lg shadow-md hover:shadow-lg transition duration-200 overflow-hidden">
-                    <div class="px-4 py-3 border-b border-gray-200 flex justify-between items-center">
-                        <h6 class="font-semibold text-gray-800 truncate">{{ $task->title }}</h6>
-                        <span class="px-2 py-1 text-xs font-medium rounded-full 
-                                    @if($task->status === 'pending') bg-yellow-100 text-yellow-800
-                                    @elseif($task->status === 'joined') bg-blue-100 text-blue-800
-                                    @elseif($task->status === 'completed') bg-green-100 text-green-800
-                                    @elseif($task->status === 'approved') bg-purple-100 text-purple-800
-                                    @elseif($task->status === 'cancelled') bg-gray-100 text-gray-800
-                                    @else bg-red-100 text-red-800 @endif">
-                            {{ $task->getStatusDisplayName() }}
-                        </span>
-                    </div>
-
-                    <!-- Hiển thị hình ảnh mockup và design -->
-                    <div class="p-4 border-b border-gray-200">
-                        <!-- Mockup -->
-                        @if($task->mockup_file)
-                        <div class="mb-3">
-                            <p class="text-xs text-gray-500 uppercase tracking-wide flex items-center mb-2">
-                                <i class="fas fa-image mr-1 text-blue-500"></i>Mockup tham khảo
-                            </p>
-                            @if($task->isMockupImage())
-                            <div class="relative group">
-                                <img src="{{ $task->getMockupUrl() }}"
-                                    alt="Mockup"
-                                    class="w-full h-24 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
-                                    onclick="openImageModal('{{ $task->getMockupUrl() }}', 'Mockup - {{ $task->title }}')">
-                            </div>
-                            @else
-                            <div class="bg-gray-50 rounded-lg p-2 text-center">
-                                <i class="fas fa-file-pdf text-xl text-red-500 mb-1"></i>
-                                <p class="text-xs text-gray-600 mb-1">File {{ strtoupper($task->getMockupFileExtension()) }}</p>
-                                <a href="{{ $task->getMockupUrl() }}" target="_blank"
-                                    class="text-blue-600 hover:text-blue-700 text-xs font-medium">
-                                    <i class="fas fa-download mr-1"></i>Tải xuống
-                                </a>
-                            </div>
-                            @endif
-                        </div>
-                        @endif
-
-                        <!-- Design (nếu có) -->
-                        @if($task->design_file)
-                        <div>
-                            <p class="text-xs text-gray-500 uppercase tracking-wide flex items-center mb-2">
-                                <i class="fas fa-palette mr-1 text-green-500"></i>Thiết kế hoàn chỉnh
-                            </p>
-                            @if($task->isDesignImage())
-                            <div class="relative group">
-                                <img src="{{ $task->getDesignUrl() }}"
-                                    alt="Design"
-                                    class="w-full h-24 object-cover rounded-lg border border-gray-200 cursor-pointer hover:opacity-90 transition-opacity"
-                                    onclick="openImageModal('{{ $task->getDesignUrl() }}', 'Design - {{ $task->title }}')">
-                            </div>
-                            @else
-                            <div class="bg-gray-50 rounded-lg p-2 text-center">
-                                <i class="fas fa-file text-xl text-blue-500 mb-1"></i>
-                                <p class="text-xs text-gray-600 mb-1">File {{ strtoupper($task->getDesignFileExtension()) }}</p>
-                                <a href="{{ $task->getDesignUrl() }}" target="_blank"
-                                    class="text-blue-600 hover:text-blue-700 text-xs font-medium">
-                                    <i class="fas fa-download mr-1"></i>Tải xuống
-                                </a>
-                            </div>
-                            @endif
-                        </div>
-                        @endif
-                    </div>
-
-                    <div class="p-4">
-                        @if($task->description)
-                        <p class="text-gray-600 text-sm mb-4">
-                            {{ Str::limit($task->description, 80) }}
-                        </p>
-                        @endif
-
-                        <div class="grid grid-cols-2 gap-4 mb-4 text-center">
-                            <div>
-                                <p class="text-xs text-gray-500 uppercase tracking-wide">Số mặt</p>
-                                <p class="font-semibold text-gray-800">{{ $task->sides_count }}</p>
-                            </div>
-                            <div>
-                                <p class="text-xs text-gray-500 uppercase tracking-wide">Giá</p>
-                                <p class="font-semibold text-blue-600">${{ number_format($task->price, 2) }}</p>
-                            </div>
-                        </div>
-
-                        <div class="mb-3">
-                            <p class="text-xs text-gray-500 uppercase tracking-wide">Khách hàng</p>
-                            <p class="font-medium text-gray-800">{{ $task->customer->first_name }} {{ $task->customer->last_name }}</p>
-                        </div>
-
-                        <div class="mb-3">
-                            <p class="text-xs text-gray-500 uppercase tracking-wide">Ngày nhận</p>
-                            <p class="text-gray-800">{{ $task->updated_at->format('d/m/Y H:i') }}</p>
-                        </div>
-
-                        @if($task->revision_notes)
-                        <div class="mb-3">
-                            <p class="text-xs text-gray-500 uppercase tracking-wide">Ghi chú chỉnh sửa</p>
-                            <div class="text-red-600 text-sm">{{ Str::limit($task->revision_notes, 60) }}</div>
-                        </div>
-                        @endif
-                    </div>
+                    <!-- Action Buttons -->
                     <div class="px-4 py-3 bg-gray-50 space-y-2">
                         <a href="{{ route('designer.tasks.show', $task->id) }}"
                             class="w-full bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center">
                             <i class="fas fa-eye mr-2"></i>Xem chi tiết
                         </a>
 
-                        @if($task->status === 'joined')
+                        @if($task->status === 'pending')
+                        <button class="w-full bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center join-task-btn"
+                            data-task-id="{{ $task->id }}">
+                            <i class="fas fa-hand-paper mr-2"></i>Nhận Task
+                        </button>
+                        @endif
+
+                        @if($task->designer_id === auth()->id() && $task->status === 'joined')
                         <button class="w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center submit-design-btn"
                             data-task-id="{{ $task->id }}"
                             onclick="openSubmitModal('{{ $task->id }}')">
@@ -232,7 +173,7 @@
                         </button>
                         @endif
 
-                        @if($task->status === 'revision')
+                        @if($task->designer_id === auth()->id() && $task->status === 'revision')
                         <a href="{{ route('designer.tasks.show', $task->id) }}"
                             class="w-full bg-yellow-600 hover:bg-yellow-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center">
                             <i class="fas fa-edit mr-2"></i>Chỉnh sửa thiết kế
@@ -246,7 +187,7 @@
     </div>
     @endif
 
-    @if($pendingTasks->count() === 0 && $myTasks->count() === 0)
+    @if($allTasks->count() === 0)
     <div class="text-center py-16">
         <i class="fas fa-palette text-6xl text-gray-300 mb-6"></i>
         <h5 class="text-xl font-semibold text-gray-600 mb-2">Chưa có design task nào</h5>
@@ -265,20 +206,43 @@
                     <i class="fas fa-times"></i>
                 </button>
             </div>
-            <form id="submitDesignForm" method="POST" enctype="multipart/form-data">
+            <form id="submitDesignForm" method="POST">
                 @csrf
                 <div class="space-y-4">
                     <div>
-                        <label for="design_file" class="block text-sm font-medium text-gray-700 mb-2">
+                        <label class="block text-sm font-medium text-gray-700 mb-2">
                             File thiết kế <span class="text-red-500">*</span>
                         </label>
-                        <input type="file"
-                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-transparent"
-                            id="design_file" name="design_file"
-                            accept=".jpg,.jpeg,.png,.pdf,.ai,.psd" required>
-                        <p class="mt-1 text-sm text-gray-500">
-                            Chấp nhận: JPG, JPEG, PNG, PDF, AI, PSD (tối đa 20MB)
-                        </p>
+                        <div id="fileUploadArea" class="border-2 border-dashed border-gray-300 rounded-lg p-6 text-center hover:border-blue-400 transition-colors">
+                            <div class="space-y-4">
+                                <div class="flex items-center justify-center">
+                                    <i class="fas fa-cloud-upload-alt text-4xl text-gray-400"></i>
+                                </div>
+                                <div>
+                                    <p class="text-lg font-medium text-gray-700">Kéo thả files hoặc click để chọn</p>
+                                    <p class="text-sm text-gray-500 mt-1">Chấp nhận: JPG, JPEG, PNG, PDF, AI, PSD (tối đa 100MB)</p>
+                                </div>
+                                <input type="file" id="designFiles" multiple accept=".jpg,.jpeg,.png,.pdf,.ai,.psd" class="hidden">
+                                <button type="button" onclick="document.getElementById('designFiles').click()"
+                                    class="bg-blue-600 hover:bg-blue-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200">
+                                    Chọn Files
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Progress bar -->
+                        <div id="uploadProgress" class="hidden mt-4">
+                            <div class="flex justify-between text-sm text-gray-600 mb-1">
+                                <span>Đang upload...</span>
+                                <span id="progressPercent">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+
+                        <!-- File list -->
+                        <div id="fileList" class="mt-4 space-y-2"></div>
                     </div>
 
                     <div>
@@ -293,7 +257,7 @@
                         class="bg-gray-300 hover:bg-gray-400 text-gray-800 font-semibold py-2 px-4 rounded-lg transition duration-200">
                         Hủy
                     </button>
-                    <button type="submit"
+                    <button type="button" onclick="submitDesign()"
                         class="bg-green-600 hover:bg-green-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 flex items-center">
                         <i class="fas fa-upload mr-2"></i>Gửi thiết kế
                     </button>
@@ -331,13 +295,18 @@
 </div>
 
 @push('scripts')
+<script src="/js/chunk-upload.js"></script>
 <script>
+    let uploadManager = null;
+    let currentTaskId = null;
+
     document.addEventListener('DOMContentLoaded', function() {
         // Join task
         document.querySelectorAll('.join-task-btn').forEach(button => {
             button.addEventListener('click', function() {
                 const taskId = this.dataset.taskId;
                 const button = this;
+                const taskCard = button.closest('.bg-white');
 
                 if (confirm('Bạn có chắc muốn nhận task này?')) {
                     button.disabled = true;
@@ -353,8 +322,11 @@
                         .then(response => response.json())
                         .then(data => {
                             if (data.success) {
-                                alert(data.message);
-                                location.reload();
+                                // Cập nhật giao diện động
+                                updateTaskCardAfterJoin(taskCard, data.designer);
+
+                                // Hiển thị thông báo thành công
+                                showNotification(data.message, 'success');
                             } else {
                                 alert(data.message);
                                 button.disabled = false;
@@ -372,14 +344,260 @@
         });
     });
 
+    function updateTaskCardAfterJoin(taskCard, designer) {
+        // Cập nhật border và background
+        taskCard.classList.remove('border-2', 'border-yellow-200');
+        taskCard.classList.add('border-2', 'border-blue-200');
+
+        // Cập nhật header background
+        const header = taskCard.querySelector('.px-4.py-3');
+        header.classList.remove('bg-yellow-50');
+        header.classList.add('bg-blue-50');
+
+        // Thêm thông tin designer
+        const headerDiv = header.parentNode;
+        const designerInfo = document.createElement('div');
+        designerInfo.className = 'px-4 py-2 bg-blue-50 border-b border-blue-100';
+        designerInfo.innerHTML = `
+            <div class="flex items-center justify-between">
+                <span class="text-xs text-gray-600">Được nhận bởi:</span>
+                <span class="text-sm font-medium text-blue-700 flex items-center">
+                    <i class="fas fa-user mr-1"></i>
+                    ${designer.first_name} ${designer.last_name}
+                    <span class="ml-2 px-2 py-1 text-xs bg-blue-200 text-blue-800 rounded-full">Bạn</span>
+                </span>
+            </div>
+        `;
+        headerDiv.insertBefore(designerInfo, header.nextSibling);
+
+        // Cập nhật status
+        const statusSpan = header.querySelector('.px-2.py-1');
+        statusSpan.className = 'px-2 py-1 text-xs font-medium rounded-full bg-blue-100 text-blue-800';
+        statusSpan.textContent = 'Đã nhận';
+
+        // Thay thế button "Nhận Task" bằng button "Gửi thiết kế"
+        const actionDiv = taskCard.querySelector('.px-4.py-3.bg-gray-50');
+        const joinButton = actionDiv.querySelector('.join-task-btn');
+        if (joinButton) {
+            const submitButton = document.createElement('button');
+            submitButton.className = 'w-full bg-green-600 hover:bg-green-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center submit-design-btn';
+            submitButton.setAttribute('data-task-id', joinButton.dataset.taskId);
+            submitButton.setAttribute('onclick', `openSubmitModal('${joinButton.dataset.taskId}')`);
+            submitButton.innerHTML = '<i class="fas fa-upload mr-2"></i>Gửi thiết kế';
+
+            joinButton.parentNode.replaceChild(submitButton, joinButton);
+        }
+    }
+
+    function showNotification(message, type = 'success') {
+        // Tạo notification element
+        const notification = document.createElement('div');
+        notification.className = `fixed top-4 right-4 z-50 p-4 rounded-lg shadow-lg transition-all duration-300 transform translate-x-full
+            ${type === 'success' ? 'bg-green-500 text-white' : 'bg-red-500 text-white'}`;
+        notification.innerHTML = `
+            <div class="flex items-center">
+                <i class="fas ${type === 'success' ? 'fa-check-circle' : 'fa-exclamation-circle'} mr-2"></i>
+                <span>${message}</span>
+            </div>
+        `;
+
+        // Thêm vào body
+        document.body.appendChild(notification);
+
+        // Hiển thị notification
+        setTimeout(() => {
+            notification.classList.remove('translate-x-full');
+        }, 100);
+
+        // Tự động ẩn sau 3 giây
+        setTimeout(() => {
+            notification.classList.add('translate-x-full');
+            setTimeout(() => {
+                document.body.removeChild(notification);
+            }, 300);
+        }, 3000);
+    }
+
     function openSubmitModal(taskId) {
+        currentTaskId = taskId;
         const form = document.getElementById('submitDesignForm');
         form.action = `/designer/tasks/${taskId}/submit`;
         document.getElementById('submitDesignModal').classList.remove('hidden');
+
+        // Reset form
+        document.getElementById('fileList').innerHTML = '';
+        document.getElementById('uploadProgress').classList.add('hidden');
+        document.getElementById('designFiles').value = '';
+
+        // Initialize upload manager
+        initUploadManager();
     }
 
     function closeSubmitModal() {
         document.getElementById('submitDesignModal').classList.add('hidden');
+        if (uploadManager) {
+            uploadManager.cancelAllUploads();
+        }
+    }
+
+    function initUploadManager() {
+        uploadManager = new FileUploadManager({
+            uploadUrl: '/designer/upload-chunk',
+            chunkSize: 1024 * 1024, // 1MB
+            onProgress: (data) => {
+                const progressBar = document.getElementById('progressBar');
+                const progressPercent = document.getElementById('progressPercent');
+                const progress = data.progress;
+
+                progressBar.style.width = progress + '%';
+                progressPercent.textContent = Math.round(progress) + '%';
+            },
+            onComplete: (data) => {
+                showNotification('Upload hoàn tất!', 'success');
+                document.getElementById('uploadProgress').classList.add('hidden');
+            },
+            onError: (data) => {
+                showNotification('Lỗi upload: ' + data.error, 'error');
+                document.getElementById('uploadProgress').classList.add('hidden');
+            }
+        });
+
+        // Setup file input
+        const fileInput = document.getElementById('designFiles');
+        fileInput.addEventListener('change', handleFileSelection);
+
+        // Setup drag and drop
+        const uploadArea = document.getElementById('fileUploadArea');
+        uploadArea.addEventListener('dragover', handleDragOver);
+        uploadArea.addEventListener('drop', handleDrop);
+    }
+
+    function handleFileSelection(event) {
+        const files = Array.from(event.target.files);
+        if (files.length > 0) {
+            uploadManager.addFiles(files);
+            displayFileList();
+        }
+    }
+
+    function handleDragOver(event) {
+        event.preventDefault();
+        event.currentTarget.classList.add('border-blue-400');
+    }
+
+    function handleDrop(event) {
+        event.preventDefault();
+        event.currentTarget.classList.remove('border-blue-400');
+
+        const files = Array.from(event.dataTransfer.files);
+        if (files.length > 0) {
+            uploadManager.addFiles(files);
+            displayFileList();
+        }
+    }
+
+    function displayFileList() {
+        const fileList = document.getElementById('fileList');
+        const files = uploadManager.getFiles();
+
+        fileList.innerHTML = '';
+        files.forEach((file, index) => {
+            const fileItem = document.createElement('div');
+            fileItem.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
+            fileItem.innerHTML = `
+                <div class="flex items-center">
+                    <i class="fas fa-file mr-3 text-blue-500"></i>
+                    <div>
+                        <p class="font-medium text-gray-800">${file.name}</p>
+                        <p class="text-sm text-gray-500">${formatFileSize(file.size)}</p>
+                    </div>
+                </div>
+                <button type="button" onclick="removeFile(${index})" class="text-red-500 hover:text-red-700">
+                    <i class="fas fa-times"></i>
+                </button>
+            `;
+            fileList.appendChild(fileItem);
+        });
+    }
+
+    function removeFile(index) {
+        uploadManager.removeFile(index);
+        displayFileList();
+    }
+
+    function formatFileSize(bytes) {
+        if (bytes === 0) return '0 Bytes';
+        const k = 1024;
+        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
+        const i = Math.floor(Math.log(bytes) / Math.log(k));
+        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
+    }
+
+    async function submitDesign() {
+        if (!uploadManager || uploadManager.getFiles().length === 0) {
+            showNotification('Vui lòng chọn ít nhất một file để upload', 'error');
+            return;
+        }
+
+        const submitButton = document.querySelector('button[onclick="submitDesign()"]');
+        const originalText = submitButton.innerHTML;
+
+        try {
+            submitButton.disabled = true;
+            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang upload...';
+
+            // Hiển thị progress bar
+            document.getElementById('uploadProgress').classList.remove('hidden');
+
+            // Bắt đầu upload
+            await uploadManager.startUpload();
+
+            // Lấy completed files
+            const completedFiles = uploadManager.getCompletedFiles();
+
+            if (completedFiles.length === 0) {
+                showNotification('Có lỗi xảy ra khi upload files', 'error');
+                return;
+            }
+
+            // Tạo form data
+            const formData = new FormData();
+            formData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
+            formData.append('notes', document.getElementById('notes').value);
+
+            // Thêm uploaded files
+            if (completedFiles.length === 1) {
+                formData.append('uploaded_file', completedFiles[0]);
+            } else {
+                completedFiles.forEach((filePath, index) => {
+                    formData.append('uploaded_files[]', filePath);
+                });
+            }
+
+            // Submit form
+            const response = await fetch(`/designer/tasks/${currentTaskId}/submit`, {
+                method: 'POST',
+                body: formData
+            });
+
+            if (response.ok) {
+                showNotification('Gửi thiết kế thành công!', 'success');
+                setTimeout(() => {
+                    closeSubmitModal();
+                    window.location.reload();
+                }, 1500);
+            } else {
+                const errorData = await response.json();
+                showNotification('Lỗi: ' + (errorData.message || 'Có lỗi xảy ra'), 'error');
+            }
+
+        } catch (error) {
+            console.error('Submit error:', error);
+            showNotification('Lỗi: ' + error.message, 'error');
+        } finally {
+            submitButton.disabled = false;
+            submitButton.innerHTML = originalText;
+        }
     }
 
     function openImageModal(imageUrl, title) {
