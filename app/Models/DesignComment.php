@@ -89,4 +89,12 @@ class DesignComment extends Model
     {
         return $this->type === self::TYPE_CUSTOMER ? 'Khách hàng' : 'Designer';
     }
+
+    /**
+     * Get formatted time for display
+     */
+    public function getFormattedTime(): string
+    {
+        return $this->created_at->format('d/m/Y H:i');
+    }
 }

@@ -573,6 +573,12 @@ class DesignController extends Controller
      */
     public function addComment(Request $request, $taskId)
     {
+        Log::info('Adding comment for task: ' . $taskId, [
+            'content' => $request->content,
+            'user_id' => Auth::id(),
+            'user_role' => Auth::user()->role
+        ]);
+
         $request->validate([
             'content' => 'required|string|max:1000',
         ]);
@@ -580,23 +586,46 @@ class DesignController extends Controller
         $task = DesignTask::findOrFail($taskId);
         $user = Auth::user();
 
+        Log::info('Task details', [
+            'task_id' => $task->id,
+            'customer_id' => $task->customer_id,
+            'designer_id' => $task->designer_id,
+            'user_id' => $user->id
+        ]);
+
         // Kiểm tra quyền comment
         if ($user->role === 'design') {
             // Designer chỉ có thể comment nếu đã nhận task
             if ($task->designer_id !== $user->id) {
+                Log::warning('Designer comment denied - designer_id: ' . $task->designer_id . ', user_id: ' . $user->id);
                 return response()->json(['error' => 'Bạn chưa nhận task này'], 403);
             }
         } else {
             // Customer chỉ có thể comment task của mình
             if ($task->customer_id !== $user->id) {
+                Log::warning('Customer comment denied - customer_id: ' . $task->customer_id . ', user_id: ' . $user->id);
                 return response()->json(['error' => 'Bạn không có quyền comment task này'], 403);
             }
         }
 
-        $comment = $task->comments()->create([
-            'user_id' => $user->id,
-            'content' => $request->content,
-            'type' => $user->role === 'design' ? 'designer' : 'customer',
+        try {
+            $comment = $task->comments()->create([
+                'user_id' => $user->id,
+                'content' => $request->content,
+                'type' => $user->role === 'design' ? 'designer' : 'customer',
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error creating comment: ' . $e->getMessage(), [
+                'task_id' => $task->id,
+                'user_id' => $user->id,
+                'content' => $request->content
+            ]);
+            return response()->json(['error' => 'Không thể tạo bình luận: ' . $e->getMessage()], 500);
+        }
+
+        Log::info('Comment created successfully', [
+            'comment_id' => $comment->id,
+            'type' => $comment->type
         ]);
 
         return response()->json([
@@ -617,27 +646,46 @@ class DesignController extends Controller
      */
     public function getComments($taskId)
     {
+        Log::info('Getting comments for task: ' . $taskId);
+
         $task = DesignTask::findOrFail($taskId);
         $user = Auth::user();
+
+        Log::info('User: ' . $user->id . ', Role: ' . $user->role);
+        Log::info('Task customer_id: ' . $task->customer_id . ', designer_id: ' . $task->designer_id);
 
         // Kiểm tra quyền xem comments
         if ($user->role === 'design') {
             // Designer chỉ có thể xem nếu đã nhận task
             if ($task->designer_id !== $user->id) {
+                Log::warning('Designer access denied - designer_id: ' . $task->designer_id . ', user_id: ' . $user->id);
                 return response()->json(['error' => 'Bạn chưa nhận task này'], 403);
             }
         } else {
             // Customer chỉ có thể xem task của mình
             if ($task->customer_id !== $user->id) {
+                Log::warning('Customer access denied - customer_id: ' . $task->customer_id . ', user_id: ' . $user->id);
                 return response()->json(['error' => 'Bạn không có quyền xem task này'], 403);
             }
         }
 
-        $comments = $task->comments()
-            ->with('user')
-            ->orderBy('created_at', 'asc')
-            ->get()
-            ->map(function ($comment) use ($user) {
+        try {
+            $comments = $task->comments()
+                ->with('user')
+                ->orderBy('created_at', 'asc')
+                ->get();
+
+            Log::info('Found ' . $comments->count() . ' comments');
+        } catch (\Exception $e) {
+            Log::error('Error loading comments: ' . $e->getMessage(), [
+                'task_id' => $task->id,
+                'user_id' => $user->id
+            ]);
+            return response()->json(['error' => 'Không thể tải bình luận: ' . $e->getMessage()], 500);
+        }
+
+        try {
+            $formattedComments = $comments->map(function ($comment) use ($user) {
                 return [
                     'id' => $comment->id,
                     'content' => $comment->content,
@@ -647,13 +695,17 @@ class DesignController extends Controller
                     'is_own' => $comment->user_id === $user->id
                 ];
             });
+        } catch (\Exception $e) {
+            Log::error('Error formatting comments: ' . $e->getMessage());
+            return response()->json(['error' => 'Không thể định dạng bình luận: ' . $e->getMessage()], 500);
+        }
 
         // Đánh dấu comments là đã đọc
         $task->markCommentsAsRead($user->id);
 
         return response()->json([
             'success' => true,
-            'comments' => $comments
+            'comments' => $formattedComments
         ]);
     }
 

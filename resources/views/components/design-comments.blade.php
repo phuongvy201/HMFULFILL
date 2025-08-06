@@ -76,6 +76,11 @@
         var currentUserId = commentContainer.getAttribute('data-user-id');
         var isDesigner = commentContainer.getAttribute('data-is-designer') === 'true';
 
+        console.log('Comment container found:', commentContainer);
+        console.log('Task ID from data:', taskId);
+        console.log('Current user ID:', currentUserId);
+        console.log('Is designer:', isDesigner);
+
         var commentsContainer = document.getElementById('comments-container');
         var commentsLoading = document.getElementById('comments-loading');
         var commentsEmpty = document.getElementById('comments-empty');
@@ -108,20 +113,27 @@
         function loadComments() {
             // Xác định route dựa trên role của user
             var baseUrl = isDesigner ? '/designer/tasks/' : '/customer/design/tasks/';
+            var url = baseUrl + taskId + '/comments';
 
-            fetch(baseUrl + taskId + '/comments', {
+            console.log('Loading comments from:', url);
+            console.log('Task ID:', taskId);
+            console.log('Is Designer:', isDesigner);
+
+            fetch(url, {
                     headers: {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
                         'Content-Type': 'application/json',
                     }
                 })
                 .then(function(response) {
+                    console.log('Response status:', response.status);
                     if (!response.ok) {
-                        throw new Error('Network response was not ok');
+                        throw new Error('Network response was not ok: ' + response.status);
                     }
                     return response.json();
                 })
                 .then(function(data) {
+                    console.log('Comments data:', data);
                     commentsLoading.classList.add('hidden');
 
                     if (data.success) {
@@ -137,13 +149,14 @@
                 })
                 .catch(function(error) {
                     commentsLoading.classList.add('hidden');
-                    console.error('Error:', error);
+                    console.error('Error loading comments:', error);
                     showNotification('Không thể kết nối đến server. Vui lòng thử lại.', 'error');
                 });
         }
 
         // Display comments
         function displayComments(comments) {
+            console.log('Displaying comments:', comments);
             commentsContainer.innerHTML = '';
 
             comments.forEach(function(comment) {
@@ -157,6 +170,8 @@
 
         // Create comment element
         function createCommentElement(comment) {
+            console.log('Creating comment element:', comment);
+
             var div = document.createElement('div');
             div.className = 'flex ' + (comment.is_own ? 'justify-end' : 'justify-start');
 
@@ -167,6 +182,9 @@
             var roleDisplayName = comment.type === 'customer' ? 'Khách hàng' : 'Designer';
             var roleColor = comment.type === 'customer' ? 'text-blue-600' : 'text-green-600';
             var avatarColor = comment.type === 'customer' ? 'bg-blue-500' : 'bg-green-500';
+
+            // Chuyển đổi link trong nội dung
+            var processedContent = convertLinksToClickable(comment.content);
 
             div.innerHTML =
                 '<div class="' + maxWidth + ' ' + bgColor + ' rounded-lg px-4 py-3 shadow-sm">' +
@@ -181,13 +199,27 @@
                 '<span class="text-sm font-medium">' + comment.user_name + '</span>' +
                 '<span class="text-xs ' + (comment.is_own ? 'opacity-75' : roleColor) + '">' + roleDisplayName + '</span>' +
                 '</div>' +
-                '<p class="text-sm break-words">' + escapeHtml(comment.content) + '</p>' +
+                '<p class="text-sm break-words">' + processedContent + '</p>' +
                 '<p class="text-xs opacity-75 mt-1">' + comment.created_at + '</p>' +
                 '</div>' +
                 '</div>' +
                 '</div>';
 
             return div;
+        }
+
+        // Convert links to clickable links
+        function convertLinksToClickable(text) {
+            // Regex để phát hiện URL
+            var urlRegex = /(https?:\/\/[^\s]+)/g;
+
+            return text.replace(urlRegex, function(url) {
+                // Đảm bảo URL có protocol
+                var fullUrl = url.startsWith('http') ? url : 'https://' + url;
+
+                // Tạo link với target="_blank" để mở trong tab mới
+                return '<a href="' + fullUrl + '" target="_blank" rel="noopener noreferrer" class="underline hover:opacity-80 transition-opacity">' + url + '</a>';
+            });
         }
 
         // Escape HTML
@@ -209,8 +241,12 @@
 
             // Xác định route dựa trên role của user
             var baseUrl = isDesigner ? '/designer/tasks/' : '/customer/design/tasks/';
+            var url = baseUrl + taskId + '/comments';
 
-            fetch(baseUrl + taskId + '/comments', {
+            console.log('Submitting comment to:', url);
+            console.log('Content:', content);
+
+            fetch(url, {
                     method: 'POST',
                     headers: {
                         'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
@@ -221,12 +257,14 @@
                     })
                 })
                 .then(function(response) {
+                    console.log('Submit response status:', response.status);
                     if (!response.ok) {
-                        throw new Error('Network response was not ok');
+                        throw new Error('Network response was not ok: ' + response.status);
                     }
                     return response.json();
                 })
                 .then(function(data) {
+                    console.log('Submit response data:', data);
                     if (data.success) {
                         // Add new comment to container
                         var commentElement = createCommentElement(data.comment);
@@ -251,7 +289,7 @@
                     }
                 })
                 .catch(function(error) {
-                    console.error('Error:', error);
+                    console.error('Error submitting comment:', error);
                     showNotification('Có lỗi xảy ra. Vui lòng thử lại.', 'error');
                 })
                 .finally(function() {
@@ -295,6 +333,22 @@
         }
 
         // Load comments on page load
+        console.log('Starting to load comments...');
+        console.log('Task ID:', taskId);
+        console.log('Is Designer:', isDesigner);
+        console.log('Current User ID:', currentUserId);
+
+        // Test if we can find the container
+        if (!commentContainer) {
+            console.error('Comment container not found!');
+            return;
+        }
+
+        if (!taskId) {
+            console.error('Task ID is empty!');
+            return;
+        }
+
         loadComments();
     });
 </script>
