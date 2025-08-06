@@ -227,11 +227,6 @@ Route::prefix('customer')->middleware('auth')->group(function () {
         Route::post('/tasks/{taskId}/comments', [App\Http\Controllers\DesignController::class, 'addComment'])->name('customer.design.comments.add');
         Route::get('/tasks/{taskId}/comments', [App\Http\Controllers\DesignController::class, 'getComments'])->name('customer.design.comments.get');
         Route::post('/tasks/{taskId}/comments/read', [App\Http\Controllers\DesignController::class, 'markCommentsAsRead'])->name('customer.design.comments.read');
-
-        // Chunk upload routes
-        Route::post('/upload-chunk', [App\Http\Controllers\ChunkUploadController::class, 'uploadChunk'])->name('customer.design.upload-chunk');
-        Route::get('/upload-status/{uploadId}', [App\Http\Controllers\ChunkUploadController::class, 'checkUploadStatus'])->name('customer.design.upload-status');
-        Route::post('/upload-cancel', [App\Http\Controllers\ChunkUploadController::class, 'cancelUpload'])->name('customer.design.upload-cancel');
     });
 });
 
@@ -287,9 +282,4 @@ Route::prefix('designer')->middleware(['auth'])->group(function () {
     Route::post('/tasks/{taskId}/comments', [App\Http\Controllers\DesignController::class, 'addComment'])->name('designer.comments.add');
     Route::get('/tasks/{taskId}/comments', [App\Http\Controllers\DesignController::class, 'getComments'])->name('designer.comments.get');
     Route::post('/tasks/{taskId}/comments/read', [App\Http\Controllers\DesignController::class, 'markCommentsAsRead'])->name('designer.comments.read');
-
-    // Chunk upload routes
-    Route::post('/upload-chunk', [App\Http\Controllers\ChunkUploadController::class, 'uploadChunk'])->name('designer.upload-chunk');
-    Route::get('/upload-status/{uploadId}', [App\Http\Controllers\ChunkUploadController::class, 'checkUploadStatus'])->name('designer.upload-status');
-    Route::post('/upload-cancel', [App\Http\Controllers\ChunkUploadController::class, 'cancelUpload'])->name('designer.upload-cancel');
 });

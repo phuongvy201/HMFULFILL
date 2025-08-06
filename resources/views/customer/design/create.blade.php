@@ -85,8 +85,12 @@
                     required onchange="updateFileUploads()">
                     <option value="">Chọn số mặt</option>
                     @for($i = 1; $i <= 5; $i++)
+                        @php
+                        $priceVND=$i * 20000;
+                        $priceUSD=round($priceVND / config('currency.usd_to_vnd', 26128.0), 2);
+                        @endphp
                         <option value="{{ $i }}" {{ old('sides_count') == $i ? 'selected' : '' }}>
-                        {{ $i }} mặt ({{ number_format($i * 20000) }} VND)
+                        {{ $i }} mặt (${{ number_format($priceUSD, 2) }})
                         </option>
                         @endfor
                 </select>
@@ -97,9 +101,9 @@
                 <div class="bg-gray-50 rounded-lg p-4">
                     <div class="flex justify-between items-center">
                         <span class="text-gray-700 font-medium">Giá dự kiến:</span>
-                        <span class="text-2xl font-bold text-green-600" id="priceDisplay">0 VND</span>
+                        <span class="text-2xl font-bold text-green-600" id="priceDisplay">$0.00</span>
                     </div>
-                    <p class="text-sm text-gray-500 mt-1">Giá sẽ được tính dựa trên số mặt bạn chọn (20,000 VND/mặt)</p>
+                    <p class="text-sm text-gray-500 mt-1">Giá sẽ được tính dựa trên số mặt bạn chọn (20,000 VND/mặt ≈ $0.77/mặt)</p>
                 </div>
             </div>
 
@@ -129,44 +133,18 @@
                 </button>
             </div>
 
-            <!-- Upload Progress -->
-            <div id="uploadProgress" class="hidden mt-4">
-                <div class="bg-blue-50 border border-blue-200 rounded-lg p-4">
-                    <div class="flex items-center justify-between mb-2">
-                        <span class="text-sm font-medium text-blue-700">Đang upload files...</span>
-                        <span id="progressPercent" class="text-sm font-medium text-blue-700">0%</span>
-                    </div>
-                    <div class="w-full bg-blue-200 rounded-full h-2">
-                        <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-                    </div>
-                    <div id="uploadDetails" class="mt-2 text-xs text-blue-600">
-                        <span id="currentFile">Chuẩn bị upload...</span>
-                    </div>
-                </div>
-            </div>
 
-            <!-- Upload Status -->
-            <div id="uploadStatus" class="hidden mt-4">
-                <div class="bg-green-50 border border-green-200 rounded-lg p-4">
-                    <div class="flex items-center">
-                        <i class="fas fa-check-circle text-green-500 mr-2"></i>
-                        <span class="text-sm font-medium text-green-700">Upload hoàn tất!</span>
-                    </div>
-                </div>
-            </div>
         </form>
     </div>
 </div>
 
-<script src="{{ asset('js/chunk-upload.js') }}"></script>
-<script>
-    let uploadManager = null;
-    let uploadedFiles = [];
 
+<script>
     function updatePrice() {
         const sidesCount = parseInt(document.getElementById('sides_count').value) || 0;
-        const price = sidesCount * 20000; // 20,000 VND per side (khớp với DesignTask::PRICE_PER_SIDE_VND)
-        document.getElementById('priceDisplay').textContent = `${price.toLocaleString('vi-VN')} VND`;
+        const priceVND = sidesCount * 20000; // 20,000 VND per side (khớp với DesignTask::PRICE_PER_SIDE_VND)
+        const priceUSD = priceVND / 26128.0; // Chuyển đổi sang USD theo tỷ giá
+        document.getElementById('priceDisplay').textContent = `$${priceUSD.toFixed(2)}`;
     }
 
     function updateFileUploads() {
@@ -203,7 +181,7 @@
                             <i class="fas fa-cloud-upload-alt text-3xl text-gray-400"></i>
                             <div>
                                 <p class="text-md font-medium text-gray-700">Tải lên ${sideName.toLowerCase()}</p>
-                                <p class="text-xs text-gray-500 mt-1">JPG, PNG, PDF (tối đa 100MB - upload tự động chia nhỏ)</p>
+                                <p class="text-xs text-gray-500 mt-1">JPG, PNG, PDF (tối đa 50MB)</p>
                             </div>
                             <button type="button" onclick="document.getElementById('mockup_file_${i}').click()"
                                 class="bg-blue-600 hover:bg-blue-700 text-white font-semibold py-2 px-4 rounded-lg transition duration-200 text-sm">
@@ -248,113 +226,23 @@
         }
     }
 
-    // Khởi tạo upload manager
-    function initUploadManager() {
-        uploadManager = new FileUploadManager({
-            uploadUrl: '{{ route("customer.design.upload-chunk") }}',
-            statusUrl: '{{ route("customer.design.upload-status", ["uploadId" => "UPLOAD_ID"]) }}'.replace('UPLOAD_ID', '{uploadId}'),
-            cancelUrl: '{{ route("customer.design.upload-cancel") }}',
-            chunkSize: 1024 * 1024, // 1MB per chunk
-            maxFileSize: 100 * 1024 * 1024, // 100MB
-            onFileProgress: function(data) {
-                updateUploadProgress(data);
-            },
-            onFileComplete: function(data) {
-                uploadedFiles.push(data.filePath);
-                console.log('File uploaded:', data.filePath);
-            },
-            onFileError: function(data) {
-                console.error('Upload error:', data.error);
-                showNotification('Lỗi upload file: ' + data.error, 'error');
-            },
-            onAllComplete: function(data) {
-                console.log('All uploads completed:', data);
-                showUploadStatus();
-            }
-        });
-    }
-
-    // Cập nhật progress
-    function updateUploadProgress(data) {
-        const progressBar = document.getElementById('progressBar');
-        const progressPercent = document.getElementById('progressPercent');
-        const currentFile = document.getElementById('currentFile');
-
-        progressBar.style.width = data.progress + '%';
-        progressPercent.textContent = Math.round(data.progress) + '%';
-        currentFile.textContent = `Đang upload: ${data.file.name} (${data.chunkIndex}/${data.totalChunks} chunks)`;
-    }
-
-    // Hiển thị trạng thái upload
-    function showUploadStatus() {
-        document.getElementById('uploadProgress').classList.add('hidden');
-        document.getElementById('uploadStatus').classList.remove('hidden');
-    }
-
     // Xử lý form submission
-    document.getElementById('designForm').addEventListener('submit', async function(e) {
-        e.preventDefault();
-
+    document.getElementById('designForm').addEventListener('submit', function(e) {
         const sidesCount = parseInt(document.getElementById('sides_count').value) || 0;
         if (sidesCount === 0) {
+            e.preventDefault();
             showNotification('Vui lòng chọn số mặt', 'error');
             return;
         }
 
         // Kiểm tra files
-        const files = [];
         for (let i = 1; i <= sidesCount; i++) {
             const fileInput = document.getElementById(`mockup_file_${i}`);
             if (fileInput.files.length === 0) {
+                e.preventDefault();
                 showNotification(`Vui lòng chọn file cho ${getSideName(i)}`, 'error');
                 return;
             }
-            files.push(fileInput.files[0]);
-        }
-
-        // Reset uploaded files array
-        uploadedFiles = [];
-
-        // Khởi tạo upload manager nếu chưa có
-        if (!uploadManager) {
-            initUploadManager();
-        }
-
-        // Thêm files vào queue
-        uploadManager.clearQueue();
-        uploadManager.addFiles(files);
-
-        // Hiển thị progress
-        document.getElementById('uploadProgress').classList.remove('hidden');
-        document.getElementById('uploadStatus').classList.add('hidden');
-
-        try {
-            // Bắt đầu upload
-            await uploadManager.startUpload();
-
-            // Kiểm tra lại uploaded files sau khi upload
-            const completedFiles = uploadManager.getCompletedFiles();
-            console.log('Completed files:', completedFiles);
-
-            if (completedFiles.length === sidesCount) {
-                // Thêm uploaded files vào form
-                completedFiles.forEach((filePath, index) => {
-                    const input = document.createElement('input');
-                    input.type = 'hidden';
-                    input.name = 'uploaded_files[]';
-                    input.value = filePath;
-                    document.getElementById('designForm').appendChild(input);
-                });
-
-                // Submit form
-                document.getElementById('designForm').submit();
-            } else {
-                showNotification(`Có lỗi xảy ra khi upload files. Đã upload ${completedFiles.length}/${sidesCount} files.`, 'error');
-            }
-
-        } catch (error) {
-            console.error('Upload error:', error);
-            showNotification('Lỗi upload: ' + error.message, 'error');
         }
     });
 
@@ -397,7 +285,6 @@
     document.addEventListener('DOMContentLoaded', function() {
         updatePrice();
         updateFileUploads();
-        initUploadManager();
     });
 
     // Cập nhật giá khi thay đổi số mặt
@@ -406,39 +293,7 @@
         updateFileUploads();
     });
 
-    // Upload Progress Handler
-    function handleUploadProgress(form, progressId, progressBarId, progressPercentId, submitBtnId) {
-        const progressDiv = document.getElementById(progressId);
-        const progressBar = document.getElementById(progressBarId);
-        const progressPercent = document.getElementById(progressPercentId);
-        const submitBtn = document.getElementById(submitBtnId);
 
-        if (form && progressDiv && progressBar && progressPercent && submitBtn) {
-            form.addEventListener('submit', function(e) {
-                // Show progress bar
-                progressDiv.classList.remove('hidden');
-                submitBtn.disabled = true;
-                submitBtn.classList.add('opacity-50', 'cursor-not-allowed');
-
-                // Simulate progress (since we can't get real upload progress without AJAX)
-                let progress = 0;
-                const interval = setInterval(() => {
-                    progress += Math.random() * 15;
-                    if (progress > 90) progress = 90; // Don't go to 100% until upload completes
-
-                    progressBar.style.width = progress + '%';
-                    progressPercent.textContent = Math.round(progress) + '%';
-                }, 200);
-
-                // Reset progress when form is actually submitted
-                setTimeout(() => {
-                    clearInterval(interval);
-                    progressBar.style.width = '100%';
-                    progressPercent.textContent = '100%';
-                }, 1000);
-            });
-        }
-    }
 
     // Thêm validation trước khi submit
     document.querySelector('form').addEventListener('submit', function(e) {
@@ -495,20 +350,6 @@
         }
 
         console.log('Form validation passed, submitting...');
-    });
-
-    // Initialize progress handler
-    document.addEventListener('DOMContentLoaded', function() {
-        const form = document.querySelector('form');
-        if (form) {
-            handleUploadProgress(
-                form,
-                'uploadProgress',
-                'progressBar',
-                'progressPercent',
-                'submitBtn'
-            );
-        }
     });
 </script>
 @endsection

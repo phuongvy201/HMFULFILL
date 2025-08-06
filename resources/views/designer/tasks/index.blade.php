@@ -230,16 +230,7 @@
                             </div>
                         </div>
 
-                        <!-- Progress bar -->
-                        <div id="uploadProgress" class="hidden mt-4">
-                            <div class="flex justify-between text-sm text-gray-600 mb-1">
-                                <span>Đang upload...</span>
-                                <span id="progressPercent">0%</span>
-                            </div>
-                            <div class="w-full bg-gray-200 rounded-full h-2">
-                                <div id="progressBar" class="bg-blue-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
-                            </div>
-                        </div>
+
 
                         <!-- File list -->
                         <div id="fileList" class="mt-4 space-y-2"></div>
@@ -295,9 +286,8 @@
 </div>
 
 @push('scripts')
-<script src="/js/chunk-upload.js"></script>
+
 <script>
-    let uploadManager = null;
     let currentTaskId = null;
 
     document.addEventListener('DOMContentLoaded', function() {
@@ -426,179 +416,29 @@
 
         // Reset form
         document.getElementById('fileList').innerHTML = '';
-        document.getElementById('uploadProgress').classList.add('hidden');
         document.getElementById('designFiles').value = '';
 
-        // Initialize upload manager
-        initUploadManager();
+
     }
 
     function closeSubmitModal() {
         document.getElementById('submitDesignModal').classList.add('hidden');
-        if (uploadManager) {
-            uploadManager.cancelAllUploads();
-        }
     }
 
-    function initUploadManager() {
-        uploadManager = new FileUploadManager({
-            uploadUrl: '/designer/upload-chunk',
-            chunkSize: 1024 * 1024, // 1MB
-            onProgress: (data) => {
-                const progressBar = document.getElementById('progressBar');
-                const progressPercent = document.getElementById('progressPercent');
-                const progress = data.progress;
 
-                progressBar.style.width = progress + '%';
-                progressPercent.textContent = Math.round(progress) + '%';
-            },
-            onComplete: (data) => {
-                showNotification('Upload hoàn tất!', 'success');
-                document.getElementById('uploadProgress').classList.add('hidden');
-            },
-            onError: (data) => {
-                showNotification('Lỗi upload: ' + data.error, 'error');
-                document.getElementById('uploadProgress').classList.add('hidden');
-            }
-        });
 
-        // Setup file input
+    function submitDesign() {
         const fileInput = document.getElementById('designFiles');
-        fileInput.addEventListener('change', handleFileSelection);
-
-        // Setup drag and drop
-        const uploadArea = document.getElementById('fileUploadArea');
-        uploadArea.addEventListener('dragover', handleDragOver);
-        uploadArea.addEventListener('drop', handleDrop);
-    }
-
-    function handleFileSelection(event) {
-        const files = Array.from(event.target.files);
-        if (files.length > 0) {
-            uploadManager.addFiles(files);
-            displayFileList();
-        }
-    }
-
-    function handleDragOver(event) {
-        event.preventDefault();
-        event.currentTarget.classList.add('border-blue-400');
-    }
-
-    function handleDrop(event) {
-        event.preventDefault();
-        event.currentTarget.classList.remove('border-blue-400');
-
-        const files = Array.from(event.dataTransfer.files);
-        if (files.length > 0) {
-            uploadManager.addFiles(files);
-            displayFileList();
-        }
-    }
-
-    function displayFileList() {
-        const fileList = document.getElementById('fileList');
-        const files = uploadManager.getFiles();
-
-        fileList.innerHTML = '';
-        files.forEach((file, index) => {
-            const fileItem = document.createElement('div');
-            fileItem.className = 'flex items-center justify-between p-3 bg-gray-50 rounded-lg';
-            fileItem.innerHTML = `
-                <div class="flex items-center">
-                    <i class="fas fa-file mr-3 text-blue-500"></i>
-                    <div>
-                        <p class="font-medium text-gray-800">${file.name}</p>
-                        <p class="text-sm text-gray-500">${formatFileSize(file.size)}</p>
-                    </div>
-                </div>
-                <button type="button" onclick="removeFile(${index})" class="text-red-500 hover:text-red-700">
-                    <i class="fas fa-times"></i>
-                </button>
-            `;
-            fileList.appendChild(fileItem);
-        });
-    }
-
-    function removeFile(index) {
-        uploadManager.removeFile(index);
-        displayFileList();
-    }
-
-    function formatFileSize(bytes) {
-        if (bytes === 0) return '0 Bytes';
-        const k = 1024;
-        const sizes = ['Bytes', 'KB', 'MB', 'GB'];
-        const i = Math.floor(Math.log(bytes) / Math.log(k));
-        return parseFloat((bytes / Math.pow(k, i)).toFixed(2)) + ' ' + sizes[i];
-    }
-
-    async function submitDesign() {
-        if (!uploadManager || uploadManager.getFiles().length === 0) {
+        if (!fileInput.files || fileInput.files.length === 0) {
             showNotification('Vui lòng chọn ít nhất một file để upload', 'error');
             return;
         }
 
-        const submitButton = document.querySelector('button[onclick="submitDesign()"]');
-        const originalText = submitButton.innerHTML;
-
-        try {
-            submitButton.disabled = true;
-            submitButton.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang upload...';
-
-            // Hiển thị progress bar
-            document.getElementById('uploadProgress').classList.remove('hidden');
-
-            // Bắt đầu upload
-            await uploadManager.startUpload();
-
-            // Lấy completed files
-            const completedFiles = uploadManager.getCompletedFiles();
-
-            if (completedFiles.length === 0) {
-                showNotification('Có lỗi xảy ra khi upload files', 'error');
-                return;
-            }
-
-            // Tạo form data
-            const formData = new FormData();
-            formData.append('_token', document.querySelector('meta[name="csrf-token"]').getAttribute('content'));
-            formData.append('notes', document.getElementById('notes').value);
-
-            // Thêm uploaded files
-            if (completedFiles.length === 1) {
-                formData.append('uploaded_file', completedFiles[0]);
-            } else {
-                completedFiles.forEach((filePath, index) => {
-                    formData.append('uploaded_files[]', filePath);
-                });
-            }
-
-            // Submit form
-            const response = await fetch(`/designer/tasks/${currentTaskId}/submit`, {
-                method: 'POST',
-                body: formData
-            });
-
-            if (response.ok) {
-                showNotification('Gửi thiết kế thành công!', 'success');
-                setTimeout(() => {
-                    closeSubmitModal();
-                    window.location.reload();
-                }, 1500);
-            } else {
-                const errorData = await response.json();
-                showNotification('Lỗi: ' + (errorData.message || 'Có lỗi xảy ra'), 'error');
-            }
-
-        } catch (error) {
-            console.error('Submit error:', error);
-            showNotification('Lỗi: ' + error.message, 'error');
-        } finally {
-            submitButton.disabled = false;
-            submitButton.innerHTML = originalText;
-        }
+        // Submit form directly
+        document.getElementById('submitDesignForm').submit();
     }
+
+
 
     function openImageModal(imageUrl, title) {
         const modal = document.getElementById('imageModal');

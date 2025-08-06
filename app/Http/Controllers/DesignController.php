@@ -48,7 +48,8 @@ class DesignController extends Controller
 
         $user = Auth::user();
         $sidesCount = (int)$request->sides_count; // Chuyển thành integer
-        $price = DesignTask::calculatePrice($sidesCount);
+        $priceVND = DesignTask::calculatePrice($sidesCount); // Giá theo VND
+        $priceUSD = DesignTask::calculatePriceUSD($sidesCount); // Giá theo USD
 
         // Validation sau khi đã cast sides_count
         $request->validate([
@@ -65,9 +66,9 @@ class DesignController extends Controller
             'mockup_files.*.max' => 'File không được vượt quá 50MB.'
         ]);
 
-        // Kiểm tra số dư
+        // Kiểm tra số dư (theo USD)
         $wallet = $user->wallet;
-        if (!$wallet || !$wallet->hasEnoughBalance($price)) {
+        if (!$wallet || !$wallet->hasEnoughBalance($priceUSD)) {
             return redirect()->back()
                 ->withInput()
                 ->withErrors(['error' => 'Số dư không đủ. Vui lòng nạp tiền trước.']);
@@ -112,27 +113,27 @@ class DesignController extends Controller
             // Lưu tất cả paths dưới dạng JSON
             $mockupFilesJson = json_encode($mockupPaths);
 
-            // Tạo design task
+            // Tạo design task (lưu giá theo VND)
             $designTask = DesignTask::create([
                 'customer_id' => $user->id,
                 'title' => $request->title,
                 'description' => $request->description,
                 'sides_count' => $sidesCount,
-                'price' => $price,
+                'price' => $priceVND, // Lưu giá theo VND
                 'status' => DesignTask::STATUS_PENDING,
                 'mockup_file' => $mockupFilesJson, // Lưu JSON array của các file paths
             ]);
 
-            // Trừ tiền từ ví
-            $wallet->withdraw($price);
+            // Trừ tiền từ ví (theo USD)
+            $wallet->withdraw($priceUSD);
 
-            // Tạo transaction record
+            // Tạo transaction record (theo USD)
             Transaction::create([
                 'user_id' => $user->id,
                 'transaction_code' => 'DEDUCT_' . strtoupper(uniqid()), // BẮT BUỘC
                 'type' => Transaction::TYPE_DEDUCT,
                 'method' => 'Bank VN', // hoặc phương thức phù hợp
-                'amount' => $price,
+                'amount' => $priceUSD, // Số tiền trừ theo USD
                 'status' => Transaction::STATUS_APPROVED,
                 'note' => "Payment for design task: {$designTask->title}",
                 // Nếu có các trường reference_id/reference_type thì thêm vào nếu cần
