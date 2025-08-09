@@ -51,9 +51,11 @@ return [
 
     // Performance settings
     'performance' => [
+        'enable_parallel' => env('S3_ENABLE_PARALLEL_UPLOAD', true),
         'concurrent_uploads' => env('S3_CONCURRENT_UPLOADS', 3),
         'memory_limit' => env('S3_UPLOAD_MEMORY_LIMIT', '512M'),
         'time_limit' => env('S3_UPLOAD_TIME_LIMIT', 600), // 10 minutes
+        'batch_size' => env('S3_BATCH_SIZE', 3), // Number of parts per batch
     ],
 
     // File type specific settings

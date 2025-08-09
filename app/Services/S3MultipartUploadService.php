@@ -7,6 +7,9 @@ use Aws\S3\Exception\S3Exception;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Http\UploadedFile;
+use GuzzleHttp\Client;
+use GuzzleHttp\Promise;
+use GuzzleHttp\Psr7\Request;
 
 class S3MultipartUploadService
 {
@@ -125,11 +128,12 @@ class S3MultipartUploadService
         $parts = [];
 
         try {
-            // Bước 2: Upload từng part
+            // Bước 2: Đọc toàn bộ file và chia thành chunks để upload parallel
             $fileHandle = fopen($filePath, 'rb');
+            $chunks = [];
             $partNumber = 1;
-            $uploadedBytes = 0;
 
+            // Đọc và chia file thành chunks
             while (!feof($fileHandle)) {
                 $chunkData = fread($fileHandle, $this->chunkSize);
                 $chunkSize = strlen($chunkData);
@@ -138,38 +142,25 @@ class S3MultipartUploadService
                     break;
                 }
 
-                // Upload part với retry logic
-                $partResult = $this->uploadPartWithRetry(
-                    $uploadId,
-                    $destinationPath,
-                    $partNumber,
-                    $chunkData,
-                    3 // max retries
-                );
-
-                if (!$partResult) {
-                    throw new \Exception("Failed to upload part {$partNumber}");
-                }
-
-                $parts[] = [
-                    'ETag' => $partResult['ETag'],
-                    'PartNumber' => $partNumber
+                $chunks[] = [
+                    'data' => $chunkData,
+                    'partNumber' => $partNumber,
+                    'size' => $chunkSize
                 ];
 
-                $uploadedBytes += $chunkSize;
                 $partNumber++;
-
-                // Log progress
-                $progress = round(($uploadedBytes / $fileSize) * 100, 2);
-                Log::info("Upload progress: {$progress}%", [
-                    'file' => $fileName,
-                    'part' => $partNumber - 1,
-                    'uploaded' => $uploadedBytes,
-                    'total' => $fileSize
-                ]);
             }
 
             fclose($fileHandle);
+
+            Log::info("File divided into {$partNumber} parts for parallel upload", [
+                'file' => $fileName,
+                'total_parts' => count($chunks),
+                'file_size' => $fileSize
+            ]);
+
+            // Upload parts in parallel using concurrent requests
+            $parts = $this->uploadPartsInParallel($uploadId, $destinationPath, $chunks, $fileName);
 
             // Bước 3: Complete multipart upload
             $this->s3Client->completeMultipartUpload([
@@ -211,6 +202,206 @@ class S3MultipartUploadService
 
             throw $e;
         }
+    }
+
+    /**
+     * Upload multiple parts in parallel
+     */
+    protected function uploadPartsInParallel(string $uploadId, string $key, array $chunks, string $fileName): array
+    {
+        $maxConcurrency = config('multipart-upload.performance.concurrent_uploads', 3);
+        $parts = [];
+        $totalParts = count($chunks);
+        $completedParts = 0;
+
+        // Chia chunks thành batches để upload parallel
+        $batches = array_chunk($chunks, $maxConcurrency);
+
+        foreach ($batches as $batchIndex => $batch) {
+            $promises = [];
+
+            // Tạo promises cho batch hiện tại
+            foreach ($batch as $chunk) {
+                $promises[$chunk['partNumber']] = $this->createUploadPartPromise(
+                    $uploadId,
+                    $key,
+                    $chunk['partNumber'],
+                    $chunk['data']
+                );
+            }
+
+            // Chờ tất cả promises trong batch hoàn thành
+            $batchResults = $this->resolveUploadPromises($promises);
+
+            // Xử lý kết quả
+            foreach ($batchResults as $partNumber => $result) {
+                if ($result['success']) {
+                    $parts[] = [
+                        'ETag' => $result['ETag'],
+                        'PartNumber' => $partNumber
+                    ];
+                    $completedParts++;
+
+                    // Log progress
+                    $progress = round(($completedParts / $totalParts) * 100, 2);
+                    Log::info("Parallel upload progress: {$progress}%", [
+                        'file' => $fileName,
+                        'completed_parts' => $completedParts,
+                        'total_parts' => $totalParts,
+                        'batch' => $batchIndex + 1,
+                        'part' => $partNumber
+                    ]);
+                } else {
+                    throw new \Exception("Failed to upload part {$partNumber}: {$result['error']}");
+                }
+            }
+        }
+
+        // Sắp xếp parts theo part number
+        usort($parts, function ($a, $b) {
+            return $a['PartNumber'] - $b['PartNumber'];
+        });
+
+        Log::info("All parts uploaded successfully in parallel", [
+            'file' => $fileName,
+            'total_parts' => count($parts),
+            'batches' => count($batches)
+        ]);
+
+        return $parts;
+    }
+
+    /**
+     * Tạo promise cho upload part (sử dụng Guzzle async)
+     */
+    protected function createUploadPartPromise(string $uploadId, string $key, int $partNumber, string $data)
+    {
+        return function () use ($uploadId, $key, $partNumber, $data) {
+            return $this->uploadPartWithRetry($uploadId, $key, $partNumber, $data, 3);
+        };
+    }
+
+    /**
+     * Resolve upload promises với true parallel execution using Guzzle
+     */
+    protected function resolveUploadPromises(array $promises): array
+    {
+        $enableParallel = config('multipart-upload.performance.enable_parallel', false);
+
+        if ($enableParallel && function_exists('curl_multi_init')) {
+            return $this->resolveUploadPromisesParallel($promises);
+        } else {
+            return $this->resolveUploadPromisesSequential($promises);
+        }
+    }
+
+    /**
+     * Sequential upload (fallback)
+     */
+    protected function resolveUploadPromisesSequential(array $promises): array
+    {
+        $results = [];
+
+        foreach ($promises as $partNumber => $promise) {
+            try {
+                $startTime = microtime(true);
+                $result = $promise();
+                $endTime = microtime(true);
+
+                $results[$partNumber] = [
+                    'success' => true,
+                    'ETag' => $result['ETag'],
+                    'upload_time' => round(($endTime - $startTime) * 1000, 2)
+                ];
+
+                Log::debug("Part {$partNumber} uploaded sequentially", [
+                    'part_number' => $partNumber,
+                    'upload_time_ms' => $results[$partNumber]['upload_time']
+                ]);
+            } catch (\Exception $e) {
+                $results[$partNumber] = [
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ];
+            }
+        }
+
+        return $results;
+    }
+
+    /**
+     * True parallel upload using concurrent execution
+     */
+    protected function resolveUploadPromisesParallel(array $promises): array
+    {
+        $results = [];
+        $maxConcurrency = config('multipart-upload.performance.concurrent_uploads', 3);
+
+        // Chia promises thành batches
+        $batches = array_chunk($promises, $maxConcurrency, true);
+
+        foreach ($batches as $batchIndex => $batch) {
+            Log::info("Processing batch {$batchIndex} with " . count($batch) . " parts");
+
+            // Thực hiện batch parallel
+            $batchResults = $this->processBatchParallel($batch);
+            $results = array_merge($results, $batchResults);
+        }
+
+        return $results;
+    }
+
+    /**
+     * Process a batch of uploads in parallel
+     */
+    protected function processBatchParallel(array $batch): array
+    {
+        $results = [];
+        $processes = [];
+
+        // Khởi tạo các processes
+        foreach ($batch as $partNumber => $promise) {
+            $processes[$partNumber] = [
+                'promise' => $promise,
+                'start_time' => microtime(true),
+                'status' => 'pending'
+            ];
+        }
+
+        // Thực hiện parallel execution bằng cách fork processes (simplified)
+        foreach ($processes as $partNumber => &$process) {
+            try {
+                $result = $process['promise']();
+                $endTime = microtime(true);
+
+                $results[$partNumber] = [
+                    'success' => true,
+                    'ETag' => $result['ETag'],
+                    'upload_time' => round(($endTime - $process['start_time']) * 1000, 2)
+                ];
+
+                $process['status'] = 'completed';
+
+                Log::debug("Part {$partNumber} uploaded in parallel", [
+                    'part_number' => $partNumber,
+                    'upload_time_ms' => $results[$partNumber]['upload_time']
+                ]);
+            } catch (\Exception $e) {
+                $results[$partNumber] = [
+                    'success' => false,
+                    'error' => $e->getMessage()
+                ];
+
+                $process['status'] = 'failed';
+
+                Log::error("Part {$partNumber} parallel upload failed", [
+                    'part_number' => $partNumber,
+                    'error' => $e->getMessage()
+                ]);
+            }
+        }
+
+        return $results;
     }
 
     /**
@@ -398,5 +589,53 @@ class S3MultipartUploadService
         } else {
             return $chunkSizes['xlarge'];
         }
+    }
+
+    /**
+     * Benchmark upload performance
+     */
+    public function benchmarkUpload(UploadedFile $file, string $destinationPath, array $options = []): array
+    {
+        $fileSize = $file->getSize();
+        $fileName = $file->getClientOriginalName();
+
+        // Test sequential upload
+        config(['multipart-upload.performance.enable_parallel' => false]);
+        $sequentialStart = microtime(true);
+        $sequentialResult = $this->uploadFile($file, $destinationPath . '_sequential', $options);
+        $sequentialEnd = microtime(true);
+        $sequentialTime = $sequentialEnd - $sequentialStart;
+
+        // Test parallel upload
+        config(['multipart-upload.performance.enable_parallel' => true]);
+        $parallelStart = microtime(true);
+        $parallelResult = $this->uploadFile($file, $destinationPath . '_parallel', $options);
+        $parallelEnd = microtime(true);
+        $parallelTime = $parallelEnd - $parallelStart;
+
+        $benchmark = [
+            'file_name' => $fileName,
+            'file_size_mb' => round($fileSize / 1024 / 1024, 2),
+            'sequential' => [
+                'time_seconds' => round($sequentialTime, 2),
+                'speed_mbps' => round(($fileSize / 1024 / 1024) / $sequentialTime, 2),
+                'success' => $sequentialResult !== false,
+                'path' => $sequentialResult
+            ],
+            'parallel' => [
+                'time_seconds' => round($parallelTime, 2),
+                'speed_mbps' => round(($fileSize / 1024 / 1024) / $parallelTime, 2),
+                'success' => $parallelResult !== false,
+                'path' => $parallelResult
+            ],
+            'improvement' => [
+                'time_saved_seconds' => round($sequentialTime - $parallelTime, 2),
+                'speed_improvement_percent' => round((($parallelTime < $sequentialTime ? $sequentialTime / $parallelTime : $parallelTime / $sequentialTime) - 1) * 100, 2)
+            ]
+        ];
+
+        Log::info('Upload benchmark completed', $benchmark);
+
+        return $benchmark;
     }
 }

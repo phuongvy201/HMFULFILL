@@ -259,6 +259,10 @@ Route::controller(RegisterController::class)->group(function () {
 Route::view('fulfill', 'fulfill')->middleware('auth');
 
 Route::get('/test-order', [OrderUploadController::class, 'testOrder']);
+
+// Debug routes (remove in production)
+Route::post('/debug/design-upload', [App\Http\Controllers\TestDesignUploadController::class, 'testUpload']);
+Route::post('/debug/s3-upload', [App\Http\Controllers\TestDesignUploadController::class, 'testS3Upload']);
 Route::get('/test-batch-order', [OrderUploadController::class, 'testBatchOrder']);
 Route::post('/find-variant-sku/{productId}', [ProductController::class, 'findVariantSku'])->name('products.find-variant-sku');
 Route::get('/products/{slug}', [ProductController::class, 'productList']);

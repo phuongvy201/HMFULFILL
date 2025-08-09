@@ -23,7 +23,14 @@ class DesignUploadRequest extends FormRequest
      */
     public function rules(): array
     {
-        $task = $this->route('task');
+        // Lấy task ID từ route parameter
+        $taskId = $this->route('taskId');
+        $task = null;
+
+        if ($taskId) {
+            $task = \App\Models\DesignTask::find($taskId);
+        }
+
         $maxFileSize = config('multipart-upload.file_types.design_files.max_file_size', 200 * 1024 * 1024);
         $allowedExtensions = config(
             'multipart-upload.file_types.design_files.allowed_extensions',
