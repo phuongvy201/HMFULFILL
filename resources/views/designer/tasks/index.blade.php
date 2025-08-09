@@ -179,6 +179,13 @@
                             <i class="fas fa-edit mr-2"></i>Chỉnh sửa thiết kế
                         </a>
                         @endif
+
+                        @if($task->designer_id === auth()->id() && $task->status === 'completed')
+                        <a href="{{ route('designer.tasks.show', $task->id) }}"
+                            class="w-full bg-orange-600 hover:bg-orange-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center">
+                            <i class="fas fa-sync-alt mr-2"></i>Cập nhật thiết kế
+                        </a>
+                        @endif
                     </div>
                 </div>
                 @endforeach

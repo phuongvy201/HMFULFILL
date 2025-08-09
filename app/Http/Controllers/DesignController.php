@@ -399,6 +399,168 @@ class DesignController extends Controller
     }
 
     /**
+     * Designer cập nhật thiết kế đã gửi
+     */
+    public function updateDesign(DesignUploadRequest $request, $taskId)
+    {
+        $user = Auth::user();
+
+        if ($user->role !== 'design') {
+            return redirect()->back()->withErrors(['error' => 'Bạn không có quyền truy cập.']);
+        }
+
+        $task = DesignTask::where('id', $taskId)
+            ->where('designer_id', $user->id)
+            ->whereIn('status', [DesignTask::STATUS_COMPLETED, DesignTask::STATUS_REVISION])
+            ->first();
+
+        if (!$task) {
+            return redirect()->back()->withErrors(['error' => 'Task không tồn tại hoặc không thể cập nhật.']);
+        }
+
+        // Kiểm tra xem task đã có revision chưa
+        $latestRevision = $task->revisions()->latest()->first();
+        if (!$latestRevision) {
+            return redirect()->back()->withErrors(['error' => 'Không tìm thấy thiết kế để cập nhật.']);
+        }
+
+        try {
+            $designPaths = [];
+            $uploadService = new S3MultipartUploadService();
+
+            if ($task->sides_count > 1) {
+                // Update nhiều files cho nhiều mặt
+                $designFiles = $request->file('design_files');
+
+                Log::info('Starting multipart upload for updating multiple design files', [
+                    'task_id' => $task->id,
+                    'revision_id' => $latestRevision->id,
+                    'files_count' => count($designFiles),
+                    'sides_count' => $task->sides_count
+                ]);
+
+                // Upload tất cả files với multipart upload service
+                $uploadResults = $uploadService->uploadMultipleFiles(
+                    $designFiles,
+                    'designs/updated',
+                    [
+                        'visibility' => 'private',
+                        'metadata' => [
+                            'task-id' => $task->id,
+                            'revision-id' => $latestRevision->id,
+                            'designer-id' => $user->id,
+                            'upload-type' => 'design-update'
+                        ]
+                    ]
+                );
+
+                // Kiểm tra kết quả upload
+                foreach ($uploadResults as $index => $result) {
+                    if ($result['success']) {
+                        $designPaths[] = $result['path'];
+
+                        Log::info('Updated design file uploaded successfully', [
+                            'task_id' => $task->id,
+                            'revision_id' => $latestRevision->id,
+                            'file_index' => $index + 1,
+                            'original_name' => $result['original_name'],
+                            'path' => $result['path'],
+                            'size' => $result['size']
+                        ]);
+                    } else {
+                        throw new \Exception("File upload failed: {$result['error']} (File: {$result['original_name']})");
+                    }
+                }
+
+                // Kiểm tra số lượng files đã upload
+                if (count($designPaths) !== $task->sides_count) {
+                    throw new \Exception('Số lượng files upload không khớp với số mặt đã chọn.');
+                }
+            } else {
+                // Update 1 file cho 1 mặt
+                $designFile = $request->file('design_file');
+
+                Log::info('Starting multipart upload for updating single design file', [
+                    'task_id' => $task->id,
+                    'revision_id' => $latestRevision->id,
+                    'file_name' => $designFile->getClientOriginalName(),
+                    'file_size' => $designFile->getSize()
+                ]);
+
+                $originalName = $designFile->getClientOriginalName();
+                $normalizedName = str_replace(' ', '+', $originalName);
+                $normalizedName = urlencode($normalizedName);
+                $designFileName = time() . '_updated_' . $normalizedName;
+                $destinationPath = 'designs/updated/' . $designFileName;
+
+                $designPath = $uploadService->uploadFile(
+                    $designFile,
+                    $destinationPath,
+                    [
+                        'visibility' => 'private',
+                        'metadata' => [
+                            'task-id' => $task->id,
+                            'revision-id' => $latestRevision->id,
+                            'designer-id' => $user->id,
+                            'upload-type' => 'design-update',
+                            'original-filename' => $originalName
+                        ]
+                    ]
+                );
+
+                if ($designPath === false) {
+                    throw new \Exception('File upload failed. Please try again.');
+                }
+
+                $designPaths[] = $designPath;
+
+                Log::info('Single updated design file uploaded successfully', [
+                    'task_id' => $task->id,
+                    'revision_id' => $latestRevision->id,
+                    'original_name' => $originalName,
+                    'path' => $designPath,
+                    'size' => $designFile->getSize()
+                ]);
+            }
+
+            // Lưu tất cả paths dưới dạng JSON
+            $designFilesJson = json_encode($designPaths);
+
+            // Cập nhật revision hiện tại thay vì tạo mới
+            $latestRevision->update([
+                'design_file' => $designFilesJson,
+                'notes' => $request->notes,
+                'status' => DesignRevision::STATUS_SUBMITTED,
+                'submitted_at' => now(),
+                'updated_at' => now()
+            ]);
+
+            // Log activity
+            Log::info('Design updated successfully', [
+                'task_id' => $task->id,
+                'revision_id' => $latestRevision->id,
+                'designer_id' => $user->id,
+                'files_count' => count($designPaths),
+                'action' => 'design_update'
+            ]);
+
+            return redirect()->route('designer.tasks.show', $task->id)
+                ->with('success', 'Đã cập nhật thiết kế thành công!');
+        } catch (\Exception $e) {
+            Log::error('Lỗi khi cập nhật design: ' . $e->getMessage(), [
+                'task_id' => $taskId,
+                'user_id' => $user->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return redirect()->back()
+                ->withInput()
+                ->withErrors(['error' => 'Có lỗi xảy ra khi cập nhật file. Vui lòng thử lại.']);
+        }
+    }
+
+    /**
      * Khách hàng xem danh sách task của mình
      */
     public function myTasks()

@@ -261,8 +261,6 @@ Route::view('fulfill', 'fulfill')->middleware('auth');
 Route::get('/test-order', [OrderUploadController::class, 'testOrder']);
 
 // Debug routes (remove in production)
-Route::post('/debug/design-upload', [App\Http\Controllers\TestDesignUploadController::class, 'testUpload']);
-Route::post('/debug/s3-upload', [App\Http\Controllers\TestDesignUploadController::class, 'testS3Upload']);
 Route::get('/test-batch-order', [OrderUploadController::class, 'testBatchOrder']);
 Route::post('/find-variant-sku/{productId}', [ProductController::class, 'findVariantSku'])->name('products.find-variant-sku');
 Route::get('/products/{slug}', [ProductController::class, 'productList']);
@@ -293,6 +291,7 @@ Route::prefix('designer')->middleware(['auth'])->group(function () {
     Route::get('/tasks', [App\Http\Controllers\DesignController::class, 'designerTasks'])->name('designer.tasks.index');
     Route::post('/tasks/{taskId}/join', [App\Http\Controllers\DesignController::class, 'joinTask'])->name('designer.tasks.join');
     Route::post('/tasks/{taskId}/submit', [App\Http\Controllers\DesignController::class, 'submitDesign'])->name('designer.tasks.submit');
+    Route::put('/tasks/{taskId}/update', [App\Http\Controllers\DesignController::class, 'updateDesign'])->name('designer.tasks.update');
     Route::get('/tasks/{taskId}', [App\Http\Controllers\DesignController::class, 'show'])->name('designer.tasks.show');
 
     // Comment routes

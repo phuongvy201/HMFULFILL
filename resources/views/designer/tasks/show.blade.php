@@ -606,6 +606,152 @@
             </div>
             @endif
 
+            <!-- Form cập nhật thiết kế đã gửi -->
+            @if($task->status === 'completed' && $task->designer_id === auth()->id() && $task->latestRevision)
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div class="bg-orange-600 text-white px-6 py-4">
+                    <h6 class="font-semibold flex items-center">
+                        <i class="fas fa-sync-alt mr-2"></i>Cập nhật thiết kế
+                        @if($task->sides_count > 1)
+                        <span class="ml-2 text-sm bg-orange-500 px-2 py-1 rounded">
+                            {{ $task->sides_count }} mặt
+                        </span>
+                        @endif
+                    </h6>
+                </div>
+                <div class="p-6">
+                    <div class="mb-6 p-4 bg-orange-50 border border-orange-200 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-info-circle text-orange-500 mr-2"></i>
+                            <span class="text-sm text-orange-700">
+                                Bạn có thể cập nhật thiết kế đã gửi để cải thiện chất lượng hoặc sửa lỗi nhỏ.
+                            </span>
+                        </div>
+                    </div>
+
+                    <form action="{{ route('designer.tasks.update', $task->id) }}" method="POST" enctype="multipart/form-data">
+                        @csrf
+                        @method('PUT')
+
+                        @if($task->sides_count > 1)
+                        <!-- Update nhiều files cho nhiều mặt -->
+                        <div class="mb-6">
+                            <label class="block text-sm font-medium text-gray-700 mb-3">
+                                Files thiết kế cập nhật <span class="text-red-500">*</span>
+                                <span class="text-sm text-gray-500">({{ $task->sides_count }} files cần thiết)</span>
+                            </label>
+
+                            <div id="update-design-files-container" class="space-y-4">
+                                @for($i = 1; $i <= $task->sides_count; $i++)
+                                    @php
+                                    $sideName = $sideNames[$i - 1] ?? "Mặt {$i}";
+                                    @endphp
+                                    <div class="border border-gray-200 rounded-lg p-4">
+                                        <div class="flex items-center justify-between mb-2">
+                                            <label class="text-sm font-medium text-gray-700">
+                                                {{ $sideName }} <span class="text-red-500">*</span>
+                                            </label>
+                                            <span class="text-xs text-gray-500">{{ $i }}/{{ $task->sides_count }}</span>
+                                        </div>
+
+                                        <!-- Hiển thị file hiện tại -->
+                                        @if($task->latestRevision && count($task->latestRevision->getDesignUrls()) >= $i)
+                                        @php
+                                        $currentDesignUrl = $task->latestRevision->getDesignUrls()[$i-1] ?? null;
+                                        @endphp
+                                        @if($currentDesignUrl)
+                                        <div class="mb-2 p-2 bg-gray-50 rounded border">
+                                            <div class="flex items-center justify-between">
+                                                <span class="text-xs text-gray-600">File hiện tại:</span>
+                                                <a href="{{ $currentDesignUrl }}" target="_blank"
+                                                    class="text-blue-600 hover:text-blue-700 text-xs">
+                                                    <i class="fas fa-external-link-alt mr-1"></i>Xem
+                                                </a>
+                                            </div>
+                                        </div>
+                                        @endif
+                                        @endif
+
+                                        <input type="file"
+                                            class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent @error('design_files.' . ($i-1)) border-red-500 @enderror"
+                                            name="design_files[]"
+                                            accept=".jpg,.jpeg,.png,.pdf,.ai,.psd" required>
+                                        @error('design_files.' . ($i-1))
+                                        <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                                        @enderror
+                                    </div>
+                                    @endfor
+                            </div>
+                        </div>
+                        @else
+                        <!-- Update 1 file cho 1 mặt -->
+                        <div class="mb-6">
+                            <label for="update_design_file" class="block text-sm font-medium text-gray-700 mb-2">
+                                File thiết kế cập nhật <span class="text-red-500">*</span>
+                            </label>
+
+                            <!-- Hiển thị file hiện tại -->
+                            @if($task->latestRevision && $task->latestRevision->getDesignUrl())
+                            <div class="mb-3 p-3 bg-gray-50 rounded border">
+                                <div class="flex items-center justify-between">
+                                    <span class="text-sm text-gray-600">File hiện tại:</span>
+                                    <div class="flex items-center space-x-2">
+                                        @if($task->latestRevision->isDesignImage())
+                                        <img src="{{ $task->latestRevision->getDesignUrl() }}"
+                                            alt="Current design"
+                                            class="w-16 h-16 object-cover rounded border cursor-pointer"
+                                            onclick="openImageModal('{{ $task->latestRevision->getDesignUrl() }}', 'Thiết kế hiện tại')">
+                                        @endif
+                                        <a href="{{ $task->latestRevision->getDesignUrl() }}" target="_blank"
+                                            class="text-blue-600 hover:text-blue-700 text-sm">
+                                            <i class="fas fa-external-link-alt mr-1"></i>Xem file
+                                        </a>
+                                    </div>
+                                </div>
+                            </div>
+                            @endif
+
+                            <input type="file"
+                                class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent @error('design_file') border-red-500 @enderror"
+                                id="update_design_file" name="design_file"
+                                accept=".jpg,.jpeg,.png,.pdf,.ai,.psd" required>
+                            @error('design_file')
+                            <p class="mt-1 text-sm text-red-600">{{ $message }}</p>
+                            @enderror
+                        </div>
+                        @endif
+
+                        <div class="mb-6">
+                            <label for="update_notes" class="block text-sm font-medium text-gray-700 mb-2">Ghi chú về cập nhật (tùy chọn)</label>
+                            <textarea class="w-full px-3 py-2 border border-gray-300 rounded-md focus:outline-none focus:ring-2 focus:ring-orange-500 focus:border-transparent"
+                                id="update_notes" name="notes" rows="3"
+                                placeholder="Mô tả những thay đổi đã thực hiện...">{{ $task->latestRevision->notes ?? '' }}</textarea>
+                        </div>
+
+                        <button type="submit" id="updateSubmitBtn" class="w-full bg-orange-600 hover:bg-orange-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center">
+                            <i class="fas fa-sync-alt mr-2"></i>
+                            @if($task->sides_count > 1)
+                            Cập nhật {{ $task->sides_count }} thiết kế
+                            @else
+                            Cập nhật thiết kế
+                            @endif
+                        </button>
+
+                        <!-- Progress Bar for Update -->
+                        <div id="updateUploadProgress" class="hidden mt-4">
+                            <div class="flex items-center justify-between mb-2">
+                                <span class="text-sm font-medium text-gray-700">Đang cập nhật...</span>
+                                <span id="updateProgressPercent" class="text-sm font-medium text-gray-700">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-2">
+                                <div id="updateProgressBar" class="bg-orange-600 h-2 rounded-full transition-all duration-300" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </form>
+                </div>
+            </div>
+            @endif
+
 
         </div>
 
@@ -836,6 +982,18 @@
                 'progressBarRevision',
                 'progressPercentRevision',
                 'submitBtnRevision'
+            );
+        }
+
+        // For update submission (when updating existing design)
+        const updateForm = document.querySelector('#updateSubmitBtn')?.closest('form');
+        if (updateForm) {
+            handleUploadProgress(
+                updateForm,
+                'updateUploadProgress',
+                'updateProgressBar',
+                'updateProgressPercent',
+                'updateSubmitBtn'
             );
         }
     });
