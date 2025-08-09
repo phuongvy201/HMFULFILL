@@ -731,7 +731,15 @@ class ExcelOrderImportService
         $isFirstItem = ($itemCount === 0);
 
         // Xác định loại shipping (TikTok hay Seller)
-        $isTikTokShipping = stripos($shippingMethod, 'tiktok') !== false;
+        // Chỉ coi là TikTok nếu shipping_method chứa 'tiktok_label' và không rỗng
+        $isTikTokShipping = !empty($shippingMethod) && stripos($shippingMethod, 'tiktok_label') !== false;
+
+        Log::info('[IMPORT] Xác định shipping method trong determineShippingMethod', [
+            'shipping_method_raw' => $shippingMethod,
+            'is_tiktok_shipping' => $isTikTokShipping,
+            'is_first_item' => $isFirstItem,
+            'item_count' => $itemCount
+        ]);
 
         // Trả về method phù hợp
         if ($isTikTokShipping) {

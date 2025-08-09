@@ -55,8 +55,12 @@
                     @if($product->currency === 'GBP')
                     <span>GBP £<span id="total-price-gbp">{{ number_format($product->base_price, 2) }}</span></span> |
                     <span>USD $<span id="total-price-usd">{{ number_format($product->base_price * 1.27, 2) }}</span></span> |
-                    <span>VND ₫<span id="total-price-vnd">{{ number_format($product->base_price * 30894.31, 0) }}</span></span>
+                    <span>VND ₫<span id="total-price-vnd">{{ number_format($product->base_price * 31000, 0) }}</span></span>
                     @elseif($product->currency === 'USD')
+                    <span>USD $<span id="total-price-usd">{{ number_format($product->base_price, 2) }}</span></span> |
+                    <span>GBP £<span id="total-price-gbp">{{ number_format($product->base_price / 1.27, 2) }}</span></span> |
+                    <span>VND ₫<span id="total-price-vnd">{{ number_format($product->base_price * 24500, 0) }}</span></span>
+                    @else
                     <span>USD $<span id="total-price-usd">{{ number_format($product->base_price, 2) }}</span></span> |
                     <span>GBP £<span id="total-price-gbp">{{ number_format($product->base_price / 1.27, 2) }}</span></span> |
                     <span>VND ₫<span id="total-price-vnd">{{ number_format($product->base_price * 24326.23, 0) }}</span></span>
@@ -125,128 +129,26 @@
         </div>
     </div>
 </section>
+<script src="{{ asset('assets/js/product-detail-new.js') }}"></script>
 <script>
-    // Thumbnail gallery functionality
-    function showImage(thumbnail) {
-        const mainImage = document.getElementById('main-image');
-        mainImage.src = thumbnail.src;
-        document.querySelectorAll('.custom-scrollbar img').forEach(thumb => {
-            thumb.classList.remove('thumbnail-active');
-        });
-        thumbnail.classList.add('thumbnail-active');
-    }
-
-    // Initialize first thumbnail
+    // Initialize data from server
     document.addEventListener('DOMContentLoaded', () => {
+        // Initialize base price
+        const basePriceData = {
+            gbp: {{ $product->currency === 'GBP' ? $product->base_price : ($product->currency === 'USD' ? $product->base_price / 1.27 : $product->base_price / 1.27) }},
+            usd: {{ $product->currency === 'USD' ? $product->base_price : ($product->currency === 'GBP' ? $product->base_price * 1.27 : $product->base_price) }},
+            vnd: {{ $product->currency === 'GBP' ? $product->base_price * 31000 : ($product->currency === 'USD' ? $product->base_price * 24500 : $product->base_price * 24326.23) }}
+        };
+
+        initializeBasePrice(basePriceData);
+        initializeProductId({{ $product->id }});
+
+        // Initialize first thumbnail
         const firstThumbnail = document.querySelector('.custom-scrollbar img');
         if (firstThumbnail) {
             firstThumbnail.classList.add('thumbnail-active');
             showImage(firstThumbnail);
         }
-    });
-
-    // Initialize variants and base price
-    const variants = @json($product->variants);
-    const basePrice = {
-        @if($product->currency === 'GBP')
-            gbp: {{ $product->base_price }},
-            usd: {{ $product->base_price * 1.34 }},
-            vnd: {{ $product->base_price * 35078.0 }}
-        @elseif($product->currency === 'USD')
-            usd: {{ $product->base_price }},
-            gbp: {{ $product->base_price / 1.34 }},
-            vnd: {{ $product->base_price * 26128.0 }}
-        @endif
-    };
-
-    // Update price display
-    function updatePrices(prices) {
-        document.getElementById('total-price-gbp').textContent = prices.gbp.toFixed(2);
-        document.getElementById('total-price-usd').textContent = prices.usd.toFixed(2);
-        document.getElementById('total-price-vnd').textContent = Math.round(prices.vnd).toLocaleString('vi-VN');
-    }
-
-    // Find matching variant based on selected attributes
-    function findMatchingVariant() {
-        const selectedValues = {};
-        const selects = document.querySelectorAll('.attribute-select');
-
-        selects.forEach(select => {
-            const name = select.name.replace(/-/g, ' ').replace(/\b\w/g, l => l.toUpperCase());
-            selectedValues[name] = select.value;
-        });
-
-        const allSelected = Object.values(selectedValues).every(value => value !== '');
-        const skuElement = document.getElementById('selected-sku');
-
-        if (!allSelected) {
-            skuElement.textContent = '-';
-            updatePrices(basePrice);
-            return null;
-        }
-
-        const matchingVariant = variants.find(variant => {
-            return variant.attributes.every(attr => selectedValues[attr.name] === attr.value);
-        });
-
-        if (matchingVariant) {
-            skuElement.textContent = matchingVariant.sku || '-';
-            return matchingVariant;
-        } else {
-            skuElement.textContent = 'No matching variant found';
-            updatePrices(basePrice);
-            return null;
-        }
-    }
-
-    // Update shipping price based on selected variant and shipping method
-    function updateShippingPrice() {
-        const currentVariant = findMatchingVariant();
-        const shippingMethod = document.getElementById('shipping-method').value;
-
-        if (!currentVariant) {
-            alert('Please select all product options');
-            document.getElementById('shipping-method').value = '';
-            updatePrices(basePrice);
-            return;
-        }
-
-        if (!shippingMethod) {
-            updatePrices(basePrice);
-            return;
-        }
-
-        const shippingPrice = currentVariant.shipping_prices.find(price => price.method === shippingMethod);
-
-        if (shippingPrice) {
-            const total = {
-                @if($product->currency === 'GBP')
-                    gbp:parseFloat(shippingPrice.price_gbp || 0),
-                    usd: parseFloat(shippingPrice.price_usd || 0),
-                    vnd:  parseFloat(shippingPrice.price_vnd || 0)
-                @elseif($product->currency === 'USD')
-                    usd: parseFloat(shippingPrice.price_usd || 0),
-                    gbp: parseFloat(shippingPrice.price_gbp || 0),
-                    vnd:  parseFloat(shippingPrice.price_vnd || 0)
-                @endif
-            };
-            updatePrices(total);
-        } else {
-            updatePrices(basePrice);
-        }
-    }
-
-    // Initialize event listeners
-    document.addEventListener('DOMContentLoaded', () => {
-        document.querySelectorAll('.attribute-select').forEach(select => {
-            select.addEventListener('change', () => {
-                findMatchingVariant();
-                document.getElementById('shipping-method').value = '';
-                updatePrices(basePrice);
-            });
-        });
-        findMatchingVariant();
-        updatePrices(basePrice);
     });
 </script>
 @endsection

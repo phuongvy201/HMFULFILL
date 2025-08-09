@@ -80,6 +80,7 @@ $variant->setUserSpecificPrice(123, 'seller_1st', 15.99, 'USD');
 
 // Lấy giá riêng
 $userPrice = $variant->getUserSpecificPrice(123, 'seller_1st');
+// Kết quả: ['price' => 12.99, 'currency' => 'USD', 'is_override' => true, 'override_id' => 1]
 
 // Xóa giá riêng
 $variant->removeUserSpecificPrice(123, 'seller_1st');

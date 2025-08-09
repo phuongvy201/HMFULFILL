@@ -56,6 +56,7 @@ class ProductVariant extends Model
 
     /**
      * Get first item price for comparison to find highest price item
+     * Sử dụng logic override: User-specific -> Tier -> Default
      */
     public function getFirstItemPrice(?string $shippingMethod = null, ?int $userId = null): float
     {
@@ -69,29 +70,41 @@ class ProductVariant extends Model
             $method = ShippingPrice::METHOD_SELLER_1ST;
         }
 
-        // Sử dụng logic mới với user-specific pricing
+        // Lấy tier của user nếu có
         $userTier = null;
         if ($userId) {
             $userTier = \App\Models\UserTier::getCurrentTier($userId);
-            $tierName = $userTier ? $userTier->tier : 'Wood';
         }
 
-        $shippingPrice = ShippingPrice::findPriceByPriority($this->id, $method, $userId, $userTier ? $userTier->tier : null);
+        // Sử dụng logic override: User-specific -> Tier -> Default
+        $priceInfo = ShippingPrice::findPriceByPriority($this->id, $method, $userId, $userTier ? $userTier->tier : null);
 
-        return $shippingPrice ? $shippingPrice->price_usd : 0;
+        if (!$priceInfo) {
+            return 0;
+        }
+
+        // Chuyển đổi giá sang USD
+        switch ($priceInfo['currency']) {
+            case 'USD':
+                return $priceInfo['price'];
+            case 'VND':
+                return $priceInfo['price'] / config('currency.usd_to_vnd', 24500);
+            case 'GBP':
+                return $priceInfo['price'] * config('currency.gbp_to_usd', 1.27);
+            default:
+                return 0;
+        }
     }
 
     /**
      * Get shipping price and product info for order with position logic
+     * Sử dụng logic override: User-specific -> Tier -> Default
      */
     public function getOrderPriceInfo(?string $shippingMethod = null, int $position = 1, ?int $userId = null): array
     {
         $printPrice = 0;
         $productId = $this->product_id;
         $method = null;
-        $tierName = 'Wood';
-        $tierPrice = false;
-        $userSpecificPrice = false;
 
         if (!empty($shippingMethod)) {
             $shippingMethodLower = strtolower($shippingMethod);
@@ -107,54 +120,42 @@ class ProductVariant extends Model
 
         $shippingPriceFound = false;
 
-        // Sử dụng logic mới với user-specific pricing
+        // Lấy tier của user nếu có
         $userTier = null;
         if ($userId) {
             $userTier = \App\Models\UserTier::getCurrentTier($userId);
-            $tierName = $userTier ? $userTier->tier : 'Wood';
         }
 
-        $shippingPrice = ShippingPrice::findPriceByPriority($this->id, $method, $userId, $userTier ? $userTier->tier : null);
+        // Sử dụng logic override: User-specific -> Tier -> Default
+        $priceInfo = ShippingPrice::findPriceByPriority($this->id, $method, $userId, $userTier ? $userTier->tier : null);
 
-        if ($shippingPrice) {
-            $printPrice = $shippingPrice->price_usd;
+        if ($priceInfo) {
+            // Chuyển đổi giá sang USD
+            switch ($priceInfo['currency']) {
+                case 'USD':
+                    $printPrice = $priceInfo['price'];
+                    break;
+                case 'VND':
+                    $printPrice = $priceInfo['price'] / config('currency.usd_to_vnd', 24500);
+                    break;
+                case 'GBP':
+                    $printPrice = $priceInfo['price'] * config('currency.gbp_to_usd', 1.27);
+                    break;
+                default:
+                    $printPrice = 0;
+            }
+
             $shippingPriceFound = true;
 
-            // Xác định loại giá
-            if ($shippingPrice->user_id) {
-                $userSpecificPrice = true;
-                $tierPrice = false;
-                Log::info("Found user-specific price for variant", [
-                    'variant_id' => $this->id,
-                    'user_id' => $userId,
-                    'method' => $method,
-                    'price_usd' => $printPrice,
-                    'position' => $position,
-                    'price_type' => 'user_specific'
-                ]);
-            } elseif ($shippingPrice->tier_name) {
-                $tierPrice = true;
-                $userSpecificPrice = false;
-                Log::info("Found tier price for variant", [
-                    'variant_id' => $this->id,
-                    'user_id' => $userId,
-                    'method' => $method,
-                    'price_usd' => $printPrice,
-                    'position' => $position,
-                    'tier' => $shippingPrice->tier_name
-                ]);
-            } else {
-                $tierPrice = false;
-                $userSpecificPrice = false;
-                Log::info("Found default price for variant", [
-                    'variant_id' => $this->id,
-                    'user_id' => $userId,
-                    'method' => $method,
-                    'price_usd' => $printPrice,
-                    'position' => $position,
-                    'price_type' => 'default'
-                ]);
-            }
+            $priceType = $priceInfo['is_override'] ? 'override' : 'default';
+            Log::info("Found {$priceType} shipping price for variant", [
+                'variant_id' => $this->id,
+                'user_id' => $userId,
+                'method' => $method,
+                'price_usd' => $printPrice,
+                'position' => $position,
+                'price_type' => $priceType
+            ]);
         } else {
             Log::warning("No shipping price found for variant", [
                 'variant_id' => $this->id,
@@ -169,16 +170,16 @@ class ProductVariant extends Model
             'product_id' => $productId,
             'method' => $method,
             'shipping_price_found' => $shippingPriceFound,
-            'tier_price' => $tierPrice,
-            'user_specific_price' => $userSpecificPrice,
-            'tier' => $tierName
+            'tier_price' => $priceInfo ? ($priceInfo['is_override'] ?? false) : false,
+            'user_specific_price' => $priceInfo ? ($priceInfo['is_override'] ?? false) : false,
+            'tier' => $userTier ? $userTier->tier : null
         ];
     }
 
     /**
      * Lấy tất cả giá theo tier cho variant này
      */
-    public function getAllTierPrices()
+    public function getAllTierPrices(): \Illuminate\Database\Eloquent\Collection
     {
         return $this->shippingPrices()->get();
     }
@@ -186,36 +187,40 @@ class ProductVariant extends Model
     /**
      * Lấy giá theo tier cụ thể
      */
-    public function getTierPrice($tier, $method)
+    public function getTierPrice($tier, $method): ?\App\Models\ShippingOverride
     {
-        return $this->shippingPrices()
-            ->where('tier_name', $tier)
+        $basePrice = $this->shippingPrices()
             ->where('method', $method)
             ->first();
+
+        if (!$basePrice) {
+            return null;
+        }
+
+        $override = \App\Models\ShippingOverride::findForTier($basePrice->id, $tier);
+        return $override;
     }
 
     /**
      * Tạo hoặc cập nhật giá theo tier
      */
-    public function setTierPrice($tier, $method, $price, $currency = 'USD')
+    public function setTierPrice($tier, $method, $price, $currency = 'USD'): \App\Models\ShippingOverride
     {
-        return ShippingPrice::updateOrCreate(
-            [
-                'variant_id' => $this->id,
-                'tier_name' => $tier,
-                'method' => $method
-            ],
-            [
-                'price' => $price,
-                'currency' => $currency
-            ]
-        );
+        $basePrice = $this->shippingPrices()
+            ->where('method', $method)
+            ->first();
+
+        if (!$basePrice) {
+            throw new \InvalidArgumentException("Shipping price not found for method {$method}");
+        }
+
+        return \App\Models\ShippingOverride::createOrUpdateForTier($basePrice->id, $tier, $price, $currency);
     }
 
     /**
      * Tạo hoặc cập nhật giá riêng cho user
      */
-    public function setUserSpecificPrice(int $userId, string $method, float $price, string $currency = 'USD')
+    public function setUserSpecificPrice(int $userId, string $method, float $price, string $currency = 'USD'): \App\Models\ShippingOverride
     {
         return ShippingPrice::setUserSpecificPrice($this->id, $method, $userId, $price, $currency);
     }
@@ -223,7 +228,7 @@ class ProductVariant extends Model
     /**
      * Lấy giá riêng cho user
      */
-    public function getUserSpecificPrice(int $userId, string $method)
+    public function getUserSpecificPrice(int $userId, string $method): ?array
     {
         return ShippingPrice::getUserSpecificPrice($this->id, $method, $userId);
     }
@@ -231,7 +236,7 @@ class ProductVariant extends Model
     /**
      * Xóa giá riêng cho user
      */
-    public function removeUserSpecificPrice(int $userId, string $method)
+    public function removeUserSpecificPrice(int $userId, string $method): bool
     {
         return ShippingPrice::removeUserSpecificPrice($this->id, $method, $userId);
     }
@@ -239,10 +244,15 @@ class ProductVariant extends Model
     /**
      * Lấy tất cả giá riêng cho user
      */
-    public function getAllUserSpecificPrices(int $userId)
+    public function getAllUserSpecificPrices(int $userId): \Illuminate\Database\Eloquent\Collection
     {
-        return $this->shippingPrices()
-            ->where('user_id', $userId)
+        return \App\Models\ShippingOverride::where(function ($query) use ($userId) {
+            $query->whereJsonContains('user_ids', $userId)
+                ->orWhereJsonContains('user_ids', (string) $userId);
+        })
+            ->with(['shippingPrice' => function ($query) {
+                $query->where('variant_id', $this->id);
+            }])
             ->get();
     }
 
@@ -313,6 +323,7 @@ class ProductVariant extends Model
     {
         return $this->attributes->pluck('value', 'name')->toArray();
     }
+
 
     /**
      * Kiểm tra xem variant có match với attributes không

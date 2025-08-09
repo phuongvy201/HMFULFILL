@@ -188,16 +188,20 @@
                     Product List
                 </a>
             </li>
-        </ul>
-        <ul
-            :class="sidebarToggle ? 'lg:hidden' : 'flex'"
-            class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
             <li>
                 <a
                     href="{{ route('admin.products.create') }}"
                     class="menu-dropdown-item group"
                     :class="page === 'formElements' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
                     Add Product
+                </a>
+            </li>
+            <li>
+                <a
+                    href="{{ route('admin.user-pricing.index') }}"
+                    class="menu-dropdown-item group"
+                    :class="page === 'userPricing' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                    User Pricing
                 </a>
             </li>
         </ul>

@@ -230,65 +230,200 @@ class ProductController extends Controller
         }
     }
 
-        public function show($slug)
-        {
-            $product = Product::with([
-                'images',
-                'variants.attributes',
-                'variants.shippingPrices' => function ($query) {
-                    $query->where(function ($q) {
-                        $q->where('tier_name', 'Wood')
-                            ->orWhereNull('tier_name');
-                    })->whereNull('user_id');
-                },
-                'fulfillmentLocations'
-            ])
-                ->where('slug', $slug)
-                ->firstOrFail();
+    public function show($slug)
+    {
+        $product = Product::with([
+            'images',
+            'variants.attributes',
+            'variants.shippingPrices', // Chỉ lấy shipping_prices mặc định
+            'fulfillmentLocations'
+        ])
+            ->where('slug', $slug)
+            ->firstOrFail();
 
-            $groupedAttributes = $product->getGroupedAttributes()->toArray();
+        $groupedAttributes = $product->getGroupedAttributes()->toArray();
 
-            // Retrieve currency rates from config
-            $currencyRates = [
-                'usd_to_vnd' => config('currency.usd_to_vnd', 24326.23),
-                'gbp_to_vnd' => config('currency.gbp_to_vnd', 30894.31),
-                'gbp_to_usd' => config('currency.gbp_to_usd', 1.27),
+        // Retrieve currency rates from config
+        $currencyRates = [
+            'usd_to_vnd' => config('currency.usd_to_vnd', 24326.23),
+            'gbp_to_vnd' => config('currency.gbp_to_vnd', 30894.31),
+            'gbp_to_usd' => config('currency.gbp_to_usd', 1.27),
+        ];
+
+        // Prepare variants with necessary fields - chỉ hiển thị giá mặc định
+        $variants = $product->variants->map(function ($variant) {
+            return [
+                'id' => $variant->id,
+                'sku' => $variant->sku ?? 'N/A',
+                'attributes' => $variant->attributes->map(function ($attr) {
+                    return [
+                        'name' => $attr->name,
+                        'value' => $attr->value
+                    ];
+                }),
+                'price_usd' => $variant->price_usd ?? 0,
+                'price_vnd' => $variant->price_vnd ?? 0,
+                'price_gbp' => $variant->price_gbp ?? 0,
+                'shipping_prices' => $variant->shippingPrices->map(function ($sp) {
+                    return [
+                        'method' => $sp->method,
+                        'price' => $sp->price,
+                        'currency' => $sp->currency,
+                        'price_usd' => $sp->price_usd,
+                        'price_vnd' => $sp->price_vnd,
+                        'price_gbp' => $sp->price_gbp,
+                        'formatted_price' => $sp->formatted_price,
+                    ];
+                })
             ];
+        });
 
-            // Prepare variants with necessary fields
-            $variants = $product->variants->map(function ($variant) {
-                return [
-                    'id' => $variant->id,
-                    'sku' => $variant->sku ?? 'N/A',
-                    'attributes' => $variant->attributes->map(function ($attr) {
-                        return [
-                            'name' => $attr->name,
-                            'value' => $attr->value
-                        ];
-                    }),
-                    'price_usd' => $variant->price_usd ?? 0,
-                    'price_vnd' => $variant->price_vnd ?? 0,
-                    'price_gbp' => $variant->price_gbp ?? 0,
-                    'shipping_prices' => $variant->shippingPrices->map(function ($sp) {
-                        return [
-                            'method' => $sp->method,
-                            'tier_name' => $sp->tier_name,
-                            'price_usd' => $sp->price_usd ?? 0,
-                            'price_vnd' => $sp->price_vnd ?? 0,
-                            'price_gbp' => $sp->price_gbp ?? 0,
-                        ];
-                    })
-                ];
+        return view('customer.products.product-detail', compact(
+            'product',
+            'groupedAttributes',
+            'currencyRates',
+            'variants'
+        ));
+    }
+
+    /**
+     * API endpoint để lấy thông tin variant và shipping price
+     */
+    public function getVariantInfo(Request $request)
+    {
+        try {
+            $productId = $request->input('product_id');
+            $attributes = $request->input('attributes', []);
+            $shippingMethod = $request->input('shipping_method');
+
+            // Log request data
+            Log::info('getVariantInfo request:', [
+                'product_id' => $productId,
+                'attributes' => $attributes,
+                'shipping_method' => $shippingMethod
+            ]);
+
+            // Tìm variant dựa trên attributes
+            $variants = ProductVariant::where('product_id', $productId)
+                ->with(['attributes', 'shippingPrices'])
+                ->get();
+
+            Log::info('Found variants count:', ['count' => $variants->count()]);
+
+            $variant = $variants->first(function ($variant) use ($attributes) {
+                $variantAttributes = $variant->attributes->pluck('value', 'name')->toArray();
+                $match = $this->attributesMatch($variantAttributes, $attributes);
+
+                Log::info('Variant check:', [
+                    'variant_id' => $variant->id,
+                    'variant_attributes' => $variantAttributes,
+                    'requested_attributes' => $attributes,
+                    'match' => $match
+                ]);
+
+                return $match;
             });
 
-            return view('customer.products.product-detail', compact(
-                'product',
-                'groupedAttributes',
-                'currencyRates',
-                'variants'
-            ));
+            if (!$variant) {
+                Log::warning('No matching variant found', [
+                    'product_id' => $productId,
+                    'attributes' => $attributes,
+                    'available_variants' => $variants->map(function ($v) {
+                        return [
+                            'id' => $v->id,
+                            'attributes' => $v->attributes->pluck('value', 'name')->toArray()
+                        ];
+                    })->toArray()
+                ]);
+
+                return response()->json([
+                    'success' => false,
+                    'message' => 'No matching variant found'
+                ]);
+            }
+
+            $response = [
+                'success' => true,
+                'variant' => [
+                    'id' => $variant->id,
+                    'sku' => $variant->sku,
+                    'price_usd' => $variant->price_usd,
+                    'price_vnd' => $variant->price_vnd,
+                    'price_gbp' => $variant->price_gbp,
+                ]
+            ];
+
+            // Nếu có shipping method, lấy shipping price mặc định
+            if ($shippingMethod) {
+                $shippingPrice = $variant->shippingPrices
+                    ->where('method', $shippingMethod)
+                    ->first();
+
+                if ($shippingPrice) {
+                    $response['variant']['shipping_price'] = [
+                        'method' => $shippingPrice->method,
+                        'price' => $shippingPrice->price,
+                        'currency' => $shippingPrice->currency,
+                        'price_usd' => $shippingPrice->price_usd,
+                        'price_vnd' => $shippingPrice->price_vnd,
+                        'price_gbp' => $shippingPrice->price_gbp,
+                        'formatted_price' => $shippingPrice->formatted_price,
+                    ];
+                }
+            }
+
+            return response()->json($response);
+        } catch (\Exception $e) {
+            Log::error('getVariantInfo error:', [
+                'message' => $e->getMessage(),
+                'file' => $e->getFile(),
+                'line' => $e->getLine(),
+                'trace' => $e->getTraceAsString(),
+                'request_data' => [
+                    'product_id' => $request->input('product_id'),
+                    'attributes' => $request->input('attributes'),
+                    'shipping_method' => $request->input('shipping_method')
+                ]
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Error: ' . $e->getMessage()
+            ], 500);
         }
-        /**
+    }
+
+    /**
+     * So sánh attributes để tìm variant phù hợp
+     */
+    private function attributesMatch($variantAttributes, $selectedAttributes)
+    {
+        Log::info('attributesMatch called:', [
+            'variant_attributes' => $variantAttributes,
+            'selected_attributes' => $selectedAttributes
+        ]);
+
+        foreach ($selectedAttributes as $name => $value) {
+            $variantValue = $variantAttributes[$name] ?? null;
+            $match = $variantValue === $value;
+
+            Log::info('Attribute comparison:', [
+                'name' => $name,
+                'variant_value' => $variantValue,
+                'selected_value' => $value,
+                'match' => $match
+            ]);
+
+            if (!$match) {
+                Log::info('Attribute mismatch found, returning false');
+                return false;
+            }
+        }
+
+        Log::info('All attributes match, returning true');
+        return true;
+    }
+    /**
      * Import sản phẩm từ file Excel
      * Cấu trúc cột Excel:
      * - A-O: Thông tin sản phẩm
@@ -403,15 +538,34 @@ class ProductController extends Controller
                             'Special' => ['start' => 35]    // Cột AJ-AM (35-38 trong array)
                         ];
 
-                        foreach ($tierConfigs as $tierName => $config) {
-                            foreach ($shippingMethods as $methodIndex => $method) {
+                        // Tạo shipping prices cơ bản cho từng method (sử dụng giá Wood tier)
+                        foreach ($shippingMethods as $methodIndex => $method) {
+                            $woodColIndex = 19 + $methodIndex; // Cột 19-22 cho Wood tier
+                            $woodPrice = !empty($cells[$woodColIndex]) ? (float)($cells[$woodColIndex] ?? 0) : 0;
+
+                            $shippingPrice = ShippingPrice::create([
+                                'variant_id' => $variant->id,
+                                'method' => $method,
+                                'price' => $woodPrice, // Giá Wood tier làm giá mặc định
+                                'currency' => $currency
+                            ]);
+
+                            // Tạo overrides cho các tier khác (Silver, Gold, Diamond, Special)
+                            $otherTierConfigs = [
+                                'Silver' => ['start' => 23],    // Cột X-AA (23-26 trong array)
+                                'Gold' => ['start' => 27],      // Cột AB-AE (27-30 trong array)
+                                'Diamond' => ['start' => 31],   // Cột AF-AI (31-34 trong array)
+                                'Special' => ['start' => 35]    // Cột AJ-AM (35-38 trong array)
+                            ];
+
+                            foreach ($otherTierConfigs as $tierName => $config) {
                                 $colIndex = $config['start'] + $methodIndex;
+
                                 if (!empty($cells[$colIndex])) {
-                                    ShippingPrice::create([
-                                        'variant_id' => $variant->id,
-                                        'method' => $method,
+                                    \App\Models\ShippingOverride::create([
+                                        'shipping_price_id' => $shippingPrice->id,
                                         'tier_name' => $tierName,
-                                        'price' => (float)($cells[$colIndex] ?? 0),
+                                        'override_price' => (float)($cells[$colIndex] ?? 0),
                                         'currency' => $currency
                                     ]);
                                 }

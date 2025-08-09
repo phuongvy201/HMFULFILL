@@ -12,6 +12,8 @@ use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
 use Illuminate\Support\Facades\Log;
 use Illuminate\Support\Facades\Storage;
+use App\Services\S3MultipartUploadService;
+use App\Http\Requests\DesignUploadRequest;
 
 class DesignController extends Controller
 {
@@ -239,7 +241,7 @@ class DesignController extends Controller
     /**
      * Designer upload file thiết kế hoàn chỉnh
      */
-    public function submitDesign(Request $request, $taskId)
+    public function submitDesign(DesignUploadRequest $request, $taskId)
     {
         $user = Auth::user();
 
@@ -256,49 +258,50 @@ class DesignController extends Controller
             return redirect()->back()->withErrors(['error' => 'Task không tồn tại hoặc không thể submit.']);
         }
 
-        // Validation dựa trên số mặt
-        $validationRules = [
-            'notes' => 'nullable|string'
-        ];
-
-        if ($task->sides_count > 1) {
-            // Nhiều mặt - yêu cầu nhiều files
-            $validationRules['design_files'] = 'required|array|size:' . $task->sides_count;
-            $validationRules['design_files.*'] = 'required|file|mimes:jpg,jpeg,png,pdf,ai,psd|max:51200';
-        } else {
-            // Một mặt - yêu cầu 1 file
-            $validationRules['design_file'] = 'required|file|mimes:jpg,jpeg,png,pdf,ai,psd|max:51200';
-        }
-
-        $request->validate($validationRules, [
-            'design_files.size' => 'Số lượng files phải bằng số mặt đã chọn.',
-            'design_files.*.required' => 'Vui lòng upload đầy đủ files cho tất cả các mặt.',
-            'design_files.*.file' => 'File không hợp lệ.',
-            'design_files.*.mimes' => 'Chỉ chấp nhận file JPG, PNG, PDF, AI, PSD.',
-            'design_files.*.max' => 'File không được vượt quá 50MB.',
-            'design_file.required' => 'Vui lòng upload file thiết kế.',
-            'design_file.file' => 'File không hợp lệ.',
-            'design_file.mimes' => 'Chỉ chấp nhận file JPG, PNG, PDF, AI, PSD.',
-            'design_file.max' => 'File không được vượt quá 50MB.'
-        ]);
+        // Validation đã được xử lý trong DesignUploadRequest
 
         try {
             $designPaths = [];
+            $uploadService = new S3MultipartUploadService();
 
             if ($task->sides_count > 1) {
-                // Upload nhiều files cho nhiều mặt
+                // Upload nhiều files cho nhiều mặt sử dụng multipart upload
                 $designFiles = $request->file('design_files');
 
-                foreach ($designFiles as $index => $designFile) {
-                    if ($designFile && $designFile->isValid()) {
-                        $originalName = $designFile->getClientOriginalName();
-                        $normalizedName = str_replace(' ', '+', $originalName);
-                        $normalizedName = urlencode($normalizedName);
-                        $designFileName = time() . '_' . ($index + 1) . '_' . $normalizedName;
-                        $designPath = $designFile->storeAs('designs/completed', $designFileName, 's3');
-                        $designPaths[] = $designPath;
+                Log::info('Starting multipart upload for multiple design files', [
+                    'task_id' => $task->id,
+                    'files_count' => count($designFiles),
+                    'sides_count' => $task->sides_count
+                ]);
+
+                // Upload tất cả files với multipart upload service
+                $uploadResults = $uploadService->uploadMultipleFiles(
+                    $designFiles,
+                    'designs/completed',
+                    [
+                        'visibility' => 'private',
+                        'metadata' => [
+                            'task-id' => $task->id,
+                            'designer-id' => $user->id,
+                            'upload-type' => 'design-submission'
+                        ]
+                    ]
+                );
+
+                // Kiểm tra kết quả upload
+                foreach ($uploadResults as $index => $result) {
+                    if ($result['success']) {
+                        $designPaths[] = $result['path'];
+
+                        Log::info('Design file uploaded successfully', [
+                            'task_id' => $task->id,
+                            'file_index' => $index + 1,
+                            'original_name' => $result['original_name'],
+                            'path' => $result['path'],
+                            'size' => $result['size']
+                        ]);
                     } else {
-                        throw new \Exception('File upload không hợp lệ hoặc bị lỗi.');
+                        throw new \Exception("File upload failed: {$result['error']} (File: {$result['original_name']})");
                     }
                 }
 
@@ -307,14 +310,47 @@ class DesignController extends Controller
                     throw new \Exception('Số lượng files upload không khớp với số mặt đã chọn.');
                 }
             } else {
-                // Upload 1 file cho 1 mặt
+                // Upload 1 file cho 1 mặt sử dụng multipart upload
                 $designFile = $request->file('design_file');
+
+                Log::info('Starting multipart upload for single design file', [
+                    'task_id' => $task->id,
+                    'file_name' => $designFile->getClientOriginalName(),
+                    'file_size' => $designFile->getSize()
+                ]);
+
                 $originalName = $designFile->getClientOriginalName();
                 $normalizedName = str_replace(' ', '+', $originalName);
                 $normalizedName = urlencode($normalizedName);
                 $designFileName = time() . '_' . $normalizedName;
-                $designPath = $designFile->storeAs('designs/completed', $designFileName, 's3');
+                $destinationPath = 'designs/completed/' . $designFileName;
+
+                $designPath = $uploadService->uploadFile(
+                    $designFile,
+                    $destinationPath,
+                    [
+                        'visibility' => 'private',
+                        'metadata' => [
+                            'task-id' => $task->id,
+                            'designer-id' => $user->id,
+                            'upload-type' => 'design-submission',
+                            'original-filename' => $originalName
+                        ]
+                    ]
+                );
+
+                if ($designPath === false) {
+                    throw new \Exception('File upload failed. Please try again.');
+                }
+
                 $designPaths[] = $designPath;
+
+                Log::info('Single design file uploaded successfully', [
+                    'task_id' => $task->id,
+                    'original_name' => $originalName,
+                    'path' => $designPath,
+                    'size' => $designFile->getSize()
+                ]);
             }
 
             // Lưu tất cả paths dưới dạng JSON

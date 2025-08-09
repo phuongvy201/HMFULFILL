@@ -98,6 +98,13 @@ Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(func
     Route::post('/refund/transaction/{transactionId}', [App\Http\Controllers\Admin\RefundController::class, 'refundTransaction'])->name('admin.refund.transaction');
     Route::post('/refund/custom', [App\Http\Controllers\Admin\RefundController::class, 'refundCustomAmount'])->name('admin.refund.custom');
     Route::get('/refund/user/{userId}', [App\Http\Controllers\Admin\RefundController::class, 'getUserInfo'])->name('admin.refund.user');
+
+    // User Pricing routes
+    Route::get('/user-pricing', [App\Http\Controllers\UserPricingController::class, 'index'])->name('admin.user-pricing.index');
+    Route::get('/user-pricing/import', [App\Http\Controllers\UserPricingController::class, 'showImportForm'])->name('admin.user-pricing.import');
+    Route::post('/user-pricing/import', [App\Http\Controllers\UserPricingController::class, 'import'])->name('admin.user-pricing.import.post');
+    Route::get('/user-pricing/template', [App\Http\Controllers\UserPricingController::class, 'exportTemplate'])->name('admin.user-pricing.template');
+    Route::delete('/user-pricing/{id}', [App\Http\Controllers\UserPricingController::class, 'destroy'])->name('admin.user-pricing.destroy');
     Route::get('/refund/history', [App\Http\Controllers\Admin\RefundController::class, 'getRefundHistory'])->name('admin.refund.history');
 
     Route::post('/admin/import-tracking', [SupplierFulfillmentController::class, 'importTrackingNumbers'])->name('admin.import-tracking');
@@ -117,6 +124,12 @@ Route::prefix('admin')->middleware(['auth', AdminMiddleware::class])->group(func
     // Statistics routes
     Route::get('/dashboard', [App\Http\Controllers\Admin\OrderStatisticsController::class, 'dashboard'])->name('admin.statistics.dashboard');
     Route::get('/statistics/detailed', [App\Http\Controllers\Admin\OrderStatisticsController::class, 'detailedStats'])->name('admin.statistics.detailed');
+
+    // S3 Management routes
+    Route::get('/s3-management', [App\Http\Controllers\Admin\S3ManagementController::class, 'index'])->name('admin.s3-management.index');
+    Route::post('/s3-management/cleanup', [App\Http\Controllers\Admin\S3ManagementController::class, 'cleanup'])->name('admin.s3-management.cleanup');
+    Route::get('/s3-management/stats', [App\Http\Controllers\Admin\S3ManagementController::class, 'getStats'])->name('admin.s3-management.stats');
+    Route::post('/s3-management/abort', [App\Http\Controllers\Admin\S3ManagementController::class, 'abortUpload'])->name('admin.s3-management.abort');
     Route::get('/statistics/reports', [App\Http\Controllers\Admin\OrderStatisticsController::class, 'reports'])->name('admin.statistics.reports');
 
     // Topup Statistics routes

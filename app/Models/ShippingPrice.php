@@ -3,10 +3,11 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use App\Models\ShippingOverride;
 
 class ShippingPrice extends Model
 {
-    protected $fillable = ['variant_id', 'method', 'price', 'currency', 'tier_name', 'user_id'];
+    protected $fillable = ['variant_id', 'method', 'price', 'currency'];
     protected $appends = ['price_usd', 'price_vnd', 'price_gbp'];
 
     // Định nghĩa các hằng số cho shipping methods
@@ -29,19 +30,11 @@ class ShippingPrice extends Model
     }
 
     /**
-     * Relationship với UserTier
+     * Relationship với ShippingOverride
      */
-    public function tier()
+    public function overrides()
     {
-        return $this->belongsTo(UserTier::class, 'tier_id');
-    }
-
-    /**
-     * Relationship với User
-     */
-    public function user()
-    {
-        return $this->belongsTo(User::class);
+        return $this->hasMany(ShippingOverride::class);
     }
 
     // Format giá shipping theo currency
@@ -114,20 +107,13 @@ class ShippingPrice extends Model
     }
 
     /**
-     * Lấy shipping price theo variant, method và tier
+     * Lấy shipping price theo variant và method
      */
-    public static function getPriceByVariantAndTier(int $variantId, string $method, ?int $tierId = null)
+    public static function getPriceByVariantAndMethod(int $variantId, string $method)
     {
-        $query = self::where('variant_id', $variantId)
-            ->where('method', $method);
-
-        if ($tierId) {
-            $query->where('tier_id', $tierId);
-        } else {
-            $query->whereNull('tier_id'); // Giá mặc định khi không có tier
-        }
-
-        return $query->first();
+        return self::where('variant_id', $variantId)
+            ->where('method', $method)
+            ->first();
     }
 
     /**
@@ -142,96 +128,112 @@ class ShippingPrice extends Model
     }
 
     /**
-     * Lấy shipping prices theo tier
+     * Lấy shipping prices với overrides theo tier
      */
-    public static function getPricesByTier(int $tierId)
+    public static function getPricesWithOverridesByTier(string $tierName)
     {
-        return self::where('tier_id', $tierId)
-            ->with(['variant', 'variant.product'])
+        return self::with(['overrides' => function ($query) use ($tierName) {
+            $query->where('tier_name', $tierName);
+        }, 'variant', 'variant.product'])
             ->get();
     }
 
     /**
-     * Tìm giá theo thứ tự ưu tiên: user-specific -> user tier -> default (null) -> Wood tier
+     * Tìm giá theo thứ tự ưu tiên: user-specific -> user tier -> default
      *
      * @param int $variantId ID của variant
      * @param string $method Shipping method
      * @param int|null $userId ID của user
      * @param string|null $userTier Tier của user
-     * @return ShippingPrice|null
+     * @return array|null ['price' => float, 'currency' => string, 'is_override' => bool]
      */
-    public static function findPriceByPriority(int $variantId, string $method, ?int $userId = null, ?string $userTier = null): ?ShippingPrice
+    public static function findPriceByPriority(int $variantId, string $method, ?int $userId = null, ?string $userTier = null): ?array
     {
+        // Lấy shipping price cơ bản
+        $basePrice = self::where('variant_id', $variantId)
+            ->where('method', $method)
+            ->first();
+
+        if (!$basePrice) {
+            return null;
+        }
+
         // 1. Ưu tiên cao nhất: giá riêng cho user cụ thể
         if ($userId) {
-            $userSpecificPrice = self::where('variant_id', $variantId)
-                ->where('method', $method)
-                ->where('user_id', $userId)
-                ->first();
-
-            if ($userSpecificPrice) {
-                return $userSpecificPrice;
+            $userOverride = ShippingOverride::findForUser($basePrice->id, $userId);
+            if ($userOverride) {
+                return [
+                    'price' => $userOverride->override_price,
+                    'currency' => $userOverride->currency,
+                    'is_override' => true,
+                    'override_id' => $userOverride->id
+                ];
             }
         }
 
         // 2. Ưu tiên lấy giá theo tier của user
         if ($userTier) {
-            $tierPrice = self::where('variant_id', $variantId)
-                ->where('method', $method)
-                ->where('tier_name', $userTier)
-                ->first();
-
-            if ($tierPrice) {
-                return $tierPrice;
+            $tierOverride = ShippingOverride::findForTier($basePrice->id, $userTier);
+            if ($tierOverride) {
+                return [
+                    'price' => $tierOverride->override_price,
+                    'currency' => $tierOverride->currency,
+                    'is_override' => true,
+                    'override_id' => $tierOverride->id
+                ];
             }
         }
 
-        // 3. Tìm giá mặc định (tier_name = null, user_id = null)
-        $defaultPrice = self::where('variant_id', $variantId)
-            ->where('method', $method)
-            ->whereNull('tier_name')
-            ->whereNull('user_id')
-            ->first();
-
-        if ($defaultPrice) {
-            return $defaultPrice;
-        }
-
-        // 4. Fallback về Wood tier
-        return self::where('variant_id', $variantId)
-            ->where('method', $method)
-            ->where('tier_name', 'Wood')
-            ->whereNull('user_id')
-            ->first();
+        // 3. Trả về giá mặc định
+        return [
+            'price' => $basePrice->price,
+            'currency' => $basePrice->currency,
+            'is_override' => false,
+            'override_id' => null
+        ];
     }
 
     /**
      * Lấy giá riêng cho user cụ thể
      */
-    public static function getUserSpecificPrice(int $variantId, string $method, int $userId): ?ShippingPrice
+    public static function getUserSpecificPrice(int $variantId, string $method, int $userId): ?array
     {
-        return self::where('variant_id', $variantId)
+        $basePrice = self::where('variant_id', $variantId)
             ->where('method', $method)
-            ->where('user_id', $userId)
             ->first();
+
+        if (!$basePrice) {
+            return null;
+        }
+
+        $userOverride = ShippingOverride::findForUser($basePrice->id, $userId);
+
+        if ($userOverride) {
+            return [
+                'price' => $userOverride->override_price,
+                'currency' => $userOverride->currency,
+                'is_override' => true,
+                'override_id' => $userOverride->id
+            ];
+        }
+
+        return null;
     }
 
     /**
      * Tạo hoặc cập nhật giá riêng cho user
      */
-    public static function setUserSpecificPrice(int $variantId, string $method, int $userId, float $price, string $currency = 'USD'): ShippingPrice
+    public static function setUserSpecificPrice(int $variantId, string $method, int $userId, float $price, string $currency = 'USD'): ShippingOverride
     {
-        return self::updateOrCreate(
-            [
-                'variant_id' => $variantId,
-                'method' => $method,
-                'user_id' => $userId
-            ],
-            [
-                'price' => $price,
-                'currency' => $currency
-            ]
-        );
+        $basePrice = self::where('variant_id', $variantId)
+            ->where('method', $method)
+            ->first();
+
+        if (!$basePrice) {
+            throw new \InvalidArgumentException("Shipping price not found for variant {$variantId} and method {$method}");
+        }
+
+        return ShippingOverride::createOrUpdateForUser($basePrice->id, $userId, $price, $currency);
     }
 
     /**
@@ -239,9 +241,14 @@ class ShippingPrice extends Model
      */
     public static function removeUserSpecificPrice(int $variantId, string $method, int $userId): bool
     {
-        return self::where('variant_id', $variantId)
+        $basePrice = self::where('variant_id', $variantId)
             ->where('method', $method)
-            ->where('user_id', $userId)
-            ->delete() > 0;
+            ->first();
+
+        if (!$basePrice) {
+            return false;
+        }
+
+        return ShippingOverride::removeForUser($basePrice->id, $userId);
     }
 }
