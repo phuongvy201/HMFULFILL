@@ -171,6 +171,11 @@
                             onclick="openSubmitModal('{{ $task->id }}')">
                             <i class="fas fa-upload mr-2"></i>Gửi thiết kế
                         </button>
+
+                        <button class="w-full bg-red-600 hover:bg-red-700 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center leave-task-btn"
+                            data-task-id="{{ $task->id }}">
+                            <i class="fas fa-sign-out-alt mr-2"></i>Rời task
+                        </button>
                         @endif
 
                         @if($task->designer_id === auth()->id() && $task->status === 'revision')
@@ -339,6 +344,48 @@
                 }
             });
         });
+
+        // Leave task
+        document.querySelectorAll('.leave-task-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const taskId = this.dataset.taskId;
+                const button = this;
+                const taskCard = button.closest('.bg-white');
+
+                if (confirm('Bạn có chắc muốn rời khỏi task này? Task sẽ quay về trạng thái chờ designer khác nhận.')) {
+                    button.disabled = true;
+                    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang xử lý...';
+
+                    fetch(`/designer/tasks/${taskId}/leave`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                                'Content-Type': 'application/json',
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Cập nhật giao diện động
+                                updateTaskCardAfterLeave(taskCard);
+
+                                // Hiển thị thông báo thành công
+                                showNotification(data.message, 'success');
+                            } else {
+                                alert(data.message);
+                                button.disabled = false;
+                                button.innerHTML = '<i class="fas fa-sign-out-alt mr-2"></i>Rời task';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('Có lỗi xảy ra. Vui lòng thử lại.');
+                            button.disabled = false;
+                            button.innerHTML = '<i class="fas fa-sign-out-alt mr-2"></i>Rời task';
+                        });
+                }
+            });
+        });
     });
 
     function updateTaskCardAfterJoin(taskCard, designer) {
@@ -383,6 +430,84 @@
             submitButton.innerHTML = '<i class="fas fa-upload mr-2"></i>Gửi thiết kế';
 
             joinButton.parentNode.replaceChild(submitButton, joinButton);
+        }
+    }
+
+    function updateTaskCardAfterLeave(taskCard) {
+        // Cập nhật border và background về trạng thái pending
+        taskCard.classList.remove('border-2', 'border-blue-200');
+        taskCard.classList.add('border-2', 'border-yellow-200');
+
+        // Cập nhật header background
+        const header = taskCard.querySelector('.px-4.py-3');
+        header.classList.remove('bg-blue-50');
+        header.classList.add('bg-yellow-50');
+
+        // Xóa thông tin designer
+        const designerInfo = taskCard.querySelector('.px-4.py-2.bg-blue-50');
+        if (designerInfo) {
+            designerInfo.remove();
+        }
+
+        // Cập nhật status
+        const statusSpan = header.querySelector('.px-2.py-1');
+        statusSpan.className = 'px-2 py-1 text-xs font-medium rounded-full bg-yellow-100 text-yellow-800';
+        statusSpan.textContent = 'Chờ nhận';
+
+        // Thay thế buttons bằng button "Nhận Task"
+        const actionDiv = taskCard.querySelector('.px-4.py-3.bg-gray-50');
+        const leaveButton = actionDiv.querySelector('.leave-task-btn');
+        const submitButton = actionDiv.querySelector('.submit-design-btn');
+
+        if (leaveButton && submitButton) {
+            // Xóa cả 2 buttons
+            leaveButton.remove();
+            submitButton.remove();
+
+            // Thêm button "Nhận Task" mới
+            const joinButton = document.createElement('button');
+            joinButton.className = 'w-full bg-yellow-500 hover:bg-yellow-600 text-white font-medium py-2 px-4 rounded-lg transition duration-200 flex items-center justify-center join-task-btn';
+            joinButton.setAttribute('data-task-id', leaveButton.dataset.taskId);
+            joinButton.innerHTML = '<i class="fas fa-hand-paper mr-2"></i>Nhận Task';
+
+            actionDiv.appendChild(joinButton);
+
+            // Thêm event listener cho button mới
+            joinButton.addEventListener('click', function() {
+                const taskId = this.dataset.taskId;
+                const button = this;
+                const taskCard = button.closest('.bg-white');
+
+                if (confirm('Bạn có chắc muốn nhận task này?')) {
+                    button.disabled = true;
+                    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang xử lý...';
+
+                    fetch(`/designer/tasks/${taskId}/join`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                                'Content-Type': 'application/json',
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                updateTaskCardAfterJoin(taskCard, data.designer);
+                                showNotification(data.message, 'success');
+                            } else {
+                                alert(data.message);
+                                button.disabled = false;
+                                button.innerHTML = '<i class="fas fa-hand-paper mr-2"></i>Nhận Task';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('Có lỗi xảy ra. Vui lòng thử lại.');
+                            button.disabled = false;
+                            button.innerHTML = '<i class="fas fa-hand-paper mr-2"></i>Nhận Task';
+                        });
+                }
+            });
         }
     }
 

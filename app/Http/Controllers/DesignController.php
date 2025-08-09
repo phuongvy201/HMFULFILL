@@ -239,6 +239,69 @@ class DesignController extends Controller
     }
 
     /**
+     * Designer rời khỏi task đã nhận
+     */
+    public function leaveTask($taskId)
+    {
+        $user = Auth::user();
+
+        if ($user->role !== 'design') {
+            return response()->json([
+                'success' => false,
+                'message' => 'Bạn không có quyền truy cập.'
+            ], 403);
+        }
+
+        $task = DesignTask::where('id', $taskId)
+            ->where('designer_id', $user->id)
+            ->where('status', DesignTask::STATUS_JOINED)
+            ->first();
+
+        if (!$task) {
+            return response()->json([
+                'success' => false,
+                'message' => 'Task không tồn tại hoặc bạn không thể rời khỏi task này.'
+            ], 404);
+        }
+
+        try {
+            // Reset task về trạng thái pending
+            $task->update([
+                'designer_id' => null,
+                'status' => DesignTask::STATUS_PENDING,
+                'updated_at' => now()
+            ]);
+
+            // Log activity
+            Log::info('Designer left task', [
+                'task_id' => $task->id,
+                'designer_id' => $user->id,
+                'designer_name' => $user->first_name . ' ' . $user->last_name,
+                'task_title' => $task->title,
+                'customer_id' => $task->customer_id,
+                'action' => 'leave_task'
+            ]);
+
+            return response()->json([
+                'success' => true,
+                'message' => 'Đã rời khỏi task thành công! Task sẽ quay về trạng thái chờ designer khác nhận.'
+            ]);
+        } catch (\Exception $e) {
+            Log::error('Error leaving task', [
+                'task_id' => $taskId,
+                'designer_id' => $user->id,
+                'error' => $e->getMessage(),
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'success' => false,
+                'message' => 'Có lỗi xảy ra khi rời khỏi task. Vui lòng thử lại.'
+            ], 500);
+        }
+    }
+
+    /**
      * Designer upload file thiết kế hoàn chỉnh
      */
     public function submitDesign(DesignUploadRequest $request, $taskId)

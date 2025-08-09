@@ -406,8 +406,34 @@
             </div>
             @endif
 
-            <!-- Form submit design -->
+            <!-- Action buttons cho designer đã nhận task -->
             @if($task->status === 'joined' && $task->designer_id === auth()->id())
+            <!-- Button Rời task -->
+            <div class="bg-white rounded-lg shadow-lg overflow-hidden">
+                <div class="bg-red-600 text-white px-6 py-4">
+                    <h6 class="font-semibold flex items-center">
+                        <i class="fas fa-exclamation-triangle mr-2"></i>Rời khỏi task
+                    </h6>
+                </div>
+                <div class="p-6">
+                    <div class="mb-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+                        <div class="flex items-center">
+                            <i class="fas fa-info-circle text-red-500 mr-2"></i>
+                            <span class="text-sm text-red-700">
+                                Nếu bạn nhận nhầm task này, bạn có thể rời khỏi để task quay về trạng thái chờ designer khác nhận.
+                            </span>
+                        </div>
+                    </div>
+
+                    <button id="leaveTaskBtn"
+                        class="w-full bg-red-600 hover:bg-red-700 text-white font-semibold py-3 px-6 rounded-lg transition duration-200 flex items-center justify-center leave-task-btn"
+                        data-task-id="{{ $task->id }}">
+                        <i class="fas fa-sign-out-alt mr-2"></i>Rời khỏi task
+                    </button>
+                </div>
+            </div>
+
+            <!-- Form submit design -->
             <div class="bg-white rounded-lg shadow-lg overflow-hidden">
                 <div class="bg-green-600 text-white px-6 py-4">
                     <h6 class="font-semibold flex items-center">
@@ -996,6 +1022,45 @@
                 'updateSubmitBtn'
             );
         }
+
+        // Leave task handler
+        document.querySelectorAll('.leave-task-btn').forEach(button => {
+            button.addEventListener('click', function() {
+                const taskId = this.dataset.taskId;
+                const button = this;
+
+                if (confirm('Bạn có chắc muốn rời khỏi task này?\n\nTask sẽ quay về trạng thái chờ designer khác nhận và bạn sẽ không thể gửi thiết kế cho task này nữa.')) {
+                    button.disabled = true;
+                    button.innerHTML = '<i class="fas fa-spinner fa-spin mr-2"></i>Đang xử lý...';
+
+                    fetch(`/designer/tasks/${taskId}/leave`, {
+                            method: 'POST',
+                            headers: {
+                                'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]').getAttribute('content'),
+                                'Content-Type': 'application/json',
+                            }
+                        })
+                        .then(response => response.json())
+                        .then(data => {
+                            if (data.success) {
+                                // Hiển thị thông báo thành công và redirect
+                                alert(data.message);
+                                window.location.href = '{{ route("designer.tasks.index") }}';
+                            } else {
+                                alert(data.message);
+                                button.disabled = false;
+                                button.innerHTML = '<i class="fas fa-sign-out-alt mr-2"></i>Rời khỏi task';
+                            }
+                        })
+                        .catch(error => {
+                            console.error('Error:', error);
+                            alert('Có lỗi xảy ra. Vui lòng thử lại.');
+                            button.disabled = false;
+                            button.innerHTML = '<i class="fas fa-sign-out-alt mr-2"></i>Rời khỏi task';
+                        });
+                }
+            });
+        });
     });
 </script>
 @endsection

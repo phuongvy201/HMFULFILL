@@ -290,6 +290,7 @@ Route::prefix('designer')->middleware(['auth'])->group(function () {
     Route::get('/dashboard', [App\Http\Controllers\DesignController::class, 'dashboard'])->name('designer.dashboard');
     Route::get('/tasks', [App\Http\Controllers\DesignController::class, 'designerTasks'])->name('designer.tasks.index');
     Route::post('/tasks/{taskId}/join', [App\Http\Controllers\DesignController::class, 'joinTask'])->name('designer.tasks.join');
+    Route::post('/tasks/{taskId}/leave', [App\Http\Controllers\DesignController::class, 'leaveTask'])->name('designer.tasks.leave');
     Route::post('/tasks/{taskId}/submit', [App\Http\Controllers\DesignController::class, 'submitDesign'])->name('designer.tasks.submit');
     Route::put('/tasks/{taskId}/update', [App\Http\Controllers\DesignController::class, 'updateDesign'])->name('designer.tasks.update');
     Route::get('/tasks/{taskId}', [App\Http\Controllers\DesignController::class, 'show'])->name('designer.tasks.show');
