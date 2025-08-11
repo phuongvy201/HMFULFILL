@@ -6,6 +6,9 @@
 /public/storage
 /storage/*.key
 /storage/pail
+/storage/framework/views/*.php
+test_user_tier_update.php
+
 
 /public/proofs/
 /public/proof_images/

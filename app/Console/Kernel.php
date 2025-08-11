@@ -16,6 +16,15 @@ class Kernel extends ConsoleKernel
         \App\Console\Commands\UpdateTrackingNumbers::class,
         \App\Console\Commands\ScheduleTierCalculation::class,
         \App\Console\Commands\ReleaseOnHoldOrders::class,
+        \App\Console\Commands\UpdateUserShippingTier::class,
+        \App\Console\Commands\UpdateExcelOrderFulfillmentPrices::class,
+        \App\Console\Commands\UpdateUserToSpecialTier::class,
+        \App\Console\Commands\CleanupTempFiles::class,
+        \App\Console\Commands\CleanupIncompleteUploads::class,
+        \App\Console\Commands\DiagnoseUploadIssue::class,
+        \App\Console\Commands\CheckRegionMismatch::class,
+        \App\Console\Commands\AnalyzeUploadLogs::class,
+        \App\Console\Commands\FixDoubleRefundCommand::class,
     ];
     protected function commands(): void
     {

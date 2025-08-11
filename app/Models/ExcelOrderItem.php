@@ -8,6 +8,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
 
 class ExcelOrderItem extends Model
 {
+    protected $table = 'excel_order_items';
+
     protected $fillable = [
         'excel_order_id',
         'part_number',

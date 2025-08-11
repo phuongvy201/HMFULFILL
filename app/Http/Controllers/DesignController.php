@@ -328,17 +328,20 @@ class DesignController extends Controller
             $uploadService = new S3MultipartUploadService();
 
             if ($task->sides_count > 1) {
-                // Upload nhiều files cho nhiều mặt sử dụng multipart upload
+                // Upload nhiều files cho nhiều mặt sử dụng parallel multipart upload
                 $designFiles = $request->file('design_files');
 
-                Log::info('Starting multipart upload for multiple design files', [
+                Log::info('Starting parallel multipart upload for multiple design files', [
                     'task_id' => $task->id,
                     'files_count' => count($designFiles),
-                    'sides_count' => $task->sides_count
+                    'sides_count' => $task->sides_count,
+                    'parallel_enabled' => config('multipart-upload.performance.enable_parallel', true),
+                    'concurrent_uploads' => config('multipart-upload.performance.concurrent_uploads', 5)
                 ]);
 
-                // Upload tất cả files với multipart upload service
-                $uploadResults = $uploadService->uploadMultipleFiles(
+                // Upload tất cả files đồng thời với multipart upload service
+                $uploadStartTime = microtime(true);
+                $uploadResults = $uploadService->uploadMultipleFilesParallel(
                     $designFiles,
                     'designs/completed',
                     [
@@ -350,6 +353,15 @@ class DesignController extends Controller
                         ]
                     ]
                 );
+                $uploadEndTime = microtime(true);
+                $totalUploadTime = round(($uploadEndTime - $uploadStartTime) * 1000, 2);
+
+                Log::info('Parallel upload completed', [
+                    'task_id' => $task->id,
+                    'total_upload_time_ms' => $totalUploadTime,
+                    'successful_uploads' => count(array_filter($uploadResults, fn($r) => $r['success'])),
+                    'failed_uploads' => count(array_filter($uploadResults, fn($r) => !$r['success']))
+                ]);
 
                 // Kiểm tra kết quả upload
                 foreach ($uploadResults as $index => $result) {
@@ -492,18 +504,21 @@ class DesignController extends Controller
             $uploadService = new S3MultipartUploadService();
 
             if ($task->sides_count > 1) {
-                // Update nhiều files cho nhiều mặt
+                // Update nhiều files cho nhiều mặt sử dụng parallel upload
                 $designFiles = $request->file('design_files');
 
-                Log::info('Starting multipart upload for updating multiple design files', [
+                Log::info('Starting parallel multipart upload for updating multiple design files', [
                     'task_id' => $task->id,
                     'revision_id' => $latestRevision->id,
                     'files_count' => count($designFiles),
-                    'sides_count' => $task->sides_count
+                    'sides_count' => $task->sides_count,
+                    'parallel_enabled' => config('multipart-upload.performance.enable_parallel', true),
+                    'concurrent_uploads' => config('multipart-upload.performance.concurrent_uploads', 5)
                 ]);
 
-                // Upload tất cả files với multipart upload service
-                $uploadResults = $uploadService->uploadMultipleFiles(
+                // Upload tất cả files đồng thời với multipart upload service
+                $uploadStartTime = microtime(true);
+                $uploadResults = $uploadService->uploadMultipleFilesParallel(
                     $designFiles,
                     'designs/updated',
                     [
@@ -516,6 +531,16 @@ class DesignController extends Controller
                         ]
                     ]
                 );
+                $uploadEndTime = microtime(true);
+                $totalUploadTime = round(($uploadEndTime - $uploadStartTime) * 1000, 2);
+
+                Log::info('Parallel update upload completed', [
+                    'task_id' => $task->id,
+                    'revision_id' => $latestRevision->id,
+                    'total_upload_time_ms' => $totalUploadTime,
+                    'successful_uploads' => count(array_filter($uploadResults, fn($r) => $r['success'])),
+                    'failed_uploads' => count(array_filter($uploadResults, fn($r) => !$r['success']))
+                ]);
 
                 // Kiểm tra kết quả upload
                 foreach ($uploadResults as $index => $result) {

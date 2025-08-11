@@ -21,11 +21,17 @@ class S3MultipartUploadService
     {
 
         $this->s3Client = new S3Client([
-            'region' => env('AWS_DEFAULT_REGION', 'ap-southeast-1'),
+            'region' => env('AWS_DEFAULT_REGION', 'ap-southeast-2'),
             'version' => 'latest',
             'credentials' => [
                 'key'    => env('AWS_ACCESS_KEY_ID'),
                 'secret' => env('AWS_SECRET_ACCESS_KEY'),
+            ],
+            'timeout' => env('S3_UPLOAD_TIME_LIMIT', 60),
+            'connect_timeout' => 30,
+            'http' => [
+                'timeout' => env('S3_UPLOAD_TIME_LIMIT', 60),
+                'connect_timeout' => 30,
             ],
         ]);
 
@@ -44,32 +50,80 @@ class S3MultipartUploadService
      */
     public function uploadFile(UploadedFile $file, string $destinationPath, array $options = [])
     {
+        $startTime = microtime(true);
+        $fileSize = $file->getSize();
+        $fileName = $file->getClientOriginalName();
+
+        Log::info('Starting S3 upload', [
+            'file_name' => $fileName,
+            'file_size_mb' => round($fileSize / 1024 / 1024, 2),
+            'destination' => $destinationPath,
+            'upload_method' => 'determining'
+        ]);
+
         try {
             // Auto cleanup incomplete uploads trước khi upload (chỉ chạy 10% lần)
             if (config('multipart-upload.cleanup.auto_cleanup_enabled', true) && rand(1, 10) === 1) {
+                Log::info('Running auto cleanup before upload');
                 $this->cleanupIncompleteUploads(
                     config('multipart-upload.cleanup.incomplete_upload_ttl_hours', 24)
                 );
             }
 
-            $fileSize = $file->getSize();
             $multipartThreshold = config('multipart-upload.multipart_threshold', 100 * 1024 * 1024);
-
-            // Điều chỉnh chunk size theo file size
             $this->chunkSize = $this->getOptimalChunkSize($fileSize);
+
+            Log::info('Upload configuration', [
+                'file_size_mb' => round($fileSize / 1024 / 1024, 2),
+                'multipart_threshold_mb' => round($multipartThreshold / 1024 / 1024, 2),
+                'chunk_size_mb' => round($this->chunkSize / 1024 / 1024, 2),
+                'will_use_multipart' => $fileSize >= $multipartThreshold
+            ]);
 
             // Nếu file nhỏ hơn threshold, sử dụng upload thường
             if ($fileSize < $multipartThreshold) {
-                return $this->simpleUpload($file, $destinationPath, $options);
+                Log::info('Using simple upload for small file');
+                $result = $this->simpleUpload($file, $destinationPath, $options);
+
+                $endTime = microtime(true);
+                $uploadTime = round(($endTime - $startTime) * 1000, 2);
+
+                Log::info('Simple upload completed', [
+                    'file_name' => $fileName,
+                    'upload_time_ms' => $uploadTime,
+                    'speed_mbps' => round(($fileSize / 1024 / 1024) / (($endTime - $startTime)), 2),
+                    'success' => $result !== false
+                ]);
+
+                return $result;
             }
 
             // Sử dụng multipart upload cho file lớn
-            return $this->multipartUpload($file, $destinationPath, $options);
+            Log::info('Using multipart upload for large file');
+            $result = $this->multipartUpload($file, $destinationPath, $options);
+
+            $endTime = microtime(true);
+            $uploadTime = round(($endTime - $startTime) * 1000, 2);
+
+            Log::info('Multipart upload completed', [
+                'file_name' => $fileName,
+                'upload_time_ms' => $uploadTime,
+                'speed_mbps' => round(($fileSize / 1024 / 1024) / (($endTime - $startTime)), 2),
+                'success' => $result !== false
+            ]);
+
+            return $result;
         } catch (\Exception $e) {
+            $endTime = microtime(true);
+            $uploadTime = round(($endTime - $startTime) * 1000, 2);
+
             Log::error('S3 Upload failed', [
-                'file' => $file->getClientOriginalName(),
+                'file_name' => $fileName,
+                'file_size_mb' => round($fileSize / 1024 / 1024, 2),
                 'destination' => $destinationPath,
+                'upload_time_ms' => $uploadTime,
                 'error' => $e->getMessage(),
+                'error_code' => $e->getCode(),
                 'trace' => $e->getTraceAsString()
             ]);
 
@@ -82,20 +136,55 @@ class S3MultipartUploadService
      */
     protected function simpleUpload(UploadedFile $file, string $destinationPath, array $options = [])
     {
-        $defaultOptions = [
-            'visibility' => 'private',
-            'ContentType' => $file->getMimeType(),
-        ];
+        $startTime = microtime(true);
+        $fileSize = $file->getSize();
+        $fileName = $file->getClientOriginalName();
 
-        $uploadOptions = array_merge($defaultOptions, $options);
+        Log::info('Starting simple upload', [
+            'file_name' => $fileName,
+            'file_size_mb' => round($fileSize / 1024 / 1024, 2),
+            'destination' => $destinationPath
+        ]);
 
-        $path = $file->storeAs(
-            dirname($destinationPath),
-            basename($destinationPath),
-            ['disk' => 's3'] + $uploadOptions
-        );
+        try {
+            $defaultOptions = [
+                'visibility' => 'private',
+                'ContentType' => $file->getMimeType(),
+            ];
 
-        return $path;
+            $uploadOptions = array_merge($defaultOptions, $options);
+
+            $path = $file->storeAs(
+                dirname($destinationPath),
+                basename($destinationPath),
+                ['disk' => 's3'] + $uploadOptions
+            );
+
+            $endTime = microtime(true);
+            $uploadTime = round(($endTime - $startTime) * 1000, 2);
+
+            Log::info('Simple upload successful', [
+                'file_name' => $fileName,
+                'upload_time_ms' => $uploadTime,
+                'speed_mbps' => round(($fileSize / 1024 / 1024) / (($endTime - $startTime)), 2),
+                'path' => $path
+            ]);
+
+            return $path;
+        } catch (\Exception $e) {
+            $endTime = microtime(true);
+            $uploadTime = round(($endTime - $startTime) * 1000, 2);
+
+            Log::error('Simple upload failed', [
+                'file_name' => $fileName,
+                'file_size_mb' => round($fileSize / 1024 / 1024, 2),
+                'upload_time_ms' => $uploadTime,
+                'error' => $e->getMessage(),
+                'error_code' => $e->getCode()
+            ]);
+
+            throw $e;
+        }
     }
 
     /**
@@ -103,32 +192,45 @@ class S3MultipartUploadService
      */
     protected function multipartUpload(UploadedFile $file, string $destinationPath, array $options = [])
     {
+        $startTime = microtime(true);
         $filePath = $file->getRealPath();
         $fileSize = $file->getSize();
         $fileName = basename($destinationPath);
+        $originalFileName = $file->getClientOriginalName();
 
         Log::info('Starting multipart upload', [
-            'file' => $fileName,
-            'size' => $fileSize,
-            'destination' => $destinationPath
+            'file_name' => $originalFileName,
+            'file_size_mb' => round($fileSize / 1024 / 1024, 2),
+            'destination' => $destinationPath,
+            'chunk_size_mb' => round($this->chunkSize / 1024 / 1024, 2)
         ]);
 
         // Bước 1: Khởi tạo multipart upload
+        $initStartTime = microtime(true);
         $result = $this->s3Client->createMultipartUpload([
             'Bucket' => $this->bucket,
             'Key' => $destinationPath,
             'ContentType' => $file->getMimeType(),
             'Metadata' => [
-                'original-filename' => $file->getClientOriginalName(),
+                'original-filename' => $originalFileName,
                 'upload-timestamp' => now()->toISOString()
             ]
         ]);
 
         $uploadId = $result['UploadId'];
+        $initTime = round((microtime(true) - $initStartTime) * 1000, 2);
+
+        Log::info('Multipart upload initialized', [
+            'file_name' => $originalFileName,
+            'upload_id' => $uploadId,
+            'init_time_ms' => $initTime
+        ]);
+
         $parts = [];
 
         try {
-            // Bước 2: Đọc toàn bộ file và chia thành chunks để upload parallel
+            // Bước 2: Đọc toàn bộ file và chia thành chunks
+            $readStartTime = microtime(true);
             $fileHandle = fopen($filePath, 'rb');
             $chunks = [];
             $partNumber = 1;
@@ -152,17 +254,23 @@ class S3MultipartUploadService
             }
 
             fclose($fileHandle);
+            $readTime = round((microtime(true) - $readStartTime) * 1000, 2);
 
-            Log::info("File divided into {$partNumber} parts for parallel upload", [
-                'file' => $fileName,
+            Log::info('File divided into chunks', [
+                'file_name' => $originalFileName,
                 'total_parts' => count($chunks),
-                'file_size' => $fileSize
+                'file_size_mb' => round($fileSize / 1024 / 1024, 2),
+                'read_time_ms' => $readTime,
+                'average_chunk_size_mb' => round($fileSize / count($chunks) / 1024 / 1024, 2)
             ]);
 
-            // Upload parts in parallel using concurrent requests
-            $parts = $this->uploadPartsInParallel($uploadId, $destinationPath, $chunks, $fileName);
+            // Upload parts in parallel
+            $uploadStartTime = microtime(true);
+            $parts = $this->uploadPartsInParallel($uploadId, $destinationPath, $chunks, $originalFileName);
+            $uploadTime = round((microtime(true) - $uploadStartTime) * 1000, 2);
 
             // Bước 3: Complete multipart upload
+            $completeStartTime = microtime(true);
             $this->s3Client->completeMultipartUpload([
                 'Bucket' => $this->bucket,
                 'Key' => $destinationPath,
@@ -171,16 +279,36 @@ class S3MultipartUploadService
                     'Parts' => $parts
                 ]
             ]);
+            $completeTime = round((microtime(true) - $completeStartTime) * 1000, 2);
+
+            $totalTime = round((microtime(true) - $startTime) * 1000, 2);
 
             Log::info('Multipart upload completed successfully', [
-                'file' => $fileName,
+                'file_name' => $originalFileName,
                 'destination' => $destinationPath,
-                'parts' => count($parts),
-                'size' => $fileSize
+                'total_parts' => count($parts),
+                'file_size_mb' => round($fileSize / 1024 / 1024, 2),
+                'total_time_ms' => $totalTime,
+                'init_time_ms' => $initTime,
+                'read_time_ms' => $readTime,
+                'upload_time_ms' => $uploadTime,
+                'complete_time_ms' => $completeTime,
+                'speed_mbps' => round(($fileSize / 1024 / 1024) / (($totalTime / 1000)), 2)
             ]);
 
             return $destinationPath;
         } catch (\Exception $e) {
+            $totalTime = round((microtime(true) - $startTime) * 1000, 2);
+
+            Log::error('Multipart upload failed', [
+                'file_name' => $originalFileName,
+                'file_size_mb' => round($fileSize / 1024 / 1024, 2),
+                'upload_id' => $uploadId,
+                'total_time_ms' => $totalTime,
+                'error' => $e->getMessage(),
+                'error_code' => $e->getCode()
+            ]);
+
             // Cleanup: Abort multipart upload nếu có lỗi
             try {
                 $this->s3Client->abortMultipartUpload([
@@ -190,7 +318,7 @@ class S3MultipartUploadService
                 ]);
 
                 Log::info('Aborted multipart upload due to error', [
-                    'file' => $fileName,
+                    'file_name' => $originalFileName,
                     'upload_id' => $uploadId
                 ]);
             } catch (\Exception $abortException) {
@@ -209,16 +337,33 @@ class S3MultipartUploadService
      */
     protected function uploadPartsInParallel(string $uploadId, string $key, array $chunks, string $fileName): array
     {
+        $startTime = microtime(true);
         $maxConcurrency = config('multipart-upload.performance.concurrent_uploads', 3);
         $parts = [];
         $totalParts = count($chunks);
         $completedParts = 0;
+        $totalUploadedSize = 0;
+
+        Log::info('Starting parallel parts upload', [
+            'file_name' => $fileName,
+            'total_parts' => $totalParts,
+            'max_concurrency' => $maxConcurrency,
+            'chunk_size_mb' => round($this->chunkSize / 1024 / 1024, 2)
+        ]);
 
         // Chia chunks thành batches để upload parallel
         $batches = array_chunk($chunks, $maxConcurrency);
 
         foreach ($batches as $batchIndex => $batch) {
+            $batchStartTime = microtime(true);
             $promises = [];
+
+            Log::info('Processing batch', [
+                'file_name' => $fileName,
+                'batch_index' => $batchIndex + 1,
+                'total_batches' => count($batches),
+                'batch_size' => count($batch)
+            ]);
 
             // Tạo promises cho batch hiện tại
             foreach ($batch as $chunk) {
@@ -241,20 +386,41 @@ class S3MultipartUploadService
                         'PartNumber' => $partNumber
                     ];
                     $completedParts++;
+                    $totalUploadedSize += $result['size'] ?? 0;
 
                     // Log progress
                     $progress = round(($completedParts / $totalParts) * 100, 2);
-                    Log::info("Parallel upload progress: {$progress}%", [
-                        'file' => $fileName,
+                    $elapsedTime = round((microtime(true) - $startTime) * 1000, 2);
+                    $avgSpeed = $elapsedTime > 0 ? round(($totalUploadedSize / 1024 / 1024) / (($elapsedTime / 1000)), 2) : 0;
+
+                    Log::info("Parallel upload progress", [
+                        'file_name' => $fileName,
+                        'progress_percent' => $progress,
                         'completed_parts' => $completedParts,
                         'total_parts' => $totalParts,
                         'batch' => $batchIndex + 1,
-                        'part' => $partNumber
+                        'part' => $partNumber,
+                        'elapsed_time_ms' => $elapsedTime,
+                        'uploaded_size_mb' => round($totalUploadedSize / 1024 / 1024, 2),
+                        'avg_speed_mbps' => $avgSpeed
                     ]);
                 } else {
+                    Log::error('Part upload failed', [
+                        'file_name' => $fileName,
+                        'part_number' => $partNumber,
+                        'error' => $result['error']
+                    ]);
                     throw new \Exception("Failed to upload part {$partNumber}: {$result['error']}");
                 }
             }
+
+            $batchTime = round((microtime(true) - $batchStartTime) * 1000, 2);
+            Log::info('Batch completed', [
+                'file_name' => $fileName,
+                'batch_index' => $batchIndex + 1,
+                'batch_time_ms' => $batchTime,
+                'batch_size' => count($batch)
+            ]);
         }
 
         // Sắp xếp parts theo part number
@@ -262,10 +428,17 @@ class S3MultipartUploadService
             return $a['PartNumber'] - $b['PartNumber'];
         });
 
+        $totalTime = round((microtime(true) - $startTime) * 1000, 2);
+        $totalSizeMB = round($totalUploadedSize / 1024 / 1024, 2);
+        $avgSpeed = $totalTime > 0 ? round($totalSizeMB / (($totalTime / 1000)), 2) : 0;
+
         Log::info("All parts uploaded successfully in parallel", [
-            'file' => $fileName,
+            'file_name' => $fileName,
             'total_parts' => count($parts),
-            'batches' => count($batches)
+            'total_batches' => count($batches),
+            'total_time_ms' => $totalTime,
+            'total_size_mb' => $totalSizeMB,
+            'avg_speed_mbps' => $avgSpeed
         ]);
 
         return $parts;
@@ -286,9 +459,9 @@ class S3MultipartUploadService
      */
     protected function resolveUploadPromises(array $promises): array
     {
-        $enableParallel = config('multipart-upload.performance.enable_parallel', false);
+        $enableParallel = config('multipart-upload.performance.enable_parallel', true);
 
-        if ($enableParallel && function_exists('curl_multi_init')) {
+        if ($enableParallel && class_exists('GuzzleHttp\Promise\Promise')) {
             return $this->resolveUploadPromisesParallel($promises);
         } else {
             return $this->resolveUploadPromisesSequential($promises);
@@ -330,74 +503,133 @@ class S3MultipartUploadService
     }
 
     /**
-     * True parallel upload using concurrent execution
+     * True parallel upload using Guzzle Promises
      */
     protected function resolveUploadPromisesParallel(array $promises): array
     {
-        $results = [];
-        $maxConcurrency = config('multipart-upload.performance.concurrent_uploads', 3);
+        $startTime = microtime(true);
+        $maxConcurrency = config('multipart-upload.performance.concurrent_uploads', 5);
 
-        // Chia promises thành batches
+        Log::info('Starting parallel promise resolution', [
+            'total_promises' => count($promises),
+            'max_concurrency' => $maxConcurrency
+        ]);
+
+        // Chia promises thành batches để kiểm soát concurrency
         $batches = array_chunk($promises, $maxConcurrency, true);
+        $results = [];
 
         foreach ($batches as $batchIndex => $batch) {
-            Log::info("Processing batch {$batchIndex} with " . count($batch) . " parts");
+            $batchStartTime = microtime(true);
+
+            Log::info("Processing batch {$batchIndex}", [
+                'batch_index' => $batchIndex + 1,
+                'total_batches' => count($batches),
+                'batch_size' => count($batch)
+            ]);
 
             // Thực hiện batch parallel
             $batchResults = $this->processBatchParallel($batch);
             $results = array_merge($results, $batchResults);
+
+            $batchTime = round((microtime(true) - $batchStartTime) * 1000, 2);
+            Log::info("Batch {$batchIndex} completed", [
+                'batch_time_ms' => $batchTime,
+                'successful_uploads' => count(array_filter($batchResults, fn($r) => $r['success']))
+            ]);
         }
+
+        $totalTime = round((microtime(true) - $startTime) * 1000, 2);
+        Log::info('Parallel promise resolution completed', [
+            'total_time_ms' => $totalTime,
+            'total_results' => count($results)
+        ]);
 
         return $results;
     }
 
     /**
-     * Process a batch of uploads in parallel
+     * Process a batch of uploads in parallel using Guzzle Promises
      */
     protected function processBatchParallel(array $batch): array
     {
         $results = [];
-        $processes = [];
+        $guzzlePromises = [];
 
-        // Khởi tạo các processes
+        // Tạo Guzzle Promises cho batch
         foreach ($batch as $partNumber => $promise) {
-            $processes[$partNumber] = [
-                'promise' => $promise,
-                'start_time' => microtime(true),
-                'status' => 'pending'
-            ];
+            $guzzlePromises[$partNumber] = new \GuzzleHttp\Promise\Promise(function () use ($promise, $partNumber) {
+                try {
+                    $startTime = microtime(true);
+                    $result = $promise();
+                    $endTime = microtime(true);
+
+                    $uploadTime = round(($endTime - $startTime) * 1000, 2);
+
+                    Log::debug("Promise {$partNumber} executed", [
+                        'part_number' => $partNumber,
+                        'upload_time_ms' => $uploadTime
+                    ]);
+
+                    return [
+                        'success' => true,
+                        'result' => $result,
+                        'upload_time' => $uploadTime
+                    ];
+                } catch (\Exception $e) {
+                    Log::error("Promise {$partNumber} failed", [
+                        'part_number' => $partNumber,
+                        'error' => $e->getMessage()
+                    ]);
+
+                    throw $e;
+                }
+            });
         }
 
-        // Thực hiện parallel execution bằng cách fork processes (simplified)
-        foreach ($processes as $partNumber => &$process) {
-            try {
-                $result = $process['promise']();
-                $endTime = microtime(true);
+        // Thực hiện parallel execution
+        try {
+            $batchResults = \GuzzleHttp\Promise\Utils::unwrap($guzzlePromises);
 
-                $results[$partNumber] = [
-                    'success' => true,
-                    'ETag' => $result['ETag'],
-                    'upload_time' => round(($endTime - $process['start_time']) * 1000, 2)
-                ];
+            // Xử lý kết quả
+            foreach ($batchResults as $partNumber => $batchResult) {
+                if ($batchResult['success']) {
+                    $results[$partNumber] = [
+                        'success' => true,
+                        'ETag' => $batchResult['result']['ETag'] ?? null,
+                        'upload_time' => $batchResult['upload_time']
+                    ];
+                } else {
+                    $results[$partNumber] = [
+                        'success' => false,
+                        'error' => 'Upload failed'
+                    ];
+                }
+            }
+        } catch (\Exception $e) {
+            Log::error('Batch parallel execution failed', [
+                'error' => $e->getMessage(),
+                'batch_size' => count($batch)
+            ]);
 
-                $process['status'] = 'completed';
+            // Fallback to sequential execution
+            foreach ($batch as $partNumber => $promise) {
+                try {
+                    $startTime = microtime(true);
+                    $result = $promise();
+                    $endTime = microtime(true);
 
-                Log::debug("Part {$partNumber} uploaded in parallel", [
-                    'part_number' => $partNumber,
-                    'upload_time_ms' => $results[$partNumber]['upload_time']
-                ]);
-            } catch (\Exception $e) {
-                $results[$partNumber] = [
-                    'success' => false,
-                    'error' => $e->getMessage()
-                ];
-
-                $process['status'] = 'failed';
-
-                Log::error("Part {$partNumber} parallel upload failed", [
-                    'part_number' => $partNumber,
-                    'error' => $e->getMessage()
-                ]);
+                    $results[$partNumber] = [
+                        'success' => true,
+                        'ETag' => $result['ETag'] ?? null,
+                        'upload_time' => round(($endTime - $startTime) * 1000, 2)
+                    ];
+                } catch (\Exception $fallbackException) {
+                    $results[$partNumber] = [
+                        'success' => false,
+                        'error' => $fallbackException->getMessage()
+                    ];
+                }
             }
         }
 
@@ -409,10 +641,18 @@ class S3MultipartUploadService
      */
     protected function uploadPartWithRetry(string $uploadId, string $key, int $partNumber, string $data, int $maxRetries = 3)
     {
+        $startTime = microtime(true);
         $retries = 0;
+        $dataSize = strlen($data);
+
+        Log::debug('Starting part upload', [
+            'part_number' => $partNumber,
+            'data_size_mb' => round($dataSize / 1024 / 1024, 2)
+        ]);
 
         while ($retries < $maxRetries) {
             try {
+                $uploadStartTime = microtime(true);
                 $result = $this->s3Client->uploadPart([
                     'Bucket' => $this->bucket,
                     'Key' => $key,
@@ -420,22 +660,49 @@ class S3MultipartUploadService
                     'PartNumber' => $partNumber,
                     'Body' => $data
                 ]);
+                $uploadTime = round((microtime(true) - $uploadStartTime) * 1000, 2);
+
+                $totalTime = round((microtime(true) - $startTime) * 1000, 2);
+                $speed = $uploadTime > 0 ? round(($dataSize / 1024 / 1024) / (($uploadTime / 1000)), 2) : 0;
+
+                Log::debug('Part upload successful', [
+                    'part_number' => $partNumber,
+                    'upload_time_ms' => $uploadTime,
+                    'total_time_ms' => $totalTime,
+                    'speed_mbps' => $speed,
+                    'retries' => $retries
+                ]);
 
                 return $result;
             } catch (S3Exception $e) {
                 $retries++;
+                $totalTime = round((microtime(true) - $startTime) * 1000, 2);
 
                 Log::warning("Part upload failed, retry {$retries}/{$maxRetries}", [
-                    'part' => $partNumber,
-                    'error' => $e->getMessage()
+                    'part_number' => $partNumber,
+                    'data_size_mb' => round($dataSize / 1024 / 1024, 2),
+                    'total_time_ms' => $totalTime,
+                    'error' => $e->getMessage(),
+                    'error_code' => $e->getCode()
                 ]);
 
                 if ($retries >= $maxRetries) {
+                    Log::error('Part upload failed after max retries', [
+                        'part_number' => $partNumber,
+                        'max_retries' => $maxRetries,
+                        'total_time_ms' => $totalTime,
+                        'final_error' => $e->getMessage()
+                    ]);
                     throw $e;
                 }
 
                 // Exponential backoff
-                sleep(pow(2, $retries));
+                $backoffTime = pow(2, $retries);
+                Log::debug('Waiting before retry', [
+                    'part_number' => $partNumber,
+                    'backoff_seconds' => $backoffTime
+                ]);
+                sleep($backoffTime);
             }
         }
 
@@ -492,6 +759,103 @@ class S3MultipartUploadService
                 ];
             }
         }
+
+        return $results;
+    }
+
+    /**
+     * Upload nhiều files đồng thời sử dụng parallel processing
+     * 
+     * @param array $files Array of UploadedFile
+     * @param string $basePath Base path for uploads
+     * @param array $options Upload options
+     * @return array Array of upload results
+     */
+    public function uploadMultipleFilesParallel(array $files, string $basePath, array $options = []): array
+    {
+        $startTime = microtime(true);
+        $filesCount = count($files);
+
+        Log::info('Starting parallel upload for multiple files', [
+            'files_count' => $filesCount,
+            'base_path' => $basePath
+        ]);
+
+        $promises = [];
+        $fileInfo = [];
+
+        // Tạo promises cho tất cả files
+        foreach ($files as $index => $file) {
+            if (!$file instanceof UploadedFile || !$file->isValid()) {
+                continue;
+            }
+
+            // Tạo unique filename
+            $originalName = $file->getClientOriginalName();
+            $normalizedName = str_replace(' ', '+', $originalName);
+            $normalizedName = urlencode($normalizedName);
+            $fileName = time() . '_' . ($index + 1) . '_' . $normalizedName;
+            $destinationPath = $basePath . '/' . $fileName;
+
+            // Lưu thông tin file
+            $fileInfo[$index] = [
+                'original_name' => $originalName,
+                'size' => $file->getSize(),
+                'destination_path' => $destinationPath
+            ];
+
+            // Tạo promise cho file này
+            $promises[$index] = function () use ($file, $destinationPath, $options, $index) {
+                try {
+                    $uploadPath = $this->uploadFile($file, $destinationPath, $options);
+
+                    return [
+                        'success' => $uploadPath !== false,
+                        'error' => $uploadPath === false ? 'Upload failed' : null,
+                        'path' => $uploadPath,
+                        'index' => $index
+                    ];
+                } catch (\Exception $e) {
+                    return [
+                        'success' => false,
+                        'error' => $e->getMessage(),
+                        'path' => null,
+                        'index' => $index
+                    ];
+                }
+            };
+        }
+
+        // Thực hiện parallel upload
+        $uploadResults = $this->resolveUploadPromises($promises);
+
+        // Tổ chức kết quả theo format mong muốn
+        $results = [];
+        foreach ($uploadResults as $index => $result) {
+            if (isset($fileInfo[$index])) {
+                $results[$index] = [
+                    'success' => $result['success'],
+                    'error' => $result['error'] ?? null,
+                    'path' => $result['path'],
+                    'original_name' => $fileInfo[$index]['original_name'],
+                    'size' => $fileInfo[$index]['size']
+                ];
+            }
+        }
+
+        $endTime = microtime(true);
+        $totalTime = round(($endTime - $startTime) * 1000, 2);
+        $totalSize = array_sum(array_column($fileInfo, 'size'));
+        $avgSpeed = $totalTime > 0 ? round(($totalSize / 1024 / 1024) / (($totalTime / 1000)), 2) : 0;
+
+        Log::info('Parallel upload completed', [
+            'files_count' => $filesCount,
+            'successful_uploads' => count(array_filter($results, fn($r) => $r['success'])),
+            'failed_uploads' => count(array_filter($results, fn($r) => !$r['success'])),
+            'total_time_ms' => $totalTime,
+            'total_size_mb' => round($totalSize / 1024 / 1024, 2),
+            'avg_speed_mbps' => $avgSpeed
+        ]);
 
         return $results;
     }
