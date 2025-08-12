@@ -1,0 +1,124 @@
+<!DOCTYPE html>
+<html lang="vi">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+        <title>Test Pricing - Design Task</title>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                max-width: 800px;
+                margin: 0 auto;
+                padding: 20px;
+            }
+            .test-section {
+                margin: 20px 0;
+                padding: 20px;
+                border: 1px solid #ddd;
+                border-radius: 8px;
+            }
+            .result {
+                background: #f5f5f5;
+                padding: 15px;
+                border-radius: 5px;
+                margin-top: 10px;
+            }
+            input,
+            select,
+            button {
+                padding: 8px;
+                margin: 5px;
+                border: 1px solid #ddd;
+                border-radius: 4px;
+            }
+            button {
+                background: #007bff;
+                color: white;
+                cursor: pointer;
+            }
+            button:hover {
+                background: #0056b3;
+            }
+        </style>
+    </head>
+    <body>
+        <h1>Test Pricing - Design Task</h1>
+
+        <div class="test-section">
+            <h2>Test API Pricing</h2>
+            <label>Customer ID:</label>
+            <input type="number" id="customerId" value="197" />
+            <br />
+            <label>Số mặt:</label>
+            <select id="sidesCount">
+                <option value="1">1 mặt</option>
+                <option value="2">2 mặt</option>
+                <option value="3">3 mặt</option>
+                <option value="4">4 mặt</option>
+                <option value="5">5 mặt</option>
+            </select>
+            <br />
+            <button onclick="testPricing()">Test Pricing</button>
+
+            <div id="apiResult" class="result" style="display: none"></div>
+        </div>
+
+        <div class="test-section">
+            <h2>Giải thích giá</h2>
+            <h3>Khách hàng đặc biệt (ID: 197, 200, 201, 204, 206)</h3>
+            <ul>
+                <li>Giá: 20,000 VND/mặt</li>
+                <li>1 mặt: 20,000 VND</li>
+                <li>2 mặt: 40,000 VND</li>
+                <li>3 mặt: 60,000 VND</li>
+                <li>4 mặt: 80,000 VND</li>
+                <li>5 mặt: 100,000 VND</li>
+            </ul>
+
+            <h3>Khách hàng thường</h3>
+            <ul>
+                <li>1 mặt: 30,000 VND</li>
+                <li>2 mặt: 50,000 VND (30,000 + 20,000)</li>
+                <li>3 mặt: 70,000 VND (30,000 + 20,000 + 20,000)</li>
+                <li>4 mặt: 90,000 VND (30,000 + 20,000 + 20,000 + 20,000)</li>
+                <li>
+                    5 mặt: 110,000 VND (30,000 + 20,000 + 20,000 + 20,000 +
+                    20,000)
+                </li>
+            </ul>
+        </div>
+
+        <script>
+            async function testPricing() {
+                const customerId = document.getElementById("customerId").value;
+                const sidesCount = document.getElementById("sidesCount").value;
+
+                try {
+                    const response = await fetch(
+                        `/design/test-pricing?sides_count=${sidesCount}&customer_id=${customerId}`
+                    );
+                    const data = await response.json();
+
+                    const resultDiv = document.getElementById("apiResult");
+                    resultDiv.style.display = "block";
+                    resultDiv.innerHTML = `
+                    <h4>Kết quả:</h4>
+                    <p><strong>Customer ID:</strong> ${data.customer_id}</p>
+                    <p><strong>Số mặt:</strong> ${data.sides_count}</p>
+                    <p><strong>Giá VND:</strong> ${data.price_vnd.toLocaleString()} VND</p>
+                    <p><strong>Giá USD:</strong> $${data.price_usd}</p>
+                    <p><strong>Loại khách hàng:</strong> ${
+                        data.pricing_info.is_special_price_customer
+                            ? "Đặc biệt"
+                            : "Thường"
+                    }</p>
+                `;
+                } catch (error) {
+                    console.error("Error:", error);
+                    document.getElementById("apiResult").innerHTML =
+                        '<p style="color: red;">Lỗi khi test API</p>';
+                }
+            }
+        </script>
+    </body>
+</html>

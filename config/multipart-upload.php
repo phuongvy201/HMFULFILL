@@ -52,10 +52,15 @@ return [
     // Performance settings
     'performance' => [
         'enable_parallel' => env('S3_ENABLE_PARALLEL_UPLOAD', true),
-        'concurrent_uploads' => env('S3_CONCURRENT_UPLOADS', 3),
-        'memory_limit' => env('S3_UPLOAD_MEMORY_LIMIT', '512M'),
-        'time_limit' => env('S3_UPLOAD_TIME_LIMIT', 600), // 10 minutes
-        'batch_size' => env('S3_BATCH_SIZE', 3), // Number of parts per batch
+        'concurrent_uploads' => env('S3_CONCURRENT_UPLOADS', 5), // Tăng lên 5 cho hiệu suất tốt hơn
+        'memory_limit' => env('S3_UPLOAD_MEMORY_LIMIT', '1G'), // Tăng memory limit
+        'time_limit' => env('S3_UPLOAD_TIME_LIMIT', 1800), // 30 minutes cho file lớn
+        'batch_size' => env('S3_BATCH_SIZE', 5), // Tăng batch size
+        'use_multipart_uploader' => env('S3_USE_MULTIPART_UPLOADER', true), // Sử dụng MultipartUploader
+        'enable_gc' => env('S3_ENABLE_GC', true), // Enable garbage collection
+        'max_concurrent_files' => env('S3_MAX_CONCURRENT_FILES', 10), // Giới hạn số file upload đồng thời
+        'min_batch_size_for_parallel' => env('S3_MIN_BATCH_SIZE_FOR_PARALLEL', 3), // Batch size tối thiểu để sử dụng parallel
+        'promise_timeout' => env('S3_PROMISE_TIMEOUT', 300), // Timeout cho Guzzle Promise (seconds)
     ],
 
     // File type specific settings

@@ -26,7 +26,10 @@ class DesignController extends Controller
         $wallet = $user->wallet;
         $balance = $wallet ? $wallet->getTotalBalance() : 0;
 
-        return view('customer.design.create', compact('balance'));
+        // Truyền thông tin về giá đặc biệt
+        $pricingInfo = DesignTask::getPricingInfo($user->id);
+
+        return view('customer.design.create', compact('balance', 'pricingInfo'));
     }
 
     /**
@@ -50,8 +53,8 @@ class DesignController extends Controller
 
         $user = Auth::user();
         $sidesCount = (int)$request->sides_count; // Chuyển thành integer
-        $priceVND = DesignTask::calculatePrice($sidesCount); // Giá theo VND
-        $priceUSD = DesignTask::calculatePriceUSD($sidesCount); // Giá theo USD
+        $priceVND = DesignTask::calculatePrice($sidesCount, $user->id); // Giá theo VND
+        $priceUSD = DesignTask::calculatePriceUSD($sidesCount, $user->id); // Giá theo USD
 
         // Validation sau khi đã cast sides_count
         $request->validate([
@@ -363,9 +366,47 @@ class DesignController extends Controller
                     'failed_uploads' => count(array_filter($uploadResults, fn($r) => !$r['success']))
                 ]);
 
+                // Log debug để kiểm tra cấu trúc uploadResults
+                Log::debug('Upload results received in DesignController', [
+                    'task_id' => $task->id,
+                    'total_results' => count($uploadResults),
+                    'results_keys' => array_keys($uploadResults),
+                    'sample_result' => !empty($uploadResults) ? array_slice($uploadResults, 0, 1, true) : null
+                ]);
+
                 // Kiểm tra kết quả upload
                 foreach ($uploadResults as $index => $result) {
+                    // Log debug cho từng result
+                    Log::debug("Processing upload result {$index}", [
+                        'task_id' => $task->id,
+                        'index' => $index,
+                        'result_keys' => array_keys($result),
+                        'result' => $result
+                    ]);
+
+                    // Đảm bảo result có đầy đủ các key cần thiết
+                    if (!isset($result['success'])) {
+                        Log::error('Invalid upload result structure', [
+                            'task_id' => $task->id,
+                            'index' => $index,
+                            'result' => $result
+                        ]);
+                        throw new \Exception("Invalid upload result structure for file index {$index}");
+                    }
+
                     if ($result['success']) {
+                        // Kiểm tra path có tồn tại không
+                        if (!isset($result['path']) || empty($result['path'])) {
+                            Log::error('Upload succeeded but path is missing', [
+                                'task_id' => $task->id,
+                                'index' => $index,
+                                'result' => $result,
+                                'result_keys' => array_keys($result)
+                            ]);
+                            $originalName = $result['original_name'] ?? 'Unknown';
+                            throw new \Exception("Upload succeeded but path is missing for file: {$originalName}");
+                        }
+
                         $designPaths[] = $result['path'];
 
                         Log::info('Design file uploaded successfully', [
@@ -376,7 +417,16 @@ class DesignController extends Controller
                             'size' => $result['size']
                         ]);
                     } else {
-                        throw new \Exception("File upload failed: {$result['error']} (File: {$result['original_name']})");
+                        $errorMessage = $result['error'] ?? 'Unknown error';
+                        $originalName = $result['original_name'] ?? 'Unknown file';
+                        Log::error('File upload failed', [
+                            'task_id' => $task->id,
+                            'index' => $index,
+                            'error' => $errorMessage,
+                            'original_name' => $originalName,
+                            'result' => $result
+                        ]);
+                        throw new \Exception("File upload failed: {$errorMessage} (File: {$originalName})");
                     }
                 }
 
@@ -1017,5 +1067,26 @@ class DesignController extends Controller
         $task->markCommentsAsRead($user->id);
 
         return response()->json(['success' => true]);
+    }
+
+    /**
+     * API để test tính giá
+     */
+    public function testPricing(Request $request)
+    {
+        $sidesCount = (int)$request->sides_count;
+        $customerId = (int)$request->customer_id;
+
+        $priceVND = DesignTask::calculatePrice($sidesCount, $customerId);
+        $priceUSD = DesignTask::calculatePriceUSD($sidesCount, $customerId);
+        $pricingInfo = DesignTask::getPricingInfo($customerId);
+
+        return response()->json([
+            'sides_count' => $sidesCount,
+            'customer_id' => $customerId,
+            'price_vnd' => $priceVND,
+            'price_usd' => $priceUSD,
+            'pricing_info' => $pricingInfo
+        ]);
     }
 }

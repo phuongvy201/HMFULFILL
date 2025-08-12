@@ -240,6 +240,9 @@ Route::prefix('customer')->middleware('auth')->group(function () {
         Route::post('/tasks/{taskId}/comments', [App\Http\Controllers\DesignController::class, 'addComment'])->name('customer.design.comments.add');
         Route::get('/tasks/{taskId}/comments', [App\Http\Controllers\DesignController::class, 'getComments'])->name('customer.design.comments.get');
         Route::post('/tasks/{taskId}/comments/read', [App\Http\Controllers\DesignController::class, 'markCommentsAsRead'])->name('customer.design.comments.read');
+
+        // API test pricing
+        Route::get('/test-pricing', [App\Http\Controllers\DesignController::class, 'testPricing'])->name('customer.design.test-pricing');
     });
 });
 

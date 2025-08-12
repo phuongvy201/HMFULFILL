@@ -42,6 +42,13 @@ class DesignTask extends Model
     // Constants cho giá theo số mặt (VND)
     const PRICE_PER_SIDE_VND = 20000;
 
+    // Danh sách khách hàng có giá đặc biệt (20,000 VND/mặt)
+    const SPECIAL_PRICE_CUSTOMER_IDS = [197, 200, 201, 204, 206, 16];
+
+    // Giá cho khách hàng thường
+    const REGULAR_PRICE_1_SIDE_VND = 30000; // 30,000 VND cho mặt thứ 1
+    const REGULAR_PRICE_ADDITIONAL_SIDE_VND = 20000; // 20,000 VND cho mỗi mặt tiếp theo
+
     /**
      * Get the customer that owns the design task.
      */
@@ -61,19 +68,46 @@ class DesignTask extends Model
     /**
      * Calculate price based on number of sides (VND)
      */
-    public static function calculatePrice(int $sidesCount): float
+    public static function calculatePrice(int $sidesCount, ?int $customerId = null): float
     {
-        return $sidesCount * self::PRICE_PER_SIDE_VND;
+        // Kiểm tra nếu khách hàng có giá đặc biệt
+        if ($customerId && in_array($customerId, self::SPECIAL_PRICE_CUSTOMER_IDS)) {
+            return $sidesCount * self::PRICE_PER_SIDE_VND;
+        }
+
+        // Giá cho khách hàng thường
+        // Mặt thứ 1: 30,000 VND, những mặt tiếp theo mỗi mặt +20,000 VND
+        if ($sidesCount == 1) {
+            return self::REGULAR_PRICE_1_SIDE_VND;
+        } else {
+            return self::REGULAR_PRICE_1_SIDE_VND + (($sidesCount - 1) * self::REGULAR_PRICE_ADDITIONAL_SIDE_VND);
+        }
     }
 
     /**
      * Calculate price in USD based on number of sides
      */
-    public static function calculatePriceUSD(int $sidesCount): float
+    public static function calculatePriceUSD(int $sidesCount, ?int $customerId = null): float
     {
-        $priceVND = self::calculatePrice($sidesCount);
+        $priceVND = self::calculatePrice($sidesCount, $customerId);
         $usdToVnd = config('currency.usd_to_vnd', 26128.0);
         return round($priceVND / $usdToVnd, 2);
+    }
+
+    /**
+     * Get pricing info for a specific customer
+     */
+    public static function getPricingInfo(?int $customerId = null): array
+    {
+        $isSpecialPriceCustomer = $customerId && in_array($customerId, self::SPECIAL_PRICE_CUSTOMER_IDS);
+
+        return [
+            'is_special_price_customer' => $isSpecialPriceCustomer,
+            'special_price_per_side' => self::PRICE_PER_SIDE_VND,
+            'regular_price_1_side' => self::REGULAR_PRICE_1_SIDE_VND,
+            'regular_price_additional_side' => self::REGULAR_PRICE_ADDITIONAL_SIDE_VND,
+            'usd_to_vnd' => config('currency.usd_to_vnd', 26128.0)
+        ];
     }
 
     /**

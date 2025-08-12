@@ -82,12 +82,20 @@
                 </label>
                 <select name="sides_count" id="sides_count"
                     class="w-full px-4 py-3 border border-gray-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-blue-500 focus:border-blue-500 transition duration-200"
-                    required onchange="updateFileUploads()">
+                    required onchange="updateFileUploads(); updatePrice();">
                     <option value="">Chọn số mặt</option>
                     @for($i = 1; $i <= 5; $i++)
                         @php
-                        $priceVND=$i * 20000;
-                        $priceUSD=round($priceVND / config('currency.usd_to_vnd', 26128.0), 2);
+                        if($pricingInfo['is_special_price_customer']) {
+                        $priceVND=$i * $pricingInfo['special_price_per_side'];
+                        } else {
+                        if($i==1) {
+                        $priceVND=$pricingInfo['regular_price_1_side'];
+                        } else {
+                        $priceVND=$pricingInfo['regular_price_1_side'] + (($i - 1) * $pricingInfo['regular_price_additional_side']);
+                        }
+                        }
+                        $priceUSD=round($priceVND / $pricingInfo['usd_to_vnd'], 2);
                         @endphp
                         <option value="{{ $i }}" {{ old('sides_count') == $i ? 'selected' : '' }}>
                         {{ $i }} mặt (${{ number_format($priceUSD, 2) }})
@@ -103,7 +111,11 @@
                         <span class="text-gray-700 font-medium">Giá dự kiến:</span>
                         <span class="text-2xl font-bold text-green-600" id="priceDisplay">$0.00</span>
                     </div>
-                    <p class="text-sm text-gray-500 mt-1">Giá sẽ được tính dựa trên số mặt bạn chọn (20,000 VND/mặt ≈ $0.77/mặt)</p>
+                    @if($pricingInfo['is_special_price_customer'])
+                    <p class="text-sm text-gray-500 mt-1">Giá: {{ number_format($pricingInfo['special_price_per_side']) }} VND/mặt ≈ ${{ number_format($pricingInfo['special_price_per_side'] / $pricingInfo['usd_to_vnd'], 2) }}/mặt</p>
+                    @else
+                    <p class="text-sm text-gray-500 mt-1">Giá: {{ number_format($pricingInfo['regular_price_1_side']) }} VND cho mặt thứ 1, {{ number_format($pricingInfo['regular_price_additional_side']) }} VND cho mỗi mặt tiếp theo</p>
+                    @endif
                 </div>
             </div>
 
@@ -140,12 +152,33 @@
 
 
 <script>
+    // Biến toàn cục cho giá
+    const pricingInfo = @json($pricingInfo);
+
     function updatePrice() {
         const sidesCount = parseInt(document.getElementById('sides_count').value) || 0;
-        const priceVND = sidesCount * 20000; // 20,000 VND per side (khớp với DesignTask::PRICE_PER_SIDE_VND)
-        const priceUSD = priceVND / 26128.0; // Chuyển đổi sang USD theo tỷ giá
+        let priceVND = 0;
+
+        if (pricingInfo.is_special_price_customer) {
+            // Giá đặc biệt: 20,000 VND/mặt
+            priceVND = sidesCount * pricingInfo.special_price_per_side;
+        } else {
+            // Giá thường: 30,000 VND cho mặt thứ 1, 20,000 VND cho mỗi mặt tiếp theo
+            if (sidesCount == 1) {
+                priceVND = pricingInfo.regular_price_1_side;
+            } else if (sidesCount > 1) {
+                priceVND = pricingInfo.regular_price_1_side + ((sidesCount - 1) * pricingInfo.regular_price_additional_side);
+            }
+        }
+
+        const priceUSD = priceVND / pricingInfo.usd_to_vnd;
         document.getElementById('priceDisplay').textContent = `$${priceUSD.toFixed(2)}`;
     }
+
+    // Gọi updatePrice khi trang load
+    document.addEventListener('DOMContentLoaded', function() {
+        updatePrice();
+    });
 
     function updateFileUploads() {
         const sidesCount = parseInt(document.getElementById('sides_count').value) || 0;
