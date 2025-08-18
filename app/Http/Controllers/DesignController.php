@@ -176,7 +176,7 @@ class DesignController extends Controller
     /**
      * Hiển thị danh sách design tasks cho designer
      */
-    public function designerTasks()
+    public function designerTasks(Request $request)
     {
         $user = Auth::user();
 
@@ -184,13 +184,41 @@ class DesignController extends Controller
             return redirect()->back()->withErrors(['error' => 'Bạn không có quyền truy cập.']);
         }
 
-        // Lấy tất cả tasks (pending và đã được nhận bởi bất kỳ designer nào)
-        $allTasks = DesignTask::with(['customer', 'designer'])
-            ->whereIn('status', [DesignTask::STATUS_PENDING, DesignTask::STATUS_JOINED, DesignTask::STATUS_COMPLETED, DesignTask::STATUS_APPROVED, DesignTask::STATUS_REVISION])
-            ->orderBy('created_at', 'desc')
-            ->get();
+        // Lấy filter từ request
+        $statusFilter = $request->get('status', 'all');
+        $myTasksOnly = $request->get('my_tasks', false);
 
-        return view('designer.tasks.index', compact('allTasks'));
+        // Query cơ bản
+        $query = DesignTask::with(['customer', 'designer'])
+            ->whereIn('status', [DesignTask::STATUS_PENDING, DesignTask::STATUS_JOINED, DesignTask::STATUS_COMPLETED, DesignTask::STATUS_APPROVED, DesignTask::STATUS_REVISION]);
+
+        // Áp dụng filter theo trạng thái
+        if ($statusFilter !== 'all') {
+            $query->where('status', $statusFilter);
+        }
+
+        // Filter chỉ tasks của designer hiện tại
+        if ($myTasksOnly) {
+            $query->where('designer_id', $user->id);
+        }
+
+        // Sắp xếp theo thời gian tạo mới nhất
+        $allTasks = $query->orderBy('created_at', 'desc')->get();
+
+        // Thống kê số lượng tasks theo trạng thái
+        $stats = [
+            'all' => DesignTask::whereIn('status', [DesignTask::STATUS_PENDING, DesignTask::STATUS_JOINED, DesignTask::STATUS_COMPLETED, DesignTask::STATUS_APPROVED, DesignTask::STATUS_REVISION])->count(),
+            'pending' => DesignTask::where('status', DesignTask::STATUS_PENDING)->count(),
+            'joined' => DesignTask::where('status', DesignTask::STATUS_JOINED)->count(),
+            'completed' => DesignTask::where('status', DesignTask::STATUS_COMPLETED)->count(),
+            'approved' => DesignTask::where('status', DesignTask::STATUS_APPROVED)->count(),
+            'revision' => DesignTask::where('status', DesignTask::STATUS_REVISION)->count(),
+            'my_tasks' => DesignTask::where('designer_id', $user->id)
+                ->whereIn('status', [DesignTask::STATUS_JOINED, DesignTask::STATUS_COMPLETED, DesignTask::STATUS_APPROVED, DesignTask::STATUS_REVISION])
+                ->count()
+        ];
+
+        return view('designer.tasks.index', compact('allTasks', 'stats', 'statusFilter', 'myTasksOnly'));
     }
 
     /**

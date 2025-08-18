@@ -35,6 +35,7 @@ use App\Models\UserTier;
 use App\Services\OrderRowValidator;
 use App\Services\OrderValidationService;
 use Illuminate\Support\Facades\Artisan;
+use App\Helpers\GoogleDriveHelper;
 
 /**
  * @OA\Info(
@@ -950,19 +951,151 @@ class SupplierFulfillmentController extends Controller
             $itemPrices = [];
 
             try {
-                foreach ($validated['products'] as $index => $product) {
+                // Lấy tier hiện tại của user
+                $userTier = \App\Models\UserTier::getCurrentTier($user->id);
+                $currentTier = $userTier ? $userTier->tier : 'Wood';
+                Log::info('[CUSTOMER-MANUAL] Tier hiện tại của user', [
+                    'user_id' => $user->id,
+                    'tier' => $currentTier,
+                    'tier_data' => $userTier
+                ]);
+
+                // Logic tính giá sẽ áp dụng thứ tự ưu tiên:
+                // 1. Giá theo tier của user (tier_name = $currentTier)
+                // 2. Giá mặc định (tier_name = null)
+                // 3. Giá Wood tier (tier_name = 'Wood') làm fallback cuối cùng
+
+                // Chuẩn bị danh sách tất cả items với thông tin cần thiết
+                $allItems = [];
+                foreach ($validated['products'] as $productIndex => $product) {
                     $variant = ProductVariant::findOrFail($product['variant_id']);
+                    $allItems[] = [
+                        'variant' => $variant,
+                        'quantity' => $product['quantity'],
+                        'product' => $product,
+                        'original_index' => $productIndex,
+                        'first_item_price' => $variant->getFirstItemPrice($validated['shipping_method'] ?? null, $user->id),
+                        'part_number' => $variant->twofifteen_sku ?? $variant->sku
+                    ];
+                }
 
-                    // Tính giá cho item này
-                    $priceInfo = $variant->getOrderPriceInfo(
-                        $validated['shipping_method'],
-                        1, // position - có thể cần logic phức tạp hơn
-                        $user->id
-                    );
+                // Tìm item có giá cao nhất trong toàn bộ đơn hàng
+                $highestPriceItem = null;
+                $highestPrice = 0;
+                foreach ($allItems as $item) {
+                    if ($item['first_item_price'] > $highestPrice) {
+                        $highestPrice = $item['first_item_price'];
+                        $highestPriceItem = $item;
+                    }
+                }
 
-                    $itemPrice = $priceInfo['print_price'] * $product['quantity'];
-                    $itemPrices[$index] = $priceInfo['print_price'];
-                    $totalAmount += $itemPrice;
+                // Gom nhóm theo part_number để xử lý logic đặc biệt cho items giống nhau
+                $productsByPartNumber = [];
+                foreach ($allItems as $item) {
+                    $partNumber = $item['part_number'];
+                    if (!isset($productsByPartNumber[$partNumber])) {
+                        $productsByPartNumber[$partNumber] = [];
+                    }
+                    $productsByPartNumber[$partNumber][] = $item;
+                }
+
+                // Xử lý tính giá cho từng item (chỉ có 1 item duy nhất tính giá "1st item")
+                $firstItemProcessed = false; // Đánh dấu đã xử lý item đầu tiên chưa
+
+                foreach ($productsByPartNumber as $partNumber => $items) {
+                    foreach ($items as $index => $item) {
+                        $variant = $item['variant'];
+                        $quantity = $item['quantity'];
+                        $originalIndex = $item['original_index'];
+
+                        // Kiểm tra xem có phải là item có giá cao nhất và chưa được xử lý chưa
+                        $isFirstItem = (!$firstItemProcessed && $highestPriceItem &&
+                            $highestPriceItem['original_index'] === $originalIndex);
+
+                        if ($isFirstItem) {
+                            $firstItemProcessed = true;
+                        }
+
+                        // Tính giá mixed khi quantity > 1
+                        $itemTotal = 0;
+                        $averagePrice = 0;
+                        $priceBreakdown = [];
+
+                        if ($isFirstItem && $quantity > 1) {
+                            // Trường hợp đặc biệt: item có giá cao nhất và quantity > 1
+                            $priceInfo1 = $variant->getOrderPriceInfo($validated['shipping_method'] ?? null, 1, $user->id);
+                            $priceInfo2 = $variant->getOrderPriceInfo($validated['shipping_method'] ?? null, 2, $user->id);
+
+                            if ($priceInfo1['shipping_price_found'] && $priceInfo2['shipping_price_found']) {
+                                $firstPrice = round($priceInfo1['print_price'], 2);
+                                $secondPrice = round($priceInfo2['print_price'], 2);
+                                $itemTotal = $firstPrice + ($secondPrice * ($quantity - 1));
+                                $itemTotal = round($itemTotal, 2);
+                                $averagePrice = round($itemTotal / $quantity, 2);
+
+                                $priceBreakdown = [
+                                    'first_item_price' => $firstPrice,
+                                    'additional_item_price' => $secondPrice,
+                                    'quantity' => $quantity,
+                                    'tier_price' => $priceInfo1['tier_price'] ?? false,
+                                    'tier' => $priceInfo1['tier'] ?? null,
+                                    'breakdown' => "1x{$firstPrice} + " . ($quantity - 1) . "x{$secondPrice}"
+                                ];
+
+                                Log::info('[CUSTOMER-MANUAL] Tính giá (first_item_mix)', [
+                                    'external_id' => $validated['order_number'],
+                                    'part_number' => $partNumber,
+                                    'quantity' => $quantity,
+                                    'first_item_price' => $firstPrice,
+                                    'second_item_price' => $secondPrice,
+                                    'item_total' => $itemTotal,
+                                    'average_price' => $averagePrice,
+                                    'tier_price' => $priceInfo1['tier_price'] ?? false,
+                                    'tier' => $priceInfo1['tier'] ?? null,
+                                    'price_source' => $priceInfo1['tier_price'] ? 'tier_specific' : 'default_or_fallback',
+                                    'breakdown' => $priceBreakdown['breakdown']
+                                ]);
+                            }
+                        } else {
+                            // Trường hợp thông thường: tất cả items tính cùng 1 giá
+                            $position = $isFirstItem ? 1 : 2;
+                            $priceInfo = $variant->getOrderPriceInfo($validated['shipping_method'] ?? null, $position, $user->id);
+
+                            if ($priceInfo['shipping_price_found']) {
+                                $unitPrice = round($priceInfo['print_price'], 2);
+                                $itemTotal = $unitPrice * $quantity;
+                                $itemTotal = round($itemTotal, 2);
+                                $averagePrice = $unitPrice;
+
+                                $priceBreakdown = [
+                                    'unit_price' => $unitPrice,
+                                    'quantity' => $quantity,
+                                    'is_first_item' => $isFirstItem,
+                                    'tier_price' => $priceInfo['tier_price'] ?? false,
+                                    'tier' => $priceInfo['tier'] ?? null,
+                                    'breakdown' => $quantity . "x" . $unitPrice
+                                ];
+
+                                Log::info('[CUSTOMER-MANUAL] Tính giá (' . ($isFirstItem ? 'first_item' : 'second_item') . ')', [
+                                    'external_id' => $validated['order_number'],
+                                    'part_number' => $partNumber,
+                                    'quantity' => $quantity,
+                                    'unit_price' => $unitPrice,
+                                    'item_total' => $itemTotal,
+                                    'average_price' => $averagePrice,
+                                    'tier_price' => $priceInfo['tier_price'] ?? false,
+                                    'tier' => $priceInfo['tier'] ?? null,
+                                    'price_source' => $priceInfo['tier_price'] ? 'tier_specific' : 'default_or_fallback',
+                                    'breakdown' => $priceBreakdown['breakdown']
+                                ]);
+                            }
+                        }
+
+                        if ($itemTotal > 0) {
+                            $totalAmount += $itemTotal;
+                            $itemPrices[$originalIndex] = $averagePrice;
+                        }
+                    }
                 }
             } catch (\Exception $e) {
                 Log::error('Error calculating prices: ' . $e->getMessage(), [
@@ -1011,7 +1144,7 @@ class SupplierFulfillmentController extends Controller
                 'brand' => $validated['store_name'] ?? '',
                 'channel' => $validated['channel'] ?? 'customer-manual',
                 'buyer_email' => $validated['customer_email'] ?? '1',
-                'first_name' => $firstName ?? '1',  
+                'first_name' => $firstName ?? '1',
                 'last_name' => $lastName ?? '1',
                 'company' => $validated['store_name'] ?? '',
                 'address1' => $validated['address'] ?? '1',
@@ -1040,27 +1173,31 @@ class SupplierFulfillmentController extends Controller
                         'part_number' => $variant->twofifteen_sku ?? $variant->sku,
                         'title' => $product['title'] ?? 'Customer Manual Order Item',
                         'quantity' => $product['quantity'],
-                        'print_price' => $itemPrices[$index],
+                        'print_price' => $itemPrices[$index] ?? 0,
                         'product_id' => $variant->product_id,
                         'description' => '',
                     ]);
 
                     // Tạo designs
                     foreach ($product['designs'] as $design) {
+                        $designUrl = $this->convertToDirectDownloadLink($design['file_url']);
+
                         ExcelOrderDesign::create([
                             'excel_order_item_id' => $orderItem->id,
                             'title' => $design['print_space'],
-                            'url' => $design['file_url']
+                            'url' => $designUrl
                         ]);
                     }
 
                     // Tạo mockups (nếu có)
                     if (!empty($product['mockups'])) {
                         foreach ($product['mockups'] as $mockup) {
+                            $mockupUrl = $this->convertToDirectDownloadLink($mockup['file_url']);
+
                             ExcelOrderMockup::create([
                                 'excel_order_item_id' => $orderItem->id,
                                 'title' => $mockup['print_space'],
-                                'url' => $mockup['file_url']
+                                'url' => $mockupUrl
                             ]);
                         }
                     }
@@ -1087,6 +1224,20 @@ class SupplierFulfillmentController extends Controller
                 ->withInput()
                 ->with('error', 'An error occurred while creating the order: ' . $e->getMessage());
         }
+    }
+
+    /**
+     * Convert URL to direct download link if it's a Google Drive link
+     */
+    private function convertToDirectDownloadLink(string $url): string
+    {
+        $originalUrl = trim($url);
+
+        if (str_contains($originalUrl, 'drive.google.com')) {
+            return GoogleDriveHelper::convertToDirectDownloadLink($originalUrl);
+        }
+
+        return $originalUrl;
     }
 
     /**
@@ -2153,6 +2304,16 @@ class SupplierFulfillmentController extends Controller
             // Lấy tier hiện tại của user
             $userTier = \App\Models\UserTier::getCurrentTier($user->id);
             $currentTier = $userTier ? $userTier->tier : 'Wood';
+            Log::info('[API-ORDER] Tier hiện tại của user', [
+                'user_id' => $user->id,
+                'tier' => $currentTier,
+                'tier_data' => $userTier
+            ]);
+
+            // Logic tính giá sẽ áp dụng thứ tự ưu tiên:
+            // 1. Giá theo tier của user (tier_name = $currentTier)
+            // 2. Giá mặc định (tier_name = null)
+            // 3. Giá Wood tier (tier_name = 'Wood') làm fallback cuối cùng
 
             // Chuẩn bị danh sách tất cả items với thông tin cần thiết
             $allItems = [];
@@ -2247,6 +2408,20 @@ class SupplierFulfillmentController extends Controller
                                 'tier' => $priceInfo1['tier'] ?? null,
                                 'breakdown' => "1x{$firstPrice} + " . ($quantity - 1) . "x{$secondPrice}"
                             ];
+
+                            Log::info('[API-ORDER] Tính giá (first_item_mix)', [
+                                'external_id' => $validated['order_number'],
+                                'part_number' => $partNumber,
+                                'quantity' => $quantity,
+                                'first_item_price' => $firstPrice,
+                                'second_item_price' => $secondPrice,
+                                'item_total' => $itemTotal,
+                                'average_price' => $averagePrice,
+                                'tier_price' => $priceInfo1['tier_price'] ?? false,
+                                'tier' => $priceInfo1['tier'] ?? null,
+                                'price_source' => $priceInfo1['tier_price'] ? 'tier_specific' : 'default_or_fallback',
+                                'breakdown' => $priceBreakdown['breakdown']
+                            ]);
                         }
                     } else {
                         // Trường hợp thông thường: tất cả items tính cùng 1 giá
@@ -2268,6 +2443,19 @@ class SupplierFulfillmentController extends Controller
                                 'tier' => $priceInfo['tier'] ?? null,
                                 'breakdown' => $quantity . "x" . $unitPrice
                             ];
+
+                            Log::info('[API-ORDER] Tính giá (' . ($isFirstItem ? 'first_item' : 'second_item') . ')', [
+                                'external_id' => $validated['order_number'],
+                                'part_number' => $partNumber,
+                                'quantity' => $quantity,
+                                'unit_price' => $unitPrice,
+                                'item_total' => $itemTotal,
+                                'average_price' => $averagePrice,
+                                'tier_price' => $priceInfo['tier_price'] ?? false,
+                                'tier' => $priceInfo['tier'] ?? null,
+                                'price_source' => $priceInfo['tier_price'] ? 'tier_specific' : 'default_or_fallback',
+                                'breakdown' => $priceBreakdown['breakdown']
+                            ]);
                         }
                     }
 
@@ -3744,8 +3932,8 @@ class SupplierFulfillmentController extends Controller
                             'quantity' => $product['quantity'],
                             'product' => $product,
                             'original_index' => $productIndex,
-                            'first_item_price' => $variant->getFirstItemPrice($shippingMethod),
-                            'part_number' => $product['part_number']
+                            'first_item_price' => $variant->getFirstItemPrice($shippingMethod, $user->id),
+                            'part_number' => $variant->twofifteen_sku ?? $product['part_number']
                         ];
                     }
                 }
@@ -3793,10 +3981,24 @@ class SupplierFulfillmentController extends Controller
                         $itemTotal = 0;
                         $averagePrice = 0;
                         $priceBreakdown = [];
+                        $specialPriceAdjustment = 0;
+
+                        // Kiểm tra position Special (chỉ áp dụng cho warehouse US)
+                        if ($existingOrder->warehouse === 'US') {
+                            // Kiểm tra trong designs có position chứa (Special) không
+                            if (!empty($product['designs'])) {
+                                foreach ($product['designs'] as $design) {
+                                    if (str_contains($design['print_space'] ?? '', '(Special)')) {
+                                        $specialPriceAdjustment = 2 * $quantity; // +$2 cho mỗi quantity
+                                        break;
+                                    }
+                                }
+                            }
+                        }
 
                         if ($isFirstItem && $quantity > 1) {
-                            $priceInfo1 = $variant->getOrderPriceInfo($shippingMethod, 1);
-                            $priceInfo2 = $variant->getOrderPriceInfo($shippingMethod, 2);
+                            $priceInfo1 = $variant->getOrderPriceInfo($shippingMethod, 1, $user->id);
+                            $priceInfo2 = $variant->getOrderPriceInfo($shippingMethod, 2, $user->id);
 
                             if ($priceInfo1['shipping_price_found'] && $priceInfo2['shipping_price_found']) {
                                 $firstPrice = round($priceInfo1['print_price'], 2);
@@ -3809,12 +4011,29 @@ class SupplierFulfillmentController extends Controller
                                     'first_item_price' => $firstPrice,
                                     'additional_item_price' => $secondPrice,
                                     'quantity' => $quantity,
+                                    'tier_price' => $priceInfo1['tier_price'] ?? false,
+                                    'tier' => $priceInfo1['tier'] ?? null,
                                     'breakdown' => "1x{$firstPrice} + " . ($quantity - 1) . "x{$secondPrice}"
                                 ];
+
+                                Log::info('[UPDATE] Tính giá (first_item_mix)', [
+                                    'external_id' => $existingOrder->external_id,
+                                    'part_number' => $partNumber,
+                                    'quantity' => $quantity,
+                                    'first_item_price' => $firstPrice,
+                                    'second_item_price' => $secondPrice,
+                                    'special_price_adjustment' => $specialPriceAdjustment,
+                                    'item_total' => $itemTotal,
+                                    'average_price' => $averagePrice,
+                                    'tier_price' => $priceInfo1['tier_price'] ?? false,
+                                    'tier' => $priceInfo1['tier'] ?? null,
+                                    'price_source' => $priceInfo1['tier_price'] ? 'tier_specific' : 'default_or_fallback',
+                                    'breakdown' => $priceBreakdown['breakdown']
+                                ]);
                             }
                         } else {
                             $position = $isFirstItem ? 1 : 2;
-                            $priceInfo = $variant->getOrderPriceInfo($shippingMethod, $position);
+                            $priceInfo = $variant->getOrderPriceInfo($shippingMethod, $position, $user->id);
 
                             if ($priceInfo['shipping_price_found']) {
                                 $unitPrice = round($priceInfo['print_price'], 2);
@@ -3826,8 +4045,24 @@ class SupplierFulfillmentController extends Controller
                                     'unit_price' => $unitPrice,
                                     'quantity' => $quantity,
                                     'is_first_item' => $isFirstItem,
+                                    'tier_price' => $priceInfo['tier_price'] ?? false,
+                                    'tier' => $priceInfo['tier'] ?? null,
                                     'breakdown' => $quantity . "x" . $unitPrice
                                 ];
+
+                                Log::info('[UPDATE] Tính giá (' . ($isFirstItem ? 'first_item' : 'second_item') . ')', [
+                                    'external_id' => $existingOrder->external_id,
+                                    'part_number' => $partNumber,
+                                    'quantity' => $quantity,
+                                    'unit_price' => $unitPrice,
+                                    'special_price_adjustment' => $specialPriceAdjustment,
+                                    'item_total' => $itemTotal,
+                                    'average_price' => $averagePrice,
+                                    'tier_price' => $priceInfo['tier_price'] ?? false,
+                                    'tier' => $priceInfo['tier'] ?? null,
+                                    'price_source' => $priceInfo['tier_price'] ? 'tier_specific' : 'default_or_fallback',
+                                    'breakdown' => $priceBreakdown['breakdown']
+                                ]);
                             }
                         }
 
@@ -4751,6 +4986,7 @@ class SupplierFulfillmentController extends Controller
             $csvData = [];
             $headers = [
                 'External_ID',
+                'Internal_ID',
                 'Customer_Name',
                 'Customer_Email',
                 'Link_Label',
@@ -4795,6 +5031,13 @@ class SupplierFulfillmentController extends Controller
                     // Format External ID dựa trên export format
                     $externalIdForExport = $this->formatExternalIdForExport($order->external_id, $exportFormat);
 
+                    // Lấy Internal ID từ OrderMapping
+                    $internalId = '';
+                    $orderMapping = OrderMapping::where('external_id', $order->external_id)->first();
+                    if ($orderMapping) {
+                        $internalId = $orderMapping->internal_id;
+                    }
+
                     // Lấy thông tin customer
                     $customerName = '';
                     $customerEmail = '';
@@ -4805,6 +5048,7 @@ class SupplierFulfillmentController extends Controller
 
                     $row = [
                         $externalIdForExport,
+                        $internalId,
                         $customerName,
                         $customerEmail,
                         $order->comment ?? '',

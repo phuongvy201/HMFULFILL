@@ -16,13 +16,90 @@
     </div>
     @endif
 
-    <!-- Tất cả Tasks -->
+    <!-- Filter Section -->
+    <div class="bg-white rounded-lg shadow-lg p-6 mb-8">
+        <div class="flex flex-col lg:flex-row lg:items-center lg:justify-between space-y-4 lg:space-y-0">
+            <!-- Status Filter -->
+            <div class="flex flex-wrap items-center space-x-2">
+                <span class="text-sm font-medium text-gray-700">Lọc theo trạng thái:</span>
+                <a href="{{ route('designer.tasks.index', ['status' => 'all', 'my_tasks' => $myTasksOnly]) }}"
+                    class="px-3 py-1 rounded-full text-sm font-medium transition-colors
+                          {{ $statusFilter === 'all' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                    Tất cả ({{ $stats['all'] }})
+                </a>
+                <a href="{{ route('designer.tasks.index', ['status' => 'pending', 'my_tasks' => $myTasksOnly]) }}"
+                    class="px-3 py-1 rounded-full text-sm font-medium transition-colors
+                          {{ $statusFilter === 'pending' ? 'bg-yellow-100 text-yellow-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                    Đang chờ ({{ $stats['pending'] }})
+                </a>
+                <a href="{{ route('designer.tasks.index', ['status' => 'joined', 'my_tasks' => $myTasksOnly]) }}"
+                    class="px-3 py-1 rounded-full text-sm font-medium transition-colors
+                          {{ $statusFilter === 'joined' ? 'bg-blue-100 text-blue-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                    Đã nhận ({{ $stats['joined'] }})
+                </a>
+                <a href="{{ route('designer.tasks.index', ['status' => 'completed', 'my_tasks' => $myTasksOnly]) }}"
+                    class="px-3 py-1 rounded-full text-sm font-medium transition-colors
+                          {{ $statusFilter === 'completed' ? 'bg-green-100 text-green-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                    Hoàn thành ({{ $stats['completed'] }})
+                </a>
+                <a href="{{ route('designer.tasks.index', ['status' => 'approved', 'my_tasks' => $myTasksOnly]) }}"
+                    class="px-3 py-1 rounded-full text-sm font-medium transition-colors
+                          {{ $statusFilter === 'approved' ? 'bg-purple-100 text-purple-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                    Đã duyệt ({{ $stats['approved'] }})
+                </a>
+                <a href="{{ route('designer.tasks.index', ['status' => 'revision', 'my_tasks' => $myTasksOnly]) }}"
+                    class="px-3 py-1 rounded-full text-sm font-medium transition-colors
+                          {{ $statusFilter === 'revision' ? 'bg-orange-100 text-orange-800' : 'bg-gray-100 text-gray-600 hover:bg-gray-200' }}">
+                    Cần sửa ({{ $stats['revision'] }})
+                </a>
+            </div>
+
+            <!-- My Tasks Toggle -->
+            <div class="flex items-center space-x-3">
+                <label class="flex items-center">
+                    <input type="checkbox" id="myTasksToggle"
+                        class="rounded border-gray-300 text-blue-600 shadow-sm focus:border-blue-300 focus:ring focus:ring-blue-200 focus:ring-opacity-50"
+                        {{ $myTasksOnly ? 'checked' : '' }}
+                        onchange="toggleMyTasks()">
+                    <span class="ml-2 text-sm font-medium text-gray-700">Chỉ hiển thị tasks của tôi</span>
+                </label>
+            </div>
+        </div>
+
+        <!-- Active Filters Display -->
+        <div class="mt-4 flex flex-wrap items-center space-x-2">
+            @if($statusFilter !== 'all')
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-blue-100 text-blue-800">
+                Trạng thái: {{ ucfirst($statusFilter) }}
+                <a href="{{ route('designer.tasks.index', ['status' => 'all', 'my_tasks' => $myTasksOnly]) }}" class="ml-1 text-blue-600 hover:text-blue-800">
+                    <i class="fas fa-times"></i>
+                </a>
+            </span>
+            @endif
+            @if($myTasksOnly)
+            <span class="inline-flex items-center px-2 py-1 rounded-full text-xs font-medium bg-green-100 text-green-800">
+                Tasks của tôi ({{ $stats['my_tasks'] }})
+                <a href="{{ route('designer.tasks.index', ['status' => $statusFilter, 'my_tasks' => false]) }}" class="ml-1 text-green-600 hover:text-green-800">
+                    <i class="fas fa-times"></i>
+                </a>
+            </span>
+            @endif
+        </div>
+    </div>
+
+    <!-- Tasks List -->
     @if($allTasks->count() > 0)
     <div class="bg-white rounded-lg shadow-lg overflow-hidden">
         <div class="bg-gradient-to-r from-blue-600 to-blue-700 text-white px-6 py-4">
             <h5 class="text-xl font-semibold flex items-center">
                 <i class="fas fa-tasks mr-2"></i>
+                @if($statusFilter !== 'all')
+                Tasks {{ ucfirst($statusFilter) }} ({{ $allTasks->count() }})
+                @elseif($myTasksOnly)
+                Tasks của tôi ({{ $allTasks->count() }})
+                @else
                 Tất cả Design Tasks ({{ $allTasks->count() }})
+                @endif
             </h5>
         </div>
         <div class="p-6">
@@ -202,8 +279,34 @@
     @if($allTasks->count() === 0)
     <div class="text-center py-16">
         <i class="fas fa-palette text-6xl text-gray-300 mb-6"></i>
-        <h5 class="text-xl font-semibold text-gray-600 mb-2">Chưa có design task nào</h5>
-        <p class="text-gray-500">Hãy chờ các yêu cầu thiết kế mới từ khách hàng!</p>
+        <h5 class="text-xl font-semibold text-gray-600 mb-2">
+            @if($statusFilter !== 'all')
+            Không có task nào ở trạng thái "{{ ucfirst($statusFilter) }}"
+            @elseif($myTasksOnly)
+            Bạn chưa có task nào
+            @else
+            Chưa có design task nào
+            @endif
+        </h5>
+        <p class="text-gray-500">
+            @if($statusFilter !== 'all' && !$myTasksOnly)
+            Hãy thử lọc theo trạng thái khác hoặc chờ các yêu cầu thiết kế mới từ khách hàng!
+            @elseif($myTasksOnly && $statusFilter !== 'all')
+            Hãy thử bỏ lọc "Tasks của tôi" hoặc chọn trạng thái khác!
+            @elseif($myTasksOnly)
+            Hãy thử bỏ lọc "Tasks của tôi" để xem tất cả tasks có sẵn!
+            @else
+            Hãy chờ các yêu cầu thiết kế mới từ khách hàng!
+            @endif
+        </p>
+        @if($statusFilter !== 'all' || $myTasksOnly)
+        <div class="mt-4">
+            <a href="{{ route('designer.tasks.index') }}"
+                class="inline-flex items-center px-4 py-2 bg-blue-600 hover:bg-blue-700 text-white font-medium rounded-lg transition duration-200">
+                <i class="fas fa-times mr-2"></i>Xóa tất cả bộ lọc
+            </a>
+        </div>
+        @endif
     </div>
     @endif
 </div>
@@ -301,6 +404,26 @@
 
 <script>
     let currentTaskId = null;
+
+    // Function để toggle "Chỉ hiển thị tasks của tôi"
+    function toggleMyTasks() {
+        const myTasksToggle = document.getElementById('myTasksToggle');
+        const currentUrl = new URL(window.location);
+
+        if (myTasksToggle.checked) {
+            currentUrl.searchParams.set('my_tasks', '1');
+        } else {
+            currentUrl.searchParams.delete('my_tasks');
+        }
+
+        // Giữ nguyên filter status hiện tại
+        const statusFilter = currentUrl.searchParams.get('status') || 'all';
+        if (statusFilter !== 'all') {
+            currentUrl.searchParams.set('status', statusFilter);
+        }
+
+        window.location.href = currentUrl.toString();
+    }
 
     document.addEventListener('DOMContentLoaded', function() {
         // Join task

@@ -23,6 +23,10 @@ Route::put('/dtf/orders/{orderId}', [OrderUploadController::class, 'updateDtfOrd
     ->middleware('auth.api.token')
     ->name('api.dtf.orders.update');
 
+// TwoFifteen Orders Count API Route
+Route::get('/twofifteen/orders/count', [OrderUploadController::class, 'getTwoFifteenOrdersCount'])
+    ->name('api.twofifteen.orders.count');
+
 Route::post('/orders/{orderId}/cancel', [SupplierFulfillmentController::class, 'cancelOrder'])
     ->middleware('auth.api.token')
     ->name('api.orders.cancel');

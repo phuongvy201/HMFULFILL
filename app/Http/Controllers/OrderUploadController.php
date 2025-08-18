@@ -892,4 +892,268 @@ class OrderUploadController extends Controller
             ], 500);
         }
     }
+
+    /**
+     * Đếm đơn hàng từ database local (fallback)
+     * 
+     * @param array $validated
+     * @return int
+     */
+    private function getLocalOrdersCount(array $validated): int
+    {
+        $query = ExcelOrder::query();
+
+        // Filter by IDs if provided
+        if (!empty($validated['ids'])) {
+            $orderIds = array_map('trim', explode(',', $validated['ids']));
+            $query->whereIn('external_id', $orderIds);
+        }
+
+        // Filter by since_id
+        if (!empty($validated['since_id'])) {
+            $query->where('id', '>=', $validated['since_id']);
+        }
+
+        // Filter by creation date range
+        if (!empty($validated['created_at_min'])) {
+            $query->where('created_at', '>=', $validated['created_at_min']);
+        }
+
+        if (!empty($validated['created_at_max'])) {
+            $query->where('created_at', '<=', $validated['created_at_max']);
+        }
+
+        // Filter by status
+        if (isset($validated['status'])) {
+            $statusMapping = [
+                0 => 'pending',      // created
+                1 => 'processing',   // processing payment
+                2 => 'paid',         // paid
+                3 => 'shipped',      // shipped
+                4 => 'refunded'      // refunded
+            ];
+
+            if (isset($statusMapping[$validated['status']])) {
+                $query->where('status', $statusMapping[$validated['status']]);
+            }
+        }
+
+        // Only count TwoFifteen orders (UK warehouse)
+        $query->where('warehouse', 'UK');
+
+        return $query->count();
+    }
+
+    /**
+     * Format date cho TwoFifteen API
+     * 
+     * @param string $date
+     * @return string
+     */
+    private function formatDateForTwoFifteen(string $date): string
+    {
+        // Nếu đã có format Y-m-d H:i:s thì giữ nguyên
+        if (preg_match('/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/', $date)) {
+            return $date;
+        }
+
+        // Nếu chỉ có Y-m-d thì thêm 00:00:00
+        if (preg_match('/^\d{4}-\d{2}-\d{2}$/', $date)) {
+            return $date . ' 00:00:00';
+        }
+
+        // Nếu là format khác, convert về Y-m-d H:i:s
+        return Carbon::parse($date)->format('Y-m-d H:i:s');
+    }
+
+    /**
+     * Đếm số lượng đơn hàng TwoFifteen theo các tham số
+     * 
+     * @param Request $request
+     * @return \Illuminate\Http\JsonResponse
+     */
+    public function getTwoFifteenOrdersCount(Request $request)
+    {
+        try {
+            // Lấy AppId từ header hoặc query parameter
+            $appId = $request->header('AppId') ?? $request->query('AppId') ?? $this->apiServices['twofifteen']['appId'];
+
+            // Lấy Signature từ header hoặc query parameter, hoặc tự tạo nếu không có
+            $signature = $request->header('Signature') ?? $request->query('Signature');
+
+            // Nếu không có signature, có thể bỏ qua validation (tùy theo yêu cầu bảo mật)
+            $skipSignatureValidation = empty($signature);
+
+            // Validate required parameters
+            $validated = $request->validate([
+                'ids' => 'nullable|string',
+                'since_id' => 'nullable|integer',
+                'created_at_min' => 'nullable|date', // Chấp nhận mọi format date hợp lệ
+                'created_at_max' => 'nullable|date', // Chấp nhận mọi format date hợp lệ
+                'status' => 'nullable|integer|in:0,1,2,3,4',
+                'page' => 'nullable|integer|min:1',
+                'limit' => 'nullable|integer|min:1|max:100',
+            ]);
+
+            // Build query parameters for signature calculation
+            $queryParams = [
+                'AppId' => $appId,
+            ];
+
+            // Add optional parameters
+            if (!empty($validated['ids'])) {
+                $queryParams['ids'] = $validated['ids'];
+            }
+
+            if (!empty($validated['since_id'])) {
+                $queryParams['since_id'] = $validated['since_id'];
+            }
+
+            // Xử lý ngày tháng
+            if (!empty($validated['created_at_min'])) {
+                $queryParams['created_at_min'] = $this->formatDateForTwoFifteen($validated['created_at_min']);
+            }
+
+            if (!empty($validated['created_at_max'])) {
+                $queryParams['created_at_max'] = $this->formatDateForTwoFifteen($validated['created_at_max']);
+            }
+
+            if (isset($validated['status'])) {
+                $queryParams['status'] = $validated['status'];
+            }
+
+            if (!empty($validated['page'])) {
+                $queryParams['page'] = $validated['page'];
+            } else {
+                $queryParams['page'] = 1; // Default value
+            }
+
+            if (!empty($validated['limit'])) {
+                $queryParams['limit'] = $validated['limit'];
+            } else {
+                $queryParams['limit'] = 50; // Default value
+            }
+
+            // Tạo query string không bao gồm Signature (giống như BrickApiService)
+            $queryString = http_build_query($queryParams);
+
+            // Tính signature: sha1(query string + secret key) - giống như BrickApiService
+            $calculatedSignature = sha1($queryString . $this->apiServices['twofifteen']['secretKey']);
+
+            // Verify signature if provided and validation is required
+            if ($signature && !$skipSignatureValidation) {
+                if ($signature !== $calculatedSignature) {
+                    Log::error('Invalid signature for TwoFifteen orders count', [
+                        'provided_signature' => $signature,
+                        'expected_signature' => $calculatedSignature,
+                        'query_string' => $queryString
+                    ]);
+
+                    return response()->json([
+                        'error' => 'Invalid signature'
+                    ], 400);
+                }
+            }
+
+            // Add calculated signature to query parameters
+            $queryParams['Signature'] = $calculatedSignature;
+
+            // Verify AppId
+            if ($appId !== $this->apiServices['twofifteen']['appId']) {
+                Log::error('Invalid AppId for TwoFifteen orders count', [
+                    'provided_app_id' => $appId,
+                    'expected_app_id' => $this->apiServices['twofifteen']['appId']
+                ]);
+
+                return response()->json([
+                    'error' => 'Invalid AppId'
+                ], 400);
+            }
+
+            // Gọi API TwoFifteen để đếm đơn hàng
+            $apiUrl = $this->apiServices['twofifteen']['apiUrl'] . '/orders/count.php';
+
+            // Log thông tin debug
+            Log::info('TwoFifteen API configuration', [
+                'base_url' => $this->apiServices['twofifteen']['apiUrl'],
+                'full_url' => $apiUrl,
+                'app_id' => $this->apiServices['twofifteen']['appId'],
+                'has_secret_key' => !empty($this->apiServices['twofifteen']['secretKey'])
+            ]);
+
+            // Chuẩn bị headers cho request
+            $headers = [
+                'Accept' => 'application/json',
+                'Content-Type' => 'application/json',
+            ];
+
+            // Gọi API TwoFifteen
+            $response = Http::withHeaders($headers)
+                ->withQueryParameters($queryParams)
+                ->get($apiUrl);
+
+            Log::info('TwoFifteen API call', [
+                'url' => $apiUrl,
+                'query_params' => $queryParams,
+                'response_status' => $response->status(),
+                'response_body' => $response->body()
+            ]);
+
+            if ($response->successful()) {
+                $apiResponse = $response->json();
+                $count = $apiResponse['count'] ?? 0;
+            } else {
+                // Log error response
+                $errorResponse = $response->json();
+                Log::error('TwoFifteen API error', [
+                    'status_code' => $response->status(),
+                    'error_response' => $errorResponse,
+                    'request_params' => $queryParams
+                ]);
+
+                // Trả về lỗi thay vì fallback về local database
+                return response()->json([
+                    'error' => 'TwoFifteen API error',
+                    'details' => $errorResponse['error'] ?? 'Unknown error',
+                    'status_code' => $response->status()
+                ], $response->status());
+            }
+
+            Log::info('TwoFifteen orders count request', [
+                'app_id' => $appId,
+                'signature_provided' => !empty($signature),
+                'skip_signature_validation' => $skipSignatureValidation,
+                'parameters' => $validated,
+                'count' => $count,
+                'data_source' => 'twofifteen_api',
+                'api_url' => $apiUrl,
+                'query_params' => $queryParams,
+                'date_filters' => [
+                    'created_at_min' => $validated['created_at_min'] ?? null,
+                    'created_at_max' => $validated['created_at_max'] ?? null
+                ]
+            ]);
+
+            return response()->json([
+                'count' => $count
+            ]);
+        } catch (\Illuminate\Validation\ValidationException $e) {
+            Log::error('Validation error in TwoFifteen orders count', [
+                'errors' => $e->errors()
+            ]);
+
+            return response()->json([
+                'error' => 'Wrong request',
+                'details' => $e->errors()
+            ], 400);
+        } catch (\Exception $e) {
+            Log::error('Error getting TwoFifteen orders count: ' . $e->getMessage(), [
+                'trace' => $e->getTraceAsString()
+            ]);
+
+            return response()->json([
+                'error' => 'Internal server error'
+            ], 500);
+        }
+    }
 }
