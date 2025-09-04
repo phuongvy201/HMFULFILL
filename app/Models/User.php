@@ -57,7 +57,7 @@ class User extends Authenticatable
     {
         return $this->hasOne(Wallet::class);
     }
-
+    
     /**
      * Relationship với UserTier
      */

@@ -244,6 +244,17 @@ Route::prefix('customer')->middleware('auth')->group(function () {
         // API test pricing
         Route::get('/test-pricing', [App\Http\Controllers\DesignController::class, 'testPricing'])->name('customer.design.test-pricing');
     });
+
+    // Admin Design Management routes
+    Route::prefix('admin/design')->name('admin.design.')->middleware(['auth', 'admin'])->group(function () {
+        Route::get('/', [App\Http\Controllers\Admin\DesignManagementController::class, 'index'])->name('index');
+        Route::get('/dashboard', [App\Http\Controllers\Admin\DesignManagementController::class, 'dashboard'])->name('dashboard');
+        Route::get('/export-csv', [App\Http\Controllers\Admin\DesignManagementController::class, 'exportCSV'])->name('export-csv');
+        Route::get('/{id}', [App\Http\Controllers\Admin\DesignManagementController::class, 'show'])->name('show');
+        Route::put('/{id}/status', [App\Http\Controllers\Admin\DesignManagementController::class, 'updateStatus'])->name('update-status');
+        Route::delete('/{id}', [App\Http\Controllers\Admin\DesignManagementController::class, 'destroy'])->name('destroy');
+        Route::post('/bulk-actions', [App\Http\Controllers\Admin\DesignManagementController::class, 'bulkActions'])->name('bulk-actions');
+    });
 });
 
 // Nhóm route authentication

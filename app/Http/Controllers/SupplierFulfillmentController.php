@@ -1139,11 +1139,14 @@ class SupplierFulfillmentController extends Controller
             $firstName = $customerNameParts[0] ?? '';
             $lastName = $customerNameParts[1] ?? '';
 
+            // Set buyer_email based on warehouse
+            $buyerEmail = $validated['warehouse'] === 'US' ? '' : ($validated['customer_email'] ?? '1');
+
             $order = ExcelOrder::create([
                 'external_id' => $validated['order_number'],
                 'brand' => $validated['store_name'] ?? '',
                 'channel' => $validated['channel'] ?? 'customer-manual',
-                'buyer_email' => $validated['customer_email'] ?? '1',
+                'buyer_email' => $buyerEmail,
                 'first_name' => $firstName ?? '1',
                 'last_name' => $lastName ?? '1',
                 'company' => $validated['store_name'] ?? '',
@@ -1168,9 +1171,13 @@ class SupplierFulfillmentController extends Controller
                 foreach ($validated['products'] as $index => $product) {
                     $variant = ProductVariant::findOrFail($product['variant_id']);
 
+                    // Chọn SKU theo warehouse
+                    $sku = $variant->getSkuByWarehouse($validated['warehouse']);
+                    $finalPartNumber = $sku ?: $variant->sku;
+
                     $orderItem = ExcelOrderItem::create([
                         'excel_order_id' => $order->id,
-                        'part_number' => $variant->twofifteen_sku ?? $variant->sku,
+                        'part_number' => $finalPartNumber,
                         'title' => $product['title'] ?? 'Customer Manual Order Item',
                         'quantity' => $product['quantity'],
                         'print_price' => $itemPrices[$index] ?? 0,
@@ -1471,10 +1478,10 @@ class SupplierFulfillmentController extends Controller
         } elseif (str_starts_with($sku, 'UV-STICKER')) {
             return 'UV Sticker';
         } elseif (str_starts_with($sku, 'VINYL-STICKER')) {
-            return 'Vinyl Sticker';
+            return 'Vinyl Sticker'; 
         } elseif (str_starts_with($sku, 'CASE-IPHONE')) {
             return 'Phone Case';
-        } elseif (str_starts_with($sku, 'TOTEBAG') || str_starts_with($sku, 'MUG')) {
+        } elseif (str_starts_with($sku, 'TOTEBAG')) {
             return 'Tote Bag';
         } elseif (str_starts_with($sku, 'MUG')) {
             return 'Mug';

@@ -54,6 +54,16 @@
                 </h3>
 
                 <ul class="flex flex-col gap-4 mb-6">
+                    <!-- Test Design Management Menu -->
+                    <li>
+                        <a href="{{ route('admin.design.index') }}" class="menu-item group">
+                            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg">
+                                <path d="M12 2L2 7L12 12L22 7L12 2Z" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" />
+                            </svg>
+                            <span class="menu-item-text">Design Management (Test)</span>
+                        </a>
+                    </li>
+                    
                     <!-- Menu Item Dashboard -->
                     <li>
                         <a
@@ -602,6 +612,85 @@
                         </div>
                         <!-- Dropdown Menu End -->
                     </li>
+
+                    <!-- Design Management -->
+                    <li>
+                        <a
+                            href="#"
+                            @click.prevent="selectedAdmin = (selectedAdmin === 'DesignManagement' ? '' : 'DesignManagement')"
+                            class="menu-item group"
+                            :class="(selectedAdmin === 'DesignManagement') ? 'menu-item-active' : 'menu-item-inactive'">
+                            <svg
+                                :class="(selectedAdmin === 'DesignManagement') ? 'menu-item-icon-active' : 'menu-item-icon-inactive'"
+                                width="24"
+                                height="24"
+                                viewBox="0 0 24 24"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M12 2L2 7L12 12L22 7L12 2Z"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path
+                                    d="M2 17L12 22L22 17"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                                <path
+                                    d="M2 12L12 17L22 12"
+                                    stroke="currentColor"
+                                    stroke-width="2"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                            <span class="menu-item-text" :class="sidebarToggle ? 'lg:hidden' : ''">
+                                Design Management
+                            </span>
+                            <svg
+                                class="menu-item-arrow absolute right-2.5 top-1/2 -translate-y-1/2 stroke-current"
+                                :class="[(selectedAdmin === 'DesignManagement') ? 'menu-item-arrow-active' : 'menu-item-arrow-inactive', sidebarToggle ? 'lg:hidden' : '' ]"
+                                width="20"
+                                height="20"
+                                viewBox="0 0 20 20"
+                                fill="none"
+                                xmlns="http://www.w3.org/2000/svg">
+                                <path
+                                    d="M4.79175 7.39584L10.0001 12.6042L15.2084 7.39585"
+                                    stroke=""
+                                    stroke-width="1.5"
+                                    stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                        </a>
+                        <!-- Dropdown Menu Start -->
+                        <div
+                            class="overflow-hidden transform translate"
+                            :class="(selectedAdmin === 'DesignManagement') ? 'block' :'hidden'">
+                            <ul :class="sidebarToggle ? 'lg:hidden' : 'flex'" class="flex flex-col gap-1 mt-2 menu-dropdown pl-9">
+                                <li>
+                                    <a
+                                        href="{{ route('admin.design.index') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'design-list' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Danh sách Tasks
+                                    </a>
+                                </li>
+                                <li>
+                                    <a
+                                        href="{{ route('admin.design.dashboard') }}"
+                                        class="menu-dropdown-item group"
+                                        :class="page === 'design-dashboard' ? 'menu-dropdown-item-active' : 'menu-dropdown-item-inactive'">
+                                        Dashboard thống kê
+                                    </a>
+                                </li>
+                            </ul>
+                        </div>
+                        <!-- Dropdown Menu End -->
+                    </li>
+
                     <li>
                         <a href="{{ route('logout') }}"
                             onclick="event.preventDefault(); document.getElementById('logout-form').submit();"

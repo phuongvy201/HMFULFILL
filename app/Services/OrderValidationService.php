@@ -267,7 +267,7 @@ class OrderValidationService
             return 'Vinyl Sticker';
         } elseif (str_starts_with($sku, 'CASE-IPHONE')) {
             return 'Phone Case';
-        } elseif (str_starts_with($sku, 'TOTEBAG') || str_starts_with($sku, 'MUG')) {
+        } elseif (str_starts_with($sku, 'TOTEBAG')) {
             return 'Tote Bag';
         } elseif (str_starts_with($sku, 'MUG')) {
             return 'Mug';
